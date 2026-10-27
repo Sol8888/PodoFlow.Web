@@ -7,6 +7,7 @@
 
 @inject PacientesApi Api
 @inject NavigationManager Nav
+@inject ILogger<PacienteFormulario> Logger
 
 <PageTitle>
     @(Id.HasValue ? "Editar paciente" : "Nuevo paciente") | PodoFlow
@@ -203,10 +204,13 @@
         }
     }
 
+    
     private async Task GuardarAsync()
     {
         if (Guardando)
             return;
+
+        ErrorGuardar = null;
 
         if (Modelo.FechaNacimiento.HasValue &&
             Modelo.FechaNacimiento.Value.Date > DateTime.Today)
@@ -217,38 +221,54 @@
         }
 
         Guardando = true;
-        ErrorGuardar = null;
 
         try
         {
             if (Id.HasValue)
             {
                 await Api.ActualizarAsync(Id.Value, Modelo);
-                Nav.NavigateTo($"/pacientes/{Id.Value}");
+
+                Nav.NavigateTo(
+                    $"/pacientes/{Id.Value}");
             }
             else
             {
-                var nuevo = await Api.CrearAsync(Modelo);
-                Nav.NavigateTo($"/pacientes/{nuevo.Id}");
+                var creado = await Api.CrearAsync(Modelo);
+
+                Nav.NavigateTo(
+                    $"/pacientes/{creado.Id}");
             }
         }
         catch (InvalidOperationException ex)
         {
             ErrorGuardar = ex.Message;
         }
+        catch (TaskCanceledException)
+        {
+            ErrorGuardar =
+                "La solicitud tardó demasiado. " +
+                "Comprueba en el directorio si se guardó " +
+                "antes de intentarlo nuevamente.";
+        }
         catch (HttpRequestException)
         {
             ErrorGuardar =
-                "No se pudo conectar con PodoFlow.Api.";
+                "No se pudo conectar con PodoFlow.Api. " +
+                "Comprueba que el backend esté ejecutándose.";
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Logger.LogError(
+                ex, "Error al guardar un paciente");
+
             ErrorGuardar =
-                "Ocurrió un error al guardar el paciente.";
+                "Ocurrió un error inesperado. " +
+                "Revisa la consola de PodoFlow.Web.";
         }
         finally
         {
             Guardando = false;
         }
     }
+
 }

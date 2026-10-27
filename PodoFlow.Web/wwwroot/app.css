@@ -1519,3 +1519,224 @@ html, body {
         grid-column: auto;
     }
 }
+
+/* BAJA LÓGICA DEL PACIENTE */
+
+.pf-profile-danger {
+    background: rgba(255,255,255,.15);
+    color: white;
+    border: 1px solid rgba(255,255,255,.45);
+    cursor: pointer;
+}
+
+    .pf-profile-danger:hover {
+        background: rgba(255,255,255,.25);
+        color: white;
+    }
+
+.pf-baja-panel {
+    padding: 25px;
+    border: 1px solid #ffd8bd;
+    background: #fffaf6;
+}
+
+    .pf-baja-panel h3 {
+        margin: 0 0 10px;
+        font-size: 18px;
+    }
+
+    .pf-baja-panel p {
+        color: #85674d;
+        font-size: 13px;
+        line-height: 1.7;
+    }
+
+    .pf-baja-panel label {
+        display: block;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+.pf-btn-danger-confirm {
+    background: #c94c4c;
+    color: white;
+}
+
+    .pf-btn-danger-confirm:hover {
+        background: #b73c3c;
+        color: white;
+    }
+
+/* =========================================
+   PODOFLOW - CONTACTOS DEL PACIENTE
+   ========================================= */
+
+.pf-contact-editor {
+    margin: 24px 0;
+    padding: 25px;
+    border-radius: 20px;
+    border: 1px solid #dce8fb;
+    background: linear-gradient( 135deg, #f5f9ff 0%, #ffffff 100% );
+}
+
+    .pf-contact-editor h3 {
+        margin: 0 0 23px;
+        font-size: 19px;
+        font-weight: 750;
+        color: #203251;
+    }
+
+.pf-contact-fields {
+    display: grid;
+    grid-template-columns: minmax(170px, 0.8fr) minmax(220px, 1.7fr) minmax(130px, auto);
+    gap: 18px;
+    align-items: end;
+}
+
+    .pf-contact-fields > div {
+        min-width: 0;
+    }
+
+    .pf-contact-fields label:not(.pf-contact-check) {
+        display: block;
+        margin-bottom: 9px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #415575;
+    }
+
+    .pf-contact-fields .pf-field {
+        width: 100%;
+        height: 48px;
+        border: 1px solid #dce6f4;
+        border-radius: 12px;
+        background: white;
+        padding: 10px 14px;
+        font-family: inherit;
+        font-size: 13px;
+    }
+
+        .pf-contact-fields .pf-field:focus {
+            border-color: #2f6fd6;
+            box-shadow: 0 0 0 3px rgba(47,111,214,.10);
+            outline: none;
+        }
+
+.pf-contact-check {
+    display: flex !important;
+    align-items: center;
+    gap: 9px;
+    min-height: 48px;
+    margin: 0;
+    font-size: 13px;
+    color: #415575;
+    cursor: pointer;
+}
+
+    .pf-contact-check input {
+        width: 17px;
+        height: 17px;
+        accent-color: #2f6fd6;
+    }
+
+.pf-contact-buttons {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 19px;
+}
+
+    .pf-contact-buttons .pf-btn {
+        height: 44px;
+    }
+
+.pf-contact-entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    padding: 20px;
+    margin-top: 12px;
+    border: 1px solid #e8eef8;
+    border-radius: 15px;
+    background: #fff;
+}
+
+    .pf-contact-entry > div:first-child {
+        min-width: 0;
+    }
+
+    .pf-contact-entry strong {
+        display: block;
+        font-size: 14px;
+        color: #243650;
+        overflow-wrap: anywhere;
+    }
+
+    .pf-contact-entry span {
+        display: block;
+        font-size: 12px;
+        color: #7b8798;
+        margin-top: 6px;
+    }
+
+.pf-contact-action {
+    background: #edf4ff;
+    border: 1px solid #dae7ff;
+    border-radius: 10px;
+    color: #2f6fd6;
+    padding: 9px 13px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: .2s;
+}
+
+    .pf-contact-action:hover {
+        background: #dceaff;
+    }
+
+.pf-contact-success {
+    padding: 15px 18px;
+    background: #eaf8f1;
+    color: #167d59;
+    border-radius: 12px;
+    font-size: 13px;
+    margin: 15px 0;
+}
+
+@media (max-width: 950px) {
+    .pf-contact-fields {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .pf-contact-check {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 620px) {
+    .pf-contact-editor {
+        padding: 18px;
+    }
+
+    .pf-contact-fields {
+        grid-template-columns: 1fr;
+    }
+
+    .pf-contact-check {
+        grid-column: auto;
+    }
+
+    .pf-contact-entry {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .pf-contact-buttons {
+        justify-content: flex-start;
+    }
+}

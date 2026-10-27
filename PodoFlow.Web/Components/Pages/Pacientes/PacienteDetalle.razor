@@ -265,10 +265,12 @@
                                         <label>Tipo</label>
                                         <InputSelect class="pf-field"
                                                      @bind-Value="ContactoEditado.Tipo">
-                                            <option value="TELEFONO">Teléfono</option>
                                             <option value="CELULAR">Celular</option>
-                                            <option value="EMAIL">Correo</option>
+                                            <option value="TELEFONO">Teléfono</option>
+                                            <option value="CORREO">Correo electrónico</option>
+                                            <option value="WHATSAPP">WhatsApp</option>
                                             <option value="OTRO">Otro</option>
+
                                         </InputSelect>
                                     </div>
 
@@ -579,6 +581,9 @@
     private string? ErrorContactos;
     private string? ErrorCitas;
     private string? ErrorPrestaciones;
+    private bool ContactosConsultados;
+    private bool CitasConsultadas;
+    private bool PrestacionesConsultadas;
 
     private bool CargandoUltimaCita;
     private string? ErrorUltimaCita;
