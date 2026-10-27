@@ -1,0 +1,255 @@
+﻿
+@page "/pacientes"
+@rendermode InteractiveServer
+
+@using PodoFlow.Web.Modelos.Pacientes
+@using PodoFlow.Web.Servicios
+
+@inject PacientesApi Api
+
+<PageTitle>Pacientes | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">
+                GESTIÓN CLÍNICA
+            </span>
+
+            <h1>Pacientes</h1>
+
+            <p>
+                Administra la información de los pacientes
+                del Centro Podológico TODO PIE.
+            </p>
+        </div>
+
+        <a href="/pacientes/nuevo"
+           class="pf-btn pf-btn-main">
+            + Nuevo paciente
+        </a>
+    </div>
+
+    <div class="pf-module-toolbar">
+
+        <input class="pf-field pf-search-field"
+               placeholder="Buscar en esta página por nombre o identificación..."
+               @bind="Busqueda"
+               @bind:event="oninput" />
+
+        <label class="pf-checkbox">
+            <input type="checkbox"
+                   @bind="IncluirInactivos"
+                   @bind:after="RecargarAsync" />
+            Incluir inactivos
+        </label>
+
+    </div>
+
+    <section class="pf-card pf-directory">
+
+        <div class="pf-card-header">
+            <div>
+                <h2>Directorio de pacientes</h2>
+                <p>Selecciona un paciente para consultar su ficha.</p>
+            </div>
+
+            <span class="pf-soft-chip">
+                @Filtrados.Count visibles
+            </span>
+        </div>
+
+        @if (Cargando)
+        {
+            <div class="pf-empty">
+                Cargando pacientes...
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(Error))
+        {
+            <div class="pf-empty">
+                @Error
+            </div>
+        }
+        else if (Filtrados.Count == 0)
+        {
+            <div class="pf-empty">
+                No se encontraron pacientes.
+            </div>
+        }
+        else
+        {
+            <div class="pf-table-wrap">
+                <table class="pf-table">
+                    <thead>
+                        <tr>
+                            <th>Paciente</th>
+                            <th>Identificación</th>
+                            <th>Estado</th>
+                            <th>Fecha de registro</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var paciente in Filtrados)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="pf-patient">
+                                        <div class="pf-patient-avatar">
+                                            @Iniciales(paciente)
+                                        </div>
+
+                                        <strong>
+                                            @paciente.NombreCompleto
+                                        </strong>
+                                    </div>
+                                </td>
+
+                                <td>
+                                    @paciente.TipoIdentificacion
+                                    · @paciente.Identificacion
+                                </td>
+
+                                <td>
+                                    <span class="pf-status @(paciente.Estatus ? "success" : "danger")">
+                                        @(paciente.Estatus ? "ACTIVO" : "INACTIVO")
+                                    </span>
+                                </td>
+
+                                <td>
+                                    @paciente.FechaCreacion.ToString("dd/MM/yyyy")
+                                </td>
+
+                                <td>
+                                    <a class="pf-action-link"
+                                       href="@($"/pacientes/{paciente.Id}")">
+                                        Ver ficha →
+                                    </a>
+                                </td>
+
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+    </section>
+
+    <div class="pf-pagination">
+
+        <button type="button"
+                disabled="@(Pagina <= 1 || Cargando)"
+                @onclick="AnteriorAsync">
+            Anterior
+        </button>
+
+        <span>Página @Pagina</span>
+
+        <button type="button"
+                disabled="@(ListaPacientes.Count < Tamano || Cargando)"
+                @onclick="SiguienteAsync">
+            Siguiente
+        </button>
+
+    </div>
+
+</div>
+
+@code {
+
+    // IMPORTANTE:
+    // La clase generada por Pacientes.razor se llama Pacientes.
+    // Por eso la lista debe llamarse ListaPacientes.
+
+    private List<PacienteDto> ListaPacientes = new();
+
+    private bool Cargando = true;
+    private bool IncluirInactivos = false;
+
+    private string Busqueda = "";
+    private string? Error;
+
+    private int Pagina = 1;
+    private const int Tamano = 10;
+
+    // Buscar dentro de los registros de la página actual.
+    private List<PacienteDto> Filtrados =>
+        ListaPacientes.Where(p =>
+            string.IsNullOrWhiteSpace(Busqueda)
+            || p.NombreCompleto.Contains(
+                Busqueda,
+                StringComparison.OrdinalIgnoreCase)
+            || p.Identificacion.Contains(
+                Busqueda,
+                StringComparison.OrdinalIgnoreCase)
+        ).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        Cargando = true;
+        Error = null;
+
+        try
+        {
+            ListaPacientes = await Api.ListarAsync(
+                IncluirInactivos,
+                Pagina,
+                Tamano);
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api. Verifica que el backend esté ejecutándose.";
+            ListaPacientes.Clear();
+        }
+        catch (Exception)
+        {
+            Error = "No se pudieron cargar los pacientes. Revisa la conexión o los permisos de acceso.";
+            ListaPacientes.Clear();
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private async Task RecargarAsync()
+    {
+        Pagina = 1;
+        await CargarAsync();
+    }
+
+    private async Task AnteriorAsync()
+    {
+        if (Pagina <= 1)
+            return;
+
+        Pagina--;
+        await CargarAsync();
+    }
+
+    private async Task SiguienteAsync()
+    {
+        if (Cargando || ListaPacientes.Count < Tamano)
+            return;
+
+        Pagina++;
+        await CargarAsync();
+    }
+
+    private static string Iniciales(PacienteDto paciente)
+    {
+        char nombre = paciente.Nombres.FirstOrDefault();
+        char apellido = paciente.Apellidos.FirstOrDefault();
+
+        return $"{nombre}{apellido}".ToUpperInvariant();
+    }
+}

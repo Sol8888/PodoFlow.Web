@@ -1,0 +1,43 @@
+﻿@inherits LayoutComponentBase
+
+<div class="pf-shell">
+
+    <aside class="pf-sidebar">
+        <NavMenu />
+    </aside>
+
+    <div class="pf-main-area">
+
+        <header class="pf-topbar">
+            <div class="pf-topbar-left">
+                <div class="pf-search">
+                    <span class="pf-search-icon">⌕</span>
+                    <input type="text" placeholder="Buscar paciente, cita, pago..." />
+                </div>
+            </div>
+
+            <div class="pf-topbar-right">
+                <button class="pf-top-icon-btn">◐</button>
+                <button class="pf-top-icon-btn">◌</button>
+
+                <div class="pf-date-chip">
+                    15 Oct, 2026
+                </div>
+
+                <div class="pf-user-chip">
+                    <div class="pf-user-avatar">PF</div>
+                    <div>
+                        <strong>PodoFlow</strong>
+                        <span>Modo demostración</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="pf-page-content">
+            @Body
+        </main>
+
+    </div>
+
+</div>

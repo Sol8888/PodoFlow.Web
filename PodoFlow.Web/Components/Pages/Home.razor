@@ -1,0 +1,288 @@
+﻿@page "/"
+@using System.Globalization
+
+<PageTitle>Dashboard | PodoFlow</PageTitle>
+
+<div class="pf-dashboard">
+
+    <section class="pf-hero">
+        <div class="pf-hero-left">
+            <span class="pf-badge">Dashboard principal</span>
+            <h1>Bienvenida de vuelta 👋</h1>
+            <p>
+                Tienes un resumen rápido de la actividad del consultorio:
+                citas de hoy, pagos, inventario y seguimiento de la jornada.
+            </p>
+
+            <div class="pf-hero-actions">
+                <button class="pf-btn pf-btn-primary">Ver citas de hoy</button>
+                <button class="pf-btn pf-btn-secondary">Registrar nueva cita</button>
+            </div>
+        </div>
+
+        <div class="pf-hero-right">
+            <div class="pf-hero-metric">
+                <span class="pf-hero-number">@CitasHoy.Count</span>
+                <small>Citas programadas hoy</small>
+            </div>
+        </div>
+    </section>
+
+    <section class="pf-kpi-grid">
+        <div class="pf-kpi-card">
+            <div class="pf-kpi-header">
+                <span>Citas de hoy</span>
+                <div class="pf-kpi-icon blue"></div>
+            </div>
+            <strong>@CitasHoy.Count</strong>
+            <p>@CitasHoy.Count(c => c.Estado == "CONFIRMADA") confirmadas para hoy</p>
+        </div>
+
+        <div class="pf-kpi-card">
+            <div class="pf-kpi-header">
+                <span>Pacientes atendidos</span>
+                <div class="pf-kpi-icon green"></div>
+            </div>
+            <strong>@CitasHoy.Count(c => c.Estado == "ATENDIDA")</strong>
+            <p>Atenciones registradas en la jornada</p>
+        </div>
+
+        <div class="pf-kpi-card">
+            <div class="pf-kpi-header">
+                <span>Cobrado hoy</span>
+                <div class="pf-kpi-icon orange"></div>
+            </div>
+            <strong>@CobradoHoy.ToString("C2", Cultura)</strong>
+            <p>@PrestacionesPendientes pendientes de cobro</p>
+        </div>
+
+        <div class="pf-kpi-card">
+            <div class="pf-kpi-header">
+                <span>Inventario</span>
+                <div class="pf-kpi-icon red"></div>
+            </div>
+            <strong>@InsumosBajos.Count</strong>
+            <p>Insumos por debajo del mínimo</p>
+        </div>
+    </section>
+
+    <section class="pf-content-grid">
+
+        <div class="pf-left-column">
+
+            <div class="pf-card">
+                <div class="pf-card-header">
+                    <div>
+                        <h2>Citas de hoy</h2>
+                        <p>Pacientes programados para la jornada</p>
+                    </div>
+                    <span class="pf-soft-chip">@CitasHoy.Count citas</span>
+                </div>
+
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                <th>Paciente</th>
+                                <th>Servicio</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var cita in CitasHoy)
+                            {
+                                <tr>
+                                    <td class="pf-time">@cita.Hora</td>
+                                    <td>
+                                        <div class="pf-patient">
+                                            <div class="pf-patient-avatar">@cita.Iniciales</div>
+                                            <span>@cita.Paciente</span>
+                                        </div>
+                                    </td>
+                                    <td>@cita.Servicio</td>
+                                    <td>
+                                        <span class="pf-status @GetStatusClass(cita.Estado)">
+                                            @cita.Estado
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="pf-bottom-row">
+                <div class="pf-card">
+                    <div class="pf-card-header">
+                        <div>
+                            <h2>Inventario crítico</h2>
+                            <p>Insumos que necesitan atención</p>
+                        </div>
+                    </div>
+
+                    <div class="pf-list">
+                        @foreach (var insumo in InsumosBajos)
+                        {
+                            <div class="pf-list-item">
+                                <div class="pf-list-bullet orange"></div>
+                                <div class="pf-list-content">
+                                    <strong>@insumo.Nombre</strong>
+                                    <span>Disponible: @insumo.StockActual @insumo.Unidad</span>
+                                </div>
+                                <span class="pf-mini-chip warning">Mínimo @insumo.StockMinimo</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="pf-card">
+                    <div class="pf-card-header">
+                        <div>
+                            <h2>Pagos</h2>
+                            <p>Estado general del día</p>
+                        </div>
+                    </div>
+
+                    <div class="pf-payment-box">
+                        <div class="pf-payment-total">
+                            <span>Total cobrado</span>
+                            <strong>@CobradoHoy.ToString("C2", Cultura)</strong>
+                        </div>
+
+                        <div class="pf-payment-item">
+                            <span>Prestaciones pagadas hoy</span>
+                            <strong>@PrestacionesPagadasHoy</strong>
+                        </div>
+
+                        <div class="pf-payment-item">
+                            <span>Prestaciones pendientes</span>
+                            <strong>@PrestacionesPendientes</strong>
+                        </div>
+
+                        <div class="pf-payment-item">
+                            <span>Saldo pendiente</span>
+                            <strong>@SaldoPendiente.ToString("C2", Cultura)</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="pf-right-column">
+
+            <div class="pf-card pf-agenda-card">
+                <div class="pf-card-header">
+                    <div>
+                        <h2>Agenda rápida</h2>
+                        <p>@FechaActual</p>
+                    </div>
+                </div>
+
+                <div class="pf-agenda-list">
+                    @foreach (var cita in CitasHoy)
+                    {
+                        <div class="pf-agenda-item">
+                            <div class="pf-agenda-avatar">@cita.Iniciales</div>
+                            <div class="pf-agenda-info">
+                                <strong>@cita.Paciente</strong>
+                                <span>@cita.Hora · @cita.Servicio</span>
+                            </div>
+                            <div class="pf-agenda-status @GetStatusClass(cita.Estado)">
+                                @cita.Estado
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="pf-card">
+                <div class="pf-card-header">
+                    <div>
+                        <h2>Resumen del día</h2>
+                        <p>Seguimiento rápido</p>
+                    </div>
+                </div>
+
+                <div class="pf-summary-list">
+                    <div class="pf-summary-row">
+                        <div class="pf-summary-indicator blue"></div>
+                        <div>
+                            <strong>@CitasHoy.Count citas</strong>
+                            <span>Agendadas para hoy</span>
+                        </div>
+                    </div>
+
+                    <div class="pf-summary-row">
+                        <div class="pf-summary-indicator green"></div>
+                        <div>
+                            <strong>@CitasHoy.Count(c => c.Estado == "ATENDIDA") atenciones</strong>
+                            <span>Marcadas como atendidas</span>
+                        </div>
+                    </div>
+
+                    <div class="pf-summary-row">
+                        <div class="pf-summary-indicator orange"></div>
+                        <div>
+                            <strong>@PrestacionesPendientes prestaciones</strong>
+                            <span>Pendientes de cobro</span>
+                        </div>
+                    </div>
+
+                    <div class="pf-summary-row">
+                        <div class="pf-summary-indicator red"></div>
+                        <div>
+                            <strong>@InsumosBajos.Count alertas</strong>
+                            <span>Inventario bajo el mínimo</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </section>
+
+</div>
+
+@code {
+    private readonly CultureInfo Cultura = CultureInfo.GetCultureInfo("es-EC");
+
+    private string FechaActual =>
+        DateTime.Today.ToString("dddd, dd 'de' MMMM 'de' yyyy", Cultura);
+
+    private readonly List<CitaDemo> CitasHoy =
+    [
+        new("08:30", "María López", "ML", "Consulta podológica", "ATENDIDA"),
+        new("09:30", "Carlos Pérez", "CP", "Control de tratamiento", "CONFIRMADA"),
+        new("11:00", "Ana Torres", "AT", "Podología preventiva", "CONFIRMADA"),
+        new("14:00", "José Herrera", "JH", "Consulta podológica", "PENDIENTE"),
+        new("16:00", "Lucía Morales", "LM", "Control de seguimiento", "PENDIENTE")
+    ];
+
+    private readonly List<InsumoDemo> InsumosBajos =
+    [
+        new("Guantes de nitrilo", 3, 10, "cajas"),
+        new("Gasas estériles", 5, 15, "paquetes"),
+        new("Solución antiséptica", 2, 6, "frascos")
+    ];
+
+    private decimal CobradoHoy = 125.50m;
+    private int PrestacionesPendientes = 3;
+    private int PrestacionesPagadasHoy = 4;
+    private decimal SaldoPendiente = 75.00m;
+
+    private static string GetStatusClass(string estado) => estado switch
+    {
+        "ATENDIDA" => "success",
+        "CONFIRMADA" => "info",
+        "PENDIENTE" => "warning",
+        "CANCELADA" => "danger",
+        _ => ""
+    };
+
+    private record CitaDemo(string Hora, string Paciente, string Iniciales, string Servicio, string Estado);
+    private record InsumoDemo(string Nombre, decimal StockActual, decimal StockMinimo, string Unidad);
+}

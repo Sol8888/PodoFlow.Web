@@ -1,0 +1,883 @@
+﻿@page "/pacientes/{Id:long}"
+@rendermode InteractiveServer
+
+@using PodoFlow.Web.Modelos.Pacientes
+@using PodoFlow.Web.Servicios
+
+@inject PacientesApi Api
+
+<PageTitle>Ficha del paciente | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <a href="/pacientes" class="pf-back-link">
+        ← Volver al directorio
+    </a>
+
+    @if (Cargando)
+    {
+        <div class="pf-card pf-empty">
+            Cargando información del paciente...
+        </div>
+    }
+    else if (Paciente == null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>No se pudo abrir la ficha</h2>
+            <p>@(ErrorPaciente ?? "El paciente no existe.")</p>
+            <a href="/pacientes" class="pf-link">
+                Volver al directorio
+            </a>
+        </section>
+    }
+    else
+    {
+        <!-- CABECERA DEL PACIENTE -->
+        <section class="pf-profile-hero">
+
+            <div class="pf-profile-avatar">
+                @Iniciales
+            </div>
+
+            <div class="pf-profile-info">
+
+                <span class="pf-profile-label">
+                    EXPEDIENTE DEL PACIENTE · #@Paciente.Id
+                </span>
+
+                <h1>@Paciente.NombreCompleto</h1>
+
+                <div class="pf-profile-meta">
+                    <span>
+                        @Paciente.TipoIdentificacion ·
+                        @Paciente.Identificacion
+                    </span>
+
+                    <span class="pf-profile-state">
+                        @(Paciente.Estatus ? "Activo" : "Inactivo")
+                    </span>
+                </div>
+            </div>
+
+            <div class="pf-profile-actions">
+                <a class="pf-profile-button"
+                   href="@($"/pacientes/{Id}/editar")">
+                    Editar paciente
+                </a>
+            </div>
+
+        </section>
+
+        <!-- PESTAÑAS -->
+        <nav class="pf-profile-tabs"
+             aria-label="Información del paciente">
+
+            <a href="@Ruta("resumen")"
+               class="@ClasePestana("resumen")">
+                Resumen
+            </a>
+
+            <a href="@Ruta("contactos")"
+               class="@ClasePestana("contactos")">
+                Contactos
+            </a>
+
+            <a href="@Ruta("citas")"
+               class="@ClasePestana("citas")">
+                Citas
+            </a>
+
+            <a href="@Ruta("historia")"
+               class="@ClasePestana("historia")">
+                Historia clínica
+            </a>
+
+            <a href="@Ruta("pagos")"
+               class="@ClasePestana("pagos")">
+                Pagos
+            </a>
+        </nav>
+
+        @if (SeccionActual == "resumen")
+        {
+            <div class="pf-detail-grid">
+
+                <section class="pf-card pf-info-card">
+                    <h2>Información personal</h2>
+
+                    <div class="pf-data-row">
+                        <span>Nombres</span>
+                        <strong>@Paciente.Nombres</strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Apellidos</span>
+                        <strong>@Paciente.Apellidos</strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Tipo de identificación</span>
+                        <strong>@Paciente.TipoIdentificacion</strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Identificación</span>
+                        <strong>@Paciente.Identificacion</strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Fecha de nacimiento</span>
+                        <strong>
+                            @(Paciente.FechaNacimiento?.ToString(
+                                "dd/MM/yyyy") ?? "No registrada")
+                        </strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Fecha de registro</span>
+                        <strong>
+                            @Paciente.FechaCreacion.ToString("dd/MM/yyyy")
+                        </strong>
+                    </div>
+                </section>
+
+                
+                <section class="pf-card pf-info-card">
+
+                    <div class="pf-last-activity-heading">
+                        <span class="pf-last-activity-icon">+</span>
+                        <div>
+                            <h2>Última actividad</h2>
+                            <p>
+                                Información reciente del paciente,
+                                disponible de un vistazo.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="pf-last-activity-item">
+
+                        <div class="pf-last-activity-top">
+                            <span>Última cita registrada</span>
+                            <span class="pf-last-activity-indicator"></span>
+                        </div>
+
+                        @if (CargandoUltimaCita)
+                        {
+                            <strong>Cargando citas...</strong>
+                        }
+                        else if (ErrorUltimaCita != null)
+                        {
+                            <p class="pf-detail-error">@ErrorUltimaCita</p>
+                        }
+                        else if (UltimaCita == null)
+                        {
+                            <strong>Sin citas registradas</strong>
+                            <small>No hay una visita registrada para este paciente.</small>
+                        }
+                        else
+                        {
+                            <strong>
+                                @UltimaCita.FechaInicio.ToString("dd/MM/yyyy")
+                            </strong>
+
+                            <small>
+                                @UltimaCita.FechaInicio.ToString("HH:mm")
+                                · Estado: @UltimaCita.Estado
+                            </small>
+                        }
+
+                    </div>
+
+                    <div class="pf-last-activity-item">
+
+                        <div class="pf-last-activity-top">
+                            <span>Última atención clínica</span>
+                            <span class="pf-last-activity-indicator orange"></span>
+                        </div>
+
+                        <strong>Pendiente de integración</strong>
+
+                        <small>
+                            Mostraremos aquí la fecha y el estado
+                            de la atención más reciente cuando
+                            conectemos cli.ATENCION.
+                        </small>
+
+                    </div>
+
+                    <div class="pf-last-activity-footer">
+                        Los detalles clínicos se consultarán
+                        únicamente con los permisos correspondientes.
+                    </div>
+
+                </section>
+
+
+            </div>
+        }
+
+        else if (SeccionActual == "contactos")
+        {
+            <section class="pf-card pf-info-card">
+
+                <div class="pf-detail-heading">
+                    <div>
+                        <h2>Datos de contacto</h2>
+                        <p class="pf-detail-muted">
+                            Administra teléfonos, correos y otros contactos.
+                        </p>
+                    </div>
+                </div>
+
+                @if (ErrorContactos != null)
+                {
+                    <p class="pf-detail-error">@ErrorContactos</p>
+                }
+
+                @if (MensajeContacto != null)
+                {
+                    <p class="pf-contact-success">@MensajeContacto</p>
+                }
+
+                @if (Paciente.Estatus)
+                {
+                    <div class="pf-contact-editor">
+                        <h3>
+                            @(ContactoEditandoId.HasValue
+                                ? "Editar contacto"
+                                : "Agregar contacto")
+                        </h3>
+
+                        <EditForm Model="@(ContactoEditandoId.HasValue
+                                                                      ? ContactoEditado
+                                                                  : NuevoContacto)"
+                                  OnValidSubmit="GuardarContactoAsync"
+                                  FormName="form-contacto">
+
+                            <DataAnnotationsValidator />
+
+                            @if (ContactoEditandoId.HasValue)
+                            {
+                                <div class="pf-contact-fields">
+
+                                    <div>
+                                        <label>Tipo</label>
+                                        <InputSelect class="pf-field"
+                                                     @bind-Value="ContactoEditado.Tipo">
+                                            <option value="TELEFONO">Teléfono</option>
+                                            <option value="CELULAR">Celular</option>
+                                            <option value="EMAIL">Correo</option>
+                                            <option value="OTRO">Otro</option>
+                                        </InputSelect>
+                                    </div>
+
+                                    <div>
+                                        <label>Contacto</label>
+                                        <InputText class="pf-field"
+                                                   @bind-Value="ContactoEditado.Valor" />
+                                        <ValidationMessage For="@(() => ContactoEditado.Valor)" />
+                                    </div>
+
+                                    <label class="pf-contact-check">
+                                        <InputCheckbox @bind-Value="ContactoEditado.Principal" />
+                                        Principal
+                                    </label>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="pf-contact-fields">
+
+                                    <div>
+                                        <label>Tipo</label>
+                                        <InputSelect class="pf-field"
+                                                     @bind-Value="NuevoContacto.Tipo">
+                                            <option value="TELEFONO">Teléfono</option>
+                                            <option value="CELULAR">Celular</option>
+                                            <option value="EMAIL">Correo</option>
+                                            <option value="OTRO">Otro</option>
+                                        </InputSelect>
+                                    </div>
+
+                                    <div>
+                                        <label>Contacto</label>
+                                        <InputText class="pf-field"
+                                                   @bind-Value="NuevoContacto.Valor" />
+                                        <ValidationMessage For="@(() => NuevoContacto.Valor)" />
+                                    </div>
+
+                                    <label class="pf-contact-check">
+                                        <InputCheckbox @bind-Value="NuevoContacto.Principal" />
+                                        Principal
+                                    </label>
+                                </div>
+                            }
+
+                            <div class="pf-contact-buttons">
+                                @if (ContactoEditandoId.HasValue)
+                                {
+                                    <button type="button"
+                                            class="pf-btn pf-btn-neutral"
+                                            @onclick="CancelarEdicionContacto">
+                                        Cancelar
+                                    </button>
+                                }
+
+                                <button type="submit"
+                                        disabled="@GuardandoContacto"
+                                        class="pf-btn pf-btn-main">
+                                    @(ContactoEditandoId.HasValue
+                                        ? "Guardar cambios"
+                                        : "Agregar contacto")
+                                </button>
+                            </div>
+
+                        </EditForm>
+                    </div>
+                }
+
+                @if (CargandoContactos)
+                {
+                    <p>Cargando contactos...</p>
+                }
+                else if (Contactos.Count == 0)
+                {
+                    <div class="pf-detail-empty">
+                        No hay contactos registrados.
+                    </div>
+                }
+                else
+                {
+                    @foreach (var contacto in Contactos)
+                    {
+                        <div class="pf-contact-entry">
+                            <div>
+                                <strong>@contacto.Valor</strong>
+
+                                <span>
+                                    @contacto.Tipo
+                                    @(contacto.Principal ? " · Principal" : "")
+                                    · @(contacto.Estatus ? "Activo" : "Inactivo")
+                                </span>
+                            </div>
+
+                            @if (Paciente.Estatus)
+                            {
+                                <div class="pf-contact-buttons">
+                                    @if (contacto.Estatus)
+                                    {
+                                        <button type="button"
+                                                class="pf-contact-action"
+                                                @onclick="() => EditarContacto(contacto)">
+                                            Editar
+                                        </button>
+                                    }
+
+                                    <button type="button"
+                                            class="pf-contact-action"
+                                            @onclick="() => CambiarEstadoContactoAsync(contacto)">
+                                        @(contacto.Estatus
+                                            ? "Desactivar"
+                                            : "Reactivar")
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </section>
+        }
+        else if (SeccionActual == "citas")
+        {
+            <section class="pf-card pf-info-card">
+
+                <div class="pf-detail-heading">
+                    <div>
+                        <h2>Citas del paciente</h2>
+                        <p class="pf-detail-muted">
+                            Historial de citas y próximas visitas.
+                        </p>
+                    </div>
+                </div>
+
+                @if (CargandoCitas)
+                {
+                    <p>Cargando citas...</p>
+                }
+                else if (ErrorCitas != null)
+                {
+                    <p class="pf-detail-error">@ErrorCitas</p>
+                }
+                else if (Citas.Count == 0)
+                {
+                    <div class="pf-detail-empty">
+                        No hay citas registradas para este paciente.
+                    </div>
+                }
+                else
+                {
+                    <div class="pf-table-wrap">
+                        <table class="pf-table">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Hora</th>
+                                    <th>Servicio</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var cita in Citas
+                                    .OrderByDescending(x => x.FechaInicio))
+                                {
+                                    <tr>
+                                        <td>
+                                            @cita.FechaInicio.ToString("dd/MM/yyyy")
+                                        </td>
+                                        <td>
+                                            @cita.FechaInicio.ToString("HH:mm")
+                                        </td>
+                                        <td>
+                                            Servicio #@cita.ServicioId
+                                        </td>
+                                        <td>
+                                            <span class="pf-status
+                                                @ClaseEstado(cita.Estado)">
+                                                @cita.Estado
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        }
+        else if (SeccionActual == "historia")
+        {
+            <section class="pf-card pf-info-card">
+
+                <h2>Historia clínica</h2>
+
+                <p class="pf-detail-muted">
+                    Aquí consultaremos los antecedentes,
+                    atenciones, evoluciones y documentos
+                    clínicos de este paciente.
+                </p>
+
+                <div class="pf-detail-empty">
+                    La consulta clínica estará disponible
+                    cuando implementemos el acceso
+                    autorizado a la historia de este paciente.
+                </div>
+
+            </section>
+        }
+        else if (SeccionActual == "pagos")
+        {
+            <section class="pf-card pf-info-card">
+
+                <h2>Prestaciones y pagos</h2>
+
+                <p class="pf-detail-muted">
+                    Servicios prestados al paciente
+                    y su estado administrativo.
+                </p>
+
+                @if (CargandoPrestaciones)
+                {
+                    <p>Cargando prestaciones...</p>
+                }
+                else if (ErrorPrestaciones != null)
+                {
+                    <p class="pf-detail-error">
+                        @ErrorPrestaciones
+                    </p>
+                }
+                else if (Prestaciones.Count == 0)
+                {
+                    <div class="pf-detail-empty">
+                        No hay prestaciones registradas.
+                    </div>
+                }
+                else
+                {
+                    <div class="pf-table-wrap">
+                        <table class="pf-table">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Prestación</th>
+                                    <th>Total</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var prestacion in Prestaciones
+                                    .OrderByDescending(x => x.FechaPrestacion))
+                                {
+                                    <tr>
+                                        <td>
+                                            @prestacion.FechaPrestacion
+                                            .ToString("dd/MM/yyyy")
+                                        </td>
+
+                                        <td>
+                                            Prestación #@prestacion.Id
+                                        </td>
+
+                                        <td>
+                                            @prestacion.Total.ToString("C2", Cultura)
+                                        </td>
+
+                                        <td>
+                                            <span class="pf-status
+                                                @ClaseEstado(prestacion.Estado)">
+                                                @prestacion.Estado
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                <p class="pf-detail-muted">
+                    Esta sección muestra prestaciones.
+                    El detalle de abonos, anulaciones
+                    y saldos se integrará con fin.COBRO.
+                </p>
+
+            </section>
+        }
+    }
+</div>
+
+@code {
+    [Parameter]
+    public long Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "seccion")]
+    public string? Seccion { get; set; }
+
+    private PacienteDto? Paciente;
+    private List<ContactoPacienteDto> Contactos = [];
+    private List<CitaPacienteDto> Citas = [];
+    private List<PrestacionPacienteDto> Prestaciones = [];
+
+    private bool Cargando = true;
+    private bool CargandoContactos;
+    private bool CargandoCitas;
+    private bool CargandoPrestaciones;
+
+    private string? ErrorPaciente;
+    private string? ErrorContactos;
+    private string? ErrorCitas;
+    private string? ErrorPrestaciones;
+
+    private bool CargandoUltimaCita;
+    private string? ErrorUltimaCita;
+
+    private readonly System.Globalization.CultureInfo Cultura =
+        System.Globalization.CultureInfo.GetCultureInfo("es-EC");
+
+    private string SeccionActual =>
+        Seccion?.ToLowerInvariant() switch
+        {
+            "contactos" => "contactos",
+            "citas" => "citas",
+            "historia" => "historia",
+            "pagos" => "pagos",
+            _ => "resumen"
+        };
+
+    private string Iniciales =>
+        Paciente == null
+            ? "PF"
+            : $"{Paciente.Nombres.FirstOrDefault()}" +
+              $"{Paciente.Apellidos.FirstOrDefault()}"
+                .ToUpperInvariant();
+
+    
+
+    // Cita más reciente por fecha, entre las citas cargadas.
+    private CitaPacienteDto? UltimaCita =>
+        Citas.OrderByDescending(c => c.FechaInicio)
+             .FirstOrDefault();
+
+    private async Task CargarUltimaCitaAsync()
+    {
+        CargandoUltimaCita = true;
+        ErrorUltimaCita = null;
+
+        try
+        {
+            Citas = await Api.CitasAsync(Id);
+        }
+        catch (Exception)
+        {
+            ErrorUltimaCita =
+                "No se pudo consultar la última cita. " +
+                "Comprueba que tengas acceso a Agenda.";
+        }
+        finally
+        {
+            CargandoUltimaCita = false;
+        }
+    }
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Paciente?.Id != Id)
+        {
+            await CargarPacienteAsync();
+        }
+
+        if (Paciente == null)
+            return;
+
+        switch (SeccionActual)
+        {
+            case "contactos":
+                if (!CargandoContactos &&
+                    ErrorContactos == null &&
+                    Contactos.Count == 0)
+                {
+                    await CargarContactosAsync();
+                }
+                break;
+
+            case "citas":
+                if (!CargandoCitas &&
+                    ErrorCitas == null &&
+                    Citas.Count == 0)
+                {
+                    await CargarCitasAsync();
+                }
+                break;
+
+            case "pagos":
+                if (!CargandoPrestaciones &&
+                    ErrorPrestaciones == null &&
+                    Prestaciones.Count == 0)
+                {
+                    await CargarPrestacionesAsync();
+                }
+                break;
+        }
+    }
+
+    private async Task CargarPacienteAsync()
+    {
+        Cargando = true;
+        ErrorPaciente = null;
+
+        Contactos = [];
+        Citas = [];
+        Prestaciones = [];
+
+        try
+        {
+            Paciente = await Api.ObtenerAsync(Id);
+        }
+        catch (Exception)
+        {
+            Paciente = null;
+            ErrorPaciente =
+                "No se pudo consultar al paciente. " +
+                "Comprueba la API y los permisos.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+        if (Paciente != null)
+        {
+            await CargarUltimaCitaAsync();
+        }
+    }
+
+    private async Task CargarContactosAsync()
+    {
+        CargandoContactos = true;
+
+        try
+        {
+            Contactos = await Api.ContactosAsync(Id);
+            ErrorContactos = null;
+        }
+        catch (Exception)
+        {
+            ErrorContactos =
+                "No se pudieron consultar los contactos.";
+        }
+        finally
+        {
+            CargandoContactos = false;
+        }
+    }
+
+    private async Task CargarCitasAsync()
+    {
+        CargandoCitas = true;
+
+        try
+        {
+            Citas = await Api.CitasAsync(Id);
+            ErrorCitas = null;
+        }
+        catch (Exception)
+        {
+            ErrorCitas =
+                "No se pudieron consultar las citas. " +
+                "Puede ser necesario iniciar sesión.";
+        }
+        finally
+        {
+            CargandoCitas = false;
+        }
+    }
+
+    private async Task CargarPrestacionesAsync()
+    {
+        CargandoPrestaciones = true;
+
+        try
+        {
+            Prestaciones = await Api.PrestacionesAsync(Id);
+            ErrorPrestaciones = null;
+        }
+        catch (Exception)
+        {
+            ErrorPrestaciones =
+                "No se pudieron consultar las prestaciones. " +
+                "Revisa los permisos de Finanzas.";
+        }
+        finally
+        {
+            CargandoPrestaciones = false;
+        }
+    }
+
+    private string Ruta(string seccion) =>
+        $"/pacientes/{Id}?seccion={seccion}";
+
+    private string ClasePestana(string seccion) =>
+        SeccionActual == seccion ? "active" : "";
+
+    private static string ClaseEstado(string estado) =>
+        estado.ToUpperInvariant() switch
+        {
+            "CONFIRMADA" or "PAGADA" or "ATENDIDA" =>
+                "success",
+
+            "PENDIENTE" or "PROGRAMADA" =>
+                "warning",
+
+            "CANCELADA" or "ANULADA" =>
+                "danger",
+
+            _ => "info"
+        };
+
+    private ContactoGuardarDto NuevoContacto = new();
+    private ContactoGuardarDto ContactoEditado = new();
+    private long? ContactoEditandoId;
+    private bool GuardandoContacto;
+    private string? MensajeContacto;
+
+    private async Task GuardarContactoAsync()
+    {
+        if (GuardandoContacto || Paciente?.Estatus != true)
+            return;
+
+        GuardandoContacto = true;
+        MensajeContacto = null;
+
+        try
+        {
+            if (ContactoEditandoId.HasValue)
+            {
+                await Api.ActualizarContactoAsync(
+                    ContactoEditandoId.Value, ContactoEditado);
+
+                MensajeContacto = "Contacto actualizado.";
+                ContactoEditandoId = null;
+            }
+            else
+            {
+                await Api.CrearContactoAsync(Id, NuevoContacto);
+                MensajeContacto = "Contacto agregado.";
+            }
+
+            NuevoContacto = new();
+
+            // Volvemos a consultar los contactos del paciente.
+            Contactos = await Api.ContactosAsync(Id);
+            ErrorContactos = null;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorContactos = ex.Message;
+        }
+        catch (Exception)
+        {
+            ErrorContactos = "No se pudo guardar el contacto.";
+        }
+        finally
+        {
+            GuardandoContacto = false;
+        }
+    }
+
+    private void EditarContacto(ContactoPacienteDto contacto)
+    {
+        ContactoEditandoId = contacto.Id;
+
+        ContactoEditado = new ContactoGuardarDto
+        {
+            Tipo = contacto.Tipo,
+            Valor = contacto.Valor,
+            Principal = contacto.Principal
+        };
+
+        MensajeContacto = null;
+    }
+
+    private void CancelarEdicionContacto()
+    {
+        ContactoEditandoId = null;
+        ContactoEditado = new();
+    }
+
+    private async Task CambiarEstadoContactoAsync(
+        ContactoPacienteDto contacto)
+    {
+        ErrorContactos = null;
+        MensajeContacto = null;
+
+        try
+        {
+            if (contacto.Estatus)
+                await Api.DesactivarContactoAsync(contacto.Id);
+            else
+                await Api.ReactivarContactoAsync(contacto.Id);
+
+            Contactos = await Api.ContactosAsync(Id);
+            MensajeContacto = "Estado del contacto actualizado.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorContactos = ex.Message;
+        }
+        catch (Exception)
+        {
+            ErrorContactos = "No se pudo cambiar el estado.";
+        }
+    }
+
+}
