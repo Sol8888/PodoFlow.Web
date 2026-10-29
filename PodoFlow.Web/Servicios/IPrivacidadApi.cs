@@ -5,8 +5,6 @@ namespace PodoFlow.Web.Servicios
 {
     public interface IPrivacidadApi
     {
-        bool EsDemostracion { get; }
-
         Task<List<PacienteDto>> ListarPacientesActivosAsync();
 
         Task<PacienteDto?> ObtenerPacienteAsync(long id);

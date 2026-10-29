@@ -15,11 +15,6 @@
         ← Volver a solicitudes
     </a>
 
-    @if (Api.EsDemostracion)
-    {
-        <span class="pf-mini-chip warning">DATOS DE DEMOSTRACIÓN</span>
-    }
-
     @if (Cargando)
     {
         <div class="pf-card pf-empty">
@@ -241,6 +236,13 @@
                                                 <input type="radio" name="formato-guia" checked="@(Formato == "CSV")" @onchange="@(() => Formato = "CSV")" />
                                                 CSV
                                             </label>
+                                            @if (Solicitud.TipoDerecho == "ACCESO")
+                                            {
+                                                <label class="pf-checkbox">
+                                                    <input type="radio" name="formato-guia" checked="@(Formato == "PDF")" @onchange="@(() => Formato = "PDF")" />
+                                                    PDF
+                                                </label>
+                                            }
                                         </div>
                                     </div>
 
@@ -645,6 +647,13 @@
                                     <input type="radio" name="formato" checked="@(Formato == "CSV")" @onchange="@(() => Formato = "CSV")" />
                                     CSV
                                 </label>
+                                @if (Solicitud.TipoDerecho == "ACCESO")
+                                {
+                                    <label class="pf-checkbox">
+                                        <input type="radio" name="formato" checked="@(Formato == "PDF")" @onchange="@(() => Formato = "PDF")" />
+                                        PDF
+                                    </label>
+                                }
                             </div>
                         </div>
 
@@ -1250,7 +1259,12 @@
 
     private static string NombreArchivo(ExportacionDto exportacion) => Path.GetFileName(exportacion.RutaArchivo);
 
-    private static string TipoContenido(string formato) => formato == "CSV" ? "text/csv" : "application/json";
+    private static string TipoContenido(string formato) => formato switch
+    {
+        "CSV" => "text/csv",
+        "PDF" => "application/pdf",
+        _ => "application/json"
+    };
 
     private async Task EjecutarAsync(Func<Task> operacion)
     {

@@ -26,8 +26,6 @@ namespace PodoFlow.Web.Servicios
                 : null;
         }
 
-        public bool EsDemostracion => false;
-
         private long UsuarioId => _usuarioId
             ?? throw new InvalidOperationException(
                 "No está configurado el usuario de la sesión (AutenticacionDesarrollo:UsuarioId).");
