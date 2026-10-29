@@ -1,0 +1,25 @@
+﻿<span class="estado-punto @Clase" title="@Texto" role="img" aria-label="@($"Estado: {Texto}")"></span>
+
+@code {
+    private static readonly Dictionary<string, (string Clase, string Texto)> Estados = new()
+    {
+        ["RECIBIDA"] = ("gris", "Recibida"),
+        ["VALIDANDO"] = ("azul", "Validando identidad"),
+        ["EN_PROCESO"] = ("naranja", "En proceso"),
+        ["RESPONDIDA"] = ("verde-anillo", "Respondida"),
+        ["CERRADA"] = ("verde", "Cerrada"),
+        ["RECHAZADA"] = ("rojo", "Rechazada"),
+        ["GENERADA"] = ("azul", "Generada"),
+        ["ENTREGADA"] = ("verde", "Entregada"),
+        ["ANULADA"] = ("rojo", "Anulada")
+    };
+
+    [Parameter, EditorRequired]
+    public string Estado { get; set; } = "";
+
+    private string Clase => Estados.TryGetValue(Estado, out var estado) ? estado.Clase : "gris";
+
+    private string Texto => Estados.TryGetValue(Estado, out var estado) ? estado.Texto : Estado;
+
+    public static string TextoDe(string estado) => Estados.TryGetValue(estado, out var valor) ? valor.Texto : estado;
+}

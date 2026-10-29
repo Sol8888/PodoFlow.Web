@@ -1,0 +1,1341 @@
+﻿@page "/privacidad/solicitudes/{Id:long}"
+@page "/privacidad/solicitudes/{Id:long}/{Seccion}"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+
+@inject IPrivacidadApi Api
+@inject IJSRuntime JS
+@inject ILogger<SolicitudDetalle> Logger
+
+<PageTitle>Solicitud de derechos | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <a href="/privacidad/solicitudes" class="pf-back-link">
+        ← Volver a solicitudes
+    </a>
+
+    @if (Api.EsDemostracion)
+    {
+        <span class="pf-mini-chip warning">DATOS DE DEMOSTRACIÓN</span>
+    }
+
+    @if (Cargando)
+    {
+        <div class="pf-card pf-empty">
+            Cargando la solicitud...
+        </div>
+    }
+    else if (Solicitud == null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>No se pudo abrir la solicitud</h2>
+            <p>@(ErrorCarga ?? "La solicitud no existe.")</p>
+            <a href="/privacidad/solicitudes" class="pf-link">Volver a solicitudes</a>
+        </section>
+    }
+    else
+    {
+        <section class="pf-profile-hero">
+
+            <div class="pf-profile-avatar">
+                @Iniciales
+            </div>
+
+            <div class="pf-profile-info">
+                <span class="pf-profile-label">
+                    SOLICITUD #@Solicitud.Id · @Solicitud.TipoDerecho
+                </span>
+
+                <h1>@NombrePaciente</h1>
+
+                <div class="pf-profile-meta">
+                    <span>
+                        @(Solicitud.TipoSolicitante == "TITULAR" ? "Presentada por el titular" : $"Representante: {Solicitud.NombreSolicitante}")
+                    </span>
+
+                    <span class="pf-profile-state">@Solicitud.Estado</span>
+
+                    @if (Solicitud.Vencida)
+                    {
+                        <span class="pf-profile-state">PLAZO VENCIDO</span>
+                    }
+                    else if (Solicitud.DiasRestantes.HasValue)
+                    {
+                        <span>Vence el @FechaCorta(Solicitud.FechaLimite)</span>
+                    }
+                </div>
+            </div>
+
+            <div class="pf-profile-actions">
+                @foreach (var transicion in TransicionesDisponibles.Where(t => t.Estado == "RECHAZADA"))
+                {
+                    <button type="button"
+                            class="@(transicion.Estado == "RECHAZADA" ? "pf-profile-button pf-profile-danger" : "pf-profile-button")"
+                            disabled="@Procesando"
+                            @onclick="() => PrepararCambio(transicion.Estado)">
+                        @transicion.Texto
+                    </button>
+                }
+            </div>
+
+        </section>
+
+        @if (Mensaje != null)
+        {
+            <div class="pf-contact-success" style="margin-top: 18px;">@Mensaje</div>
+        }
+
+        @if (ErrorAccion != null)
+        {
+            <div class="pf-detail-error">@ErrorAccion</div>
+        }
+
+        @if (EstadoPendiente != null)
+        {
+            <section class="pf-card pf-info-card" style="margin-top: 18px;">
+                <h2>@TituloCambio(EstadoPendiente)</h2>
+                <p class="pf-detail-muted">@AyudaCambio(EstadoPendiente)</p>
+
+                <div class="pf-patient-form-grid">
+
+                    @if (EstadoPendiente is "RESPONDIDA" or "RECHAZADA")
+                    {
+                        <div class="pf-form-group pf-form-full">
+                            <label>@(EstadoPendiente == "RECHAZADA" ? "Motivo del rechazo *" : "Respuesta al titular *")</label>
+                            <textarea class="pf-field" rows="4" maxlength="3000" @bind="RespuestaCambio"></textarea>
+                        </div>
+                    }
+
+                    @if (EstadoPendiente == "RESPONDIDA")
+                    {
+                        <div class="pf-form-group">
+                            <label>Medio de respuesta *</label>
+                            <select class="pf-field" @bind="MedioCambio">
+                                <option value="">Selecciona un medio</option>
+                                <option value="CORREO">Correo electrónico</option>
+                                <option value="PRESENCIAL">Presencial</option>
+                                <option value="WHATSAPP">WhatsApp</option>
+                            </select>
+                        </div>
+                    }
+
+                    <div class="pf-form-group pf-form-full">
+                        <label>Observación interna</label>
+                        <textarea class="pf-field" rows="2" maxlength="2000" @bind="ObservacionCambio"></textarea>
+                    </div>
+
+                </div>
+
+                <div class="pf-form-actions">
+                    <button type="button" class="pf-btn pf-btn-neutral" @onclick="CancelarCambio">
+                        Cancelar
+                    </button>
+
+                    <button type="button"
+                            class="@(EstadoPendiente == "RECHAZADA" ? "pf-btn pf-btn-danger-confirm" : "pf-btn pf-btn-main")"
+                            disabled="@Procesando"
+                            @onclick="ConfirmarCambioAsync">
+                        @(Procesando ? "Guardando..." : "Confirmar")
+                    </button>
+                </div>
+            </section>
+        }
+
+        @if (Solicitud.EsFinal)
+        {
+            <section class="pf-card pf-info-card guia">
+                <div class="guia-final @(Solicitud.Estado == "CERRADA" ? "cerrada" : "rechazada")">
+                    <strong>@(Solicitud.Estado == "CERRADA" ? "Solicitud atendida y cerrada" : "Solicitud rechazada")</strong>
+                    <span>
+                        @(Solicitud.FechaCierre.HasValue ? $"Desde el {FechaLarga(Solicitud.FechaCierre.Value)}. " : "")Todo lo realizado queda en la pestaña Seguimiento.
+                    </span>
+                </div>
+            </section>
+        }
+        else
+        {
+            <section class="pf-card pf-info-card guia">
+                <ol class="guia-pasos">
+                    @for (var i = 0; i < Pasos.Count; i++)
+                    {
+                        var indice = i;
+                        <li class="guia-paso @ClasePaso(indice)">
+                            <span class="guia-numero">@(indice < IndicePasoActual ? "✓" : (indice + 1).ToString())</span>
+                            <span class="guia-texto">@Pasos[indice].Titulo</span>
+                        </li>
+                    }
+                </ol>
+
+                <div class="guia-contenido">
+                    @switch (PasoActualClave)
+                    {
+                        case "identidad":
+                            <h2>Verificar la identidad del solicitante</h2>
+                            <p class="pf-detail-muted">
+                                Revisa el documento de identidad de @Solicitud.NombreSolicitante y registra la evidencia.
+                                Al confirmar, la solicitud pasa a atención.
+                            </p>
+
+                            @if (Solicitud.Estado == "VALIDANDO")
+                            {
+                                <p class="pf-detail-muted"><strong>En validación:</strong> esperando documentos del solicitante.</p>
+                            }
+
+                            @if (Evidencias.Count > 0)
+                            {
+                                <div class="pf-contact-success">
+                                    Evidencia registrada: @string.Join(", ", Evidencias.Select(e => e.Tipo)). Ya puedes continuar.
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="pf-patient-form-grid">
+                                    <div class="pf-form-group">
+                                        <label>Tipo de evidencia *</label>
+                                        <select class="pf-field" @bind="TipoEvidenciaGuia">
+                                            <option value="IDENTIFICACION">Identificación</option>
+                                            <option value="PODER_REPRESENTACION">Poder de representación</option>
+                                            <option value="OTRO">Otro</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="pf-form-group">
+                                        <label>Archivo de la evidencia *</label>
+                                        <input class="pf-field" maxlength="1000" placeholder="evidencias/cedula-titular.pdf" @bind="RutaEvidenciaGuia" />
+                                    </div>
+                                </div>
+                            }
+
+                            <div class="pf-form-actions">
+                                @if (Solicitud.Estado == "RECIBIDA")
+                                {
+                                    <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="MarcarEnValidacionAsync">
+                                        Faltan documentos
+                                    </button>
+                                }
+
+                                <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="VerificarIdentidadAsync">
+                                    @(Procesando ? "Guardando..." : "Identidad verificada · iniciar atención")
+                                </button>
+                            </div>
+                            break;
+
+                        case "datos":
+                            <h2>Preparar y entregar los datos al titular</h2>
+                            <p class="pf-detail-muted">
+                                Se exportan solo los datos de este titular, con huella SHA-256. Después de entregarlo, márcalo como entregado.
+                            </p>
+
+                            @if (UltimaExportacionVigente == null)
+                            {
+                                <div class="guia-columnas">
+                                    <div class="pf-form-group">
+                                        <label>Formato</label>
+                                        <div class="guia-opciones">
+                                            <label class="pf-checkbox">
+                                                <input type="radio" name="formato-guia" checked="@(Formato == "JSON")" @onchange="@(() => Formato = "JSON")" />
+                                                JSON
+                                            </label>
+                                            <label class="pf-checkbox">
+                                                <input type="radio" name="formato-guia" checked="@(Formato == "CSV")" @onchange="@(() => Formato = "CSV")" />
+                                                CSV
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="pf-form-group">
+                                        <label>Datos a incluir</label>
+                                        <div class="guia-secciones">
+                                            @foreach (var seccion in SeccionesExportables)
+                                            {
+                                                <label class="pf-checkbox">
+                                                    <input type="checkbox"
+                                                           checked="@SeccionesElegidas.Contains(seccion.Codigo)"
+                                                           @onchange="@(e => CambiarSeccion(seccion.Codigo, e.Value is true))" />
+                                                    @seccion.Nombre
+                                                </label>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="pf-form-actions">
+                                    <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="GenerarAsync">
+                                        @(Procesando ? "Generando..." : "Generar archivo")
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                var exportacion = UltimaExportacionVigente!;
+
+                                <div class="pf-data-row">
+                                    <span>Archivo</span>
+                                    <strong>@NombreArchivo(exportacion) · @exportacion.Formato</strong>
+                                </div>
+
+                                <div class="pf-data-row">
+                                    <span>Huella SHA-256</span>
+                                    <strong>@exportacion.HuellaCorta</strong>
+                                </div>
+
+                                <div class="pf-muted-note" style="margin-top: 14px;">
+                                    Guarda el archivo en una ubicación segura y elimínalo después de entregarlo al titular.
+                                </div>
+
+                                <div class="pf-form-actions">
+                                    <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="() => GuardarAsync(exportacion)">
+                                        Guardar archivo…
+                                    </button>
+
+                                    <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando"
+                                            @onclick="@(() => CambiarExportacionAsync(exportacion, "ENTREGADA"))">
+                                        Ya lo entregué al titular
+                                    </button>
+                                </div>
+                            }
+                            break;
+
+                        case "respuesta":
+                            <h2>Responder al titular</h2>
+                            <p class="pf-detail-muted">Registra la respuesta que se entregó y por qué medio.</p>
+
+                            <div class="pf-patient-form-grid">
+                                <div class="pf-form-group pf-form-full">
+                                    <label>Respuesta *</label>
+                                    <textarea class="pf-field" rows="3" maxlength="3000" @bind="RespuestaGuia"></textarea>
+                                </div>
+
+                                <div class="pf-form-group">
+                                    <label>Medio de respuesta *</label>
+                                    <select class="pf-field" @bind="MedioGuia">
+                                        <option value="">Selecciona un medio</option>
+                                        <option value="CORREO">Correo electrónico</option>
+                                        <option value="PRESENCIAL">Presencial</option>
+                                        <option value="WHATSAPP">WhatsApp</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="pf-form-actions">
+                                <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="ResponderAsync">
+                                    @(Procesando ? "Guardando..." : "Registrar respuesta")
+                                </button>
+                            </div>
+                            break;
+
+                        case "cierre":
+                            <h2>Cerrar la solicitud</h2>
+                            <p class="pf-detail-muted">
+                                La respuesta se entregó por @(Solicitud.MedioRespuesta ?? "el medio registrado").
+                                Al cerrarla, la solicitud ya no admite cambios.
+                            </p>
+
+                            <div class="pf-form-actions">
+                                <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="CerrarAsync">
+                                    @(Procesando ? "Cerrando..." : "Cerrar solicitud")
+                                </button>
+                            </div>
+                            break;
+                    }
+                </div>
+            </section>
+        }
+
+        <nav class="pf-profile-tabs" aria-label="Información de la solicitud">
+            <a href="@Ruta("resumen")" class="@ClasePestana("resumen")">Resumen</a>
+            <a href="@Ruta("seguimiento")" class="@ClasePestana("seguimiento")">Seguimiento</a>
+            <a href="@Ruta("evidencias")" class="@ClasePestana("evidencias")">Evidencias (@Evidencias.Count)</a>
+            @if (Solicitud.PermiteExportacion)
+            {
+                <a href="@Ruta("exportacion")" class="@ClasePestana("exportacion")">Exportación</a>
+            }
+        </nav>
+
+        @if (SeccionActual == "resumen")
+        {
+            <div class="pf-detail-grid">
+
+                <section class="pf-card pf-info-card">
+                    <h2>Datos de la solicitud</h2>
+
+                    <div class="pf-data-row">
+                        <span>Derecho</span>
+                        <strong>@Solicitud.TipoDerecho</strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Solicitante</span>
+                        <strong>@Solicitud.NombreSolicitante</strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Identificación del solicitante</span>
+                        <strong>@Solicitud.IdentificacionSolicitante</strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Tipo de solicitante</span>
+                        <strong>@(Solicitud.TipoSolicitante == "TITULAR" ? "Titular" : "Representante")</strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Detalle</span>
+                        <strong>@(Solicitud.Detalle ?? "Sin detalle")</strong>
+                    </div>
+                </section>
+
+                <section class="pf-card pf-info-card">
+                    <h2>Plazo y respuesta</h2>
+
+                    <div class="pf-data-row">
+                        <span>Recibida</span>
+                        <strong>@FechaLarga(Solicitud.FechaRecepcion)</strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Fecha límite</span>
+                        <strong>@FechaLarga(Solicitud.FechaLimite)</strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Plazo</span>
+                        <strong>
+                            @if (Solicitud.Vencida)
+                            {
+                                <span class="pf-status danger">VENCIDA</span>
+                            }
+                            else if (Solicitud.DiasRestantes.HasValue)
+                            {
+                                <span class="pf-status @(Solicitud.DiasRestantes <= 3 ? "warning" : "info")">
+                                    @(Solicitud.DiasRestantes <= 0 ? "VENCE HOY" : Solicitud.DiasRestantes == 1 ? "1 DÍA RESTANTE" : $"{Solicitud.DiasRestantes} DÍAS RESTANTES")
+                                </span>
+                            }
+                            else
+                            {
+                                <span>Atendida</span>
+                            }
+                        </strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Medio de respuesta</span>
+                        <strong>@(Solicitud.MedioRespuesta ?? "Por definir")</strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Respuesta</span>
+                        <strong>@(Solicitud.Respuesta ?? "Sin respuesta todavía")</strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Cierre</span>
+                        <strong>@(Solicitud.FechaCierre.HasValue ? FechaLarga(Solicitud.FechaCierre.Value) : "Abierta")</strong>
+                    </div>
+                </section>
+
+            </div>
+        }
+        else if (SeccionActual == "seguimiento")
+        {
+            <section class="pf-card pf-info-card">
+                <div class="pf-last-activity-heading">
+                    <span class="pf-last-activity-icon">+</span>
+                    <div>
+                        <h2>Seguimiento</h2>
+                        <p>Bitácora de todo lo que se hizo con esta solicitud.</p>
+                    </div>
+                </div>
+
+                @if (Acciones.Count == 0)
+                {
+                    <div class="pf-detail-empty">Todavía no hay acciones registradas.</div>
+                }
+                else
+                {
+                    foreach (var accion in Acciones.OrderByDescending(a => a.FechaHora).ThenByDescending(a => a.Id))
+                    {
+                        <div class="pf-last-activity-item">
+                            <div class="pf-last-activity-top">
+                                <span>@FechaLarga(accion.FechaHora)</span>
+                                <span class="pf-last-activity-indicator @(accion.EstadoNuevo != null ? "orange" : "")"></span>
+                            </div>
+
+                            <strong>@accion.Accion</strong>
+
+                            @if (accion.EstadoNuevo != null)
+                            {
+                                <small>@(accion.EstadoAnterior ?? "—") → @accion.EstadoNuevo</small>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(accion.Observacion))
+                            {
+                                <small>@accion.Observacion</small>
+                            }
+                        </div>
+                    }
+                }
+            </section>
+        }
+        else if (SeccionActual == "evidencias")
+        {
+            <div class="pf-detail-grid">
+
+                <section class="pf-card pf-info-card">
+                    <h2>Evidencias registradas</h2>
+                    <p class="pf-detail-muted">Respaldo de la validación de identidad y de la atención de la solicitud.</p>
+
+                    @if (Evidencias.Count == 0)
+                    {
+                        <div class="pf-detail-empty">Sin evidencias. La exportación exige al menos una.</div>
+                    }
+                    else
+                    {
+                        <div class="pf-table-wrap">
+                            <table class="pf-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tipo</th>
+                                        <th>Archivo</th>
+                                        <th>Cargada</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var evidencia in Evidencias)
+                                    {
+                                        <tr>
+                                            <td>@evidencia.Tipo</td>
+                                            <td>@evidencia.RutaArchivo</td>
+                                            <td>@FechaLarga(evidencia.FechaCarga)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </section>
+
+                <section class="pf-card pf-info-card">
+                    <h2>Registrar evidencia</h2>
+
+                    @if (Solicitud.EsFinal)
+                    {
+                        <div class="pf-detail-empty">La solicitud está @Solicitud.Estado y ya no admite evidencias.</div>
+                    }
+                    else
+                    {
+                        <EditForm Model="@NuevaEvidencia" OnValidSubmit="@RegistrarEvidenciaAsync" FormName="form-evidencia">
+                            <DataAnnotationsValidator />
+
+                            <div class="pf-form-group">
+                                <label>Tipo *</label>
+                                <InputSelect class="pf-field" @bind-Value="NuevaEvidencia.Tipo">
+                                    <option value="IDENTIFICACION">Identificación</option>
+                                    <option value="PODER_REPRESENTACION">Poder de representación</option>
+                                    <option value="RESPUESTA">Respuesta entregada</option>
+                                    <option value="OTRO">Otro</option>
+                                </InputSelect>
+                            </div>
+
+                            <div class="pf-form-group">
+                                <label>Ruta del archivo *</label>
+                                <InputText class="pf-field" maxlength="1000" @bind-Value="NuevaEvidencia.RutaArchivo" />
+                                <ValidationMessage For="@(() => NuevaEvidencia.RutaArchivo)" />
+                            </div>
+
+                            <div class="pf-form-group">
+                                <label>Huella SHA-256</label>
+                                <InputText class="pf-field" maxlength="128" @bind-Value="NuevaEvidencia.Huella" />
+                            </div>
+
+                            <div class="pf-form-group">
+                                <label>Observación</label>
+                                <InputTextArea class="pf-field" rows="2" maxlength="2000" @bind-Value="NuevaEvidencia.Observacion" />
+                            </div>
+
+                            <div class="pf-form-actions">
+                                <button type="submit" class="pf-btn pf-btn-main" disabled="@Procesando">
+                                    @(Procesando ? "Registrando..." : "Registrar evidencia")
+                                </button>
+                            </div>
+                        </EditForm>
+                    }
+                </section>
+
+            </div>
+        }
+        else if (SeccionActual == "exportacion" && Solicitud.PermiteExportacion)
+        {
+            @if (UltimaGenerada != null)
+            {
+                <section class="pf-card pf-info-card" style="margin-top: 18px;">
+                    <div class="pf-last-activity-heading">
+                        <span class="pf-last-activity-icon">✓</span>
+                        <div>
+                            <h2>Exportación #@UltimaGenerada.Id lista para entregar</h2>
+                            <p>El archivo quedó en el almacenamiento protegido de PodoFlow. Guárdalo para entregarlo al titular.</p>
+                        </div>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Formato</span>
+                        <strong>@UltimaGenerada.Formato</strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Archivo</span>
+                        <strong>@NombreArchivo(UltimaGenerada)</strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Secciones incluidas</span>
+                        <strong>@SeccionesUltima</strong>
+                    </div>
+
+                    <div class="pf-data-row">
+                        <span>Huella SHA-256</span>
+                        <strong style="font-family: monospace; word-break: break-all;">@UltimaGenerada.Huella</strong>
+                    </div>
+
+                    <div class="pf-muted-note" style="margin-top: 16px;">
+                        Guarda el archivo en una ubicación segura y elimínalo después de entregarlo al titular.
+                        Cuando lo entregues, márcalo como entregado.
+                    </div>
+
+                    <div class="pf-form-actions">
+                        <button type="button" class="pf-btn pf-btn-neutral" @onclick="CerrarConfirmacion">
+                            Cerrar
+                        </button>
+
+                        <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="CopiarHuellaAsync">
+                            @(HuellaCopiada ? "Huella copiada" : "Copiar huella")
+                        </button>
+
+                        <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando"
+                                @onclick="GuardarUltimaAsync">
+                            @(Procesando ? "Guardando..." : "Guardar archivo…")
+                        </button>
+                    </div>
+                </section>
+            }
+
+            <div class="pf-detail-grid">
+
+                <section class="pf-card pf-info-card">
+                    <h2>Generar exportación</h2>
+                    <p class="pf-detail-muted">
+                        Solo se incluyen datos de este titular. El archivo queda con huella SHA-256 para verificar su integridad.
+                    </p>
+
+                    @if (!PuedeGenerar)
+                    {
+                        <div class="pf-detail-empty">@MotivoNoGenerar</div>
+                    }
+                    else
+                    {
+                        <div class="pf-form-group">
+                            <label>Formato</label>
+                            <div style="display: flex; gap: 22px;">
+                                <label class="pf-checkbox">
+                                    <input type="radio" name="formato" checked="@(Formato == "JSON")" @onchange="@(() => Formato = "JSON")" />
+                                    JSON
+                                </label>
+                                <label class="pf-checkbox">
+                                    <input type="radio" name="formato" checked="@(Formato == "CSV")" @onchange="@(() => Formato = "CSV")" />
+                                    CSV
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label>Secciones</label>
+                            @foreach (var seccion in SeccionesExportables)
+                            {
+                                <label class="pf-checkbox">
+                                    <input type="checkbox"
+                                           checked="@SeccionesElegidas.Contains(seccion.Codigo)"
+                                           @onchange="@(e => CambiarSeccion(seccion.Codigo, e.Value is true))" />
+                                    @seccion.Nombre
+                                </label>
+                            }
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label>Observación</label>
+                            <textarea class="pf-field" rows="2" maxlength="2000" @bind="ObservacionExportacion"></textarea>
+                        </div>
+
+                        <div class="pf-form-actions">
+                            <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="GenerarAsync">
+                                @(Procesando ? "Generando..." : "Generar exportación")
+                            </button>
+                        </div>
+                    }
+                </section>
+
+                <section class="pf-card pf-info-card">
+                    <h2>Exportaciones generadas</h2>
+
+                    @if (Exportaciones.Count == 0)
+                    {
+                        <div class="pf-detail-empty">Todavía no se generó ninguna exportación.</div>
+                    }
+                    else
+                    {
+                        foreach (var exportacion in Exportaciones.OrderByDescending(x => x.Id))
+                        {
+                            <div class="pf-last-activity-item">
+                                <div class="pf-last-activity-top">
+                                    <span>#@exportacion.Id · @exportacion.Formato · @FechaLarga(exportacion.FechaGeneracion)</span>
+                                    <EstadoPunto Estado="@exportacion.Estado" />
+                                </div>
+
+                                <small>SHA-256 @exportacion.HuellaCorta</small>
+
+                                @if (exportacion.FechaEntrega.HasValue)
+                                {
+                                    <small>Entregada el @FechaLarga(exportacion.FechaEntrega.Value)</small>
+                                }
+
+                                @if (exportacion.Estado != "ANULADA")
+                                {
+                                    <div class="pf-contact-buttons" style="margin-top: 10px;">
+                                        <button type="button" class="pf-contact-action" disabled="@Procesando"
+                                                @onclick="() => GuardarAsync(exportacion)">
+                                            Guardar archivo…
+                                        </button>
+
+                                        @if (exportacion.Estado == "GENERADA")
+                                        {
+                                            <button type="button" class="pf-contact-action" disabled="@Procesando"
+                                                    @onclick="@(() => CambiarExportacionAsync(exportacion, "ENTREGADA"))">
+                                                Marcar entregada
+                                            </button>
+
+                                            @if (AnulacionPendiente == exportacion.Id)
+                                            {
+                                                <button type="button" class="pf-contact-action" style="color: #c94c4c;" disabled="@Procesando"
+                                                        @onclick="@(() => CambiarExportacionAsync(exportacion, "ANULADA"))">
+                                                    Confirmar anulación
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="pf-contact-action" style="color: #c94c4c;" disabled="@Procesando"
+                                                        @onclick="() => AnulacionPendiente = exportacion.Id">
+                                                    Anular
+                                                </button>
+                                            }
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                </section>
+
+            </div>
+        }
+    }
+
+</div>
+
+@code {
+    private static readonly Dictionary<string, (string Estado, string Texto)[]> Transiciones = new()
+    {
+        ["RECIBIDA"] = [("VALIDANDO", "Validar identidad"), ("RECHAZADA", "Rechazar")],
+        ["VALIDANDO"] = [("EN_PROCESO", "Iniciar atención"), ("RECHAZADA", "Rechazar")],
+        ["EN_PROCESO"] = [("RESPONDIDA", "Marcar respondida"), ("RECHAZADA", "Rechazar")],
+        ["RESPONDIDA"] = [("CERRADA", "Cerrar solicitud")]
+    };
+
+    private static readonly (string Codigo, string Nombre)[] SeccionesExportables =
+    [
+        ("PERSONALES", "Datos personales y contactos"),
+        ("CITAS", "Citas"),
+        ("CONSENTIMIENTOS", "Consentimientos"),
+        ("COMUNICACIONES", "Comunicaciones"),
+        ("SOLICITUDES", "Solicitudes de derechos"),
+        ("CLINICA", "Historia clínica")
+    ];
+
+    private static readonly HashSet<string> EstadosExportables = ["EN_PROCESO", "RESPONDIDA"];
+    private static readonly TimeSpan EsperaDialogoGuardar = TimeSpan.FromMinutes(10);
+
+    [Parameter]
+    public long Id { get; set; }
+
+    [Parameter]
+    public string? Seccion { get; set; }
+
+    private SolicitudDto? Solicitud;
+    private List<AccionSolicitudDto> Acciones = new();
+    private List<EvidenciaDto> Evidencias = new();
+    private List<ExportacionDto> Exportaciones = new();
+    private string NombrePaciente = "";
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private string? ErrorCarga;
+    private string? ErrorAccion;
+    private string? Mensaje;
+
+    private string? EstadoPendiente;
+    private string? ObservacionCambio;
+    private string? RespuestaCambio;
+    private string? MedioCambio;
+
+    private EvidenciaGuardarDto NuevaEvidencia = new();
+
+    private string Formato = "JSON";
+    private HashSet<string> SeccionesElegidas = SeccionesExportables.Select(s => s.Codigo).ToHashSet();
+    private string? ObservacionExportacion;
+    private long? AnulacionPendiente;
+
+    private string TipoEvidenciaGuia = "IDENTIFICACION";
+    private string? RutaEvidenciaGuia;
+    private string? RespuestaGuia;
+    private string? MedioGuia;
+
+    private List<(string Clave, string Titulo)> Pasos => Solicitud?.PermiteExportacion == true
+        ? [("identidad", "Verificar identidad"), ("datos", "Entregar datos"), ("respuesta", "Responder"), ("cierre", "Cerrar")]
+        : [("identidad", "Verificar identidad"), ("respuesta", "Responder"), ("cierre", "Cerrar")];
+
+    private bool HayExportacionEntregada => Exportaciones.Any(x => x.Estado == "ENTREGADA");
+
+    private ExportacionDto? UltimaExportacionVigente => Exportaciones
+        .Where(x => x.Estado == "GENERADA")
+        .OrderByDescending(x => x.Id)
+        .FirstOrDefault();
+
+    private string PasoActualClave => Solicitud?.Estado switch
+    {
+        "RECIBIDA" or "VALIDANDO" => "identidad",
+        "EN_PROCESO" => Solicitud.PermiteExportacion && !HayExportacionEntregada ? "datos" : "respuesta",
+        "RESPONDIDA" => "cierre",
+        _ => ""
+    };
+
+    private int IndicePasoActual => Pasos.FindIndex(p => p.Clave == PasoActualClave);
+
+    private string ClasePaso(int indice) =>
+        indice < IndicePasoActual ? "hecho" : indice == IndicePasoActual ? "actual" : "pendiente";
+
+    private long? UltimaGeneradaId;
+    private string SeccionesUltima = "";
+    private bool HuellaCopiada;
+
+    private IJSObjectReference? ModuloDescarga;
+    private long IdCargado;
+
+    private string SeccionActual => (Seccion ?? "resumen").ToLowerInvariant() switch
+    {
+        "seguimiento" => "seguimiento",
+        "evidencias" => "evidencias",
+        "exportacion" => "exportacion",
+        _ => "resumen"
+    };
+
+    private (string Estado, string Texto)[] TransicionesDisponibles =>
+        Solicitud != null && Transiciones.TryGetValue(Solicitud.Estado, out var lista) ? lista : [];
+
+    private bool PuedeGenerar => Solicitud != null
+        && EstadosExportables.Contains(Solicitud.Estado)
+        && Evidencias.Count > 0;
+
+    private string MotivoNoGenerar => Solicitud == null
+        ? ""
+        : !EstadosExportables.Contains(Solicitud.Estado)
+            ? $"La solicitud está {Solicitud.Estado}. Solo se exporta cuando está EN_PROCESO o RESPONDIDA."
+            : "Registra primero la evidencia de la validación de identidad en la pestaña Evidencias.";
+
+    private string Iniciales
+    {
+        get
+        {
+            var partes = NombrePaciente.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            return partes.Length switch
+            {
+                0 => "?",
+                1 => partes[0][..1].ToUpperInvariant(),
+                _ => $"{partes[0][0]}{partes[^1][0]}".ToUpperInvariant()
+            };
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IdCargado == Id)
+            return;
+
+        IdCargado = Id;
+        Cargando = true;
+        ErrorCarga = null;
+        RutaEvidenciaGuia = null;
+        RespuestaGuia = null;
+        MedioGuia = null;
+
+        try
+        {
+            await CargarTodoAsync();
+        }
+        catch (HttpRequestException)
+        {
+            ErrorCarga = "No fue posible conectar con PodoFlow.Api. Verifica que el backend esté ejecutándose.";
+            Solicitud = null;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorCarga = ex.Message;
+            Solicitud = null;
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private async Task CargarTodoAsync()
+    {
+        Solicitud = await Api.ObtenerSolicitudAsync(Id);
+
+        if (Solicitud == null)
+            return;
+
+        NombrePaciente = await ObtenerNombrePacienteAsync(Solicitud.PacienteId);
+        Acciones = await Api.AccionesAsync(Id);
+        Evidencias = await Api.EvidenciasAsync(Id);
+        Exportaciones = Solicitud.PermiteExportacion ? await Api.ExportacionesAsync(Id) : new();
+
+        if (string.IsNullOrWhiteSpace(RespuestaGuia))
+            RespuestaGuia = SugerirRespuesta();
+
+        MedioGuia ??= Solicitud.MedioRespuesta;
+    }
+
+    private async Task<string> ObtenerNombrePacienteAsync(long pacienteId)
+    {
+        try
+        {
+            var paciente = await Api.ObtenerPacienteAsync(pacienteId);
+            return paciente?.NombreCompleto ?? $"Paciente #{pacienteId}";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            return $"Paciente #{pacienteId}";
+        }
+    }
+
+    private void PrepararCambio(string estado)
+    {
+        EstadoPendiente = estado;
+        ObservacionCambio = null;
+        RespuestaCambio = estado == "RESPONDIDA" ? Solicitud?.Respuesta : null;
+        MedioCambio = Solicitud?.MedioRespuesta;
+        ErrorAccion = null;
+        Mensaje = null;
+    }
+
+    private void CancelarCambio()
+    {
+        EstadoPendiente = null;
+        ErrorAccion = null;
+    }
+
+    private async Task ConfirmarCambioAsync()
+    {
+        if (Solicitud == null || EstadoPendiente == null)
+            return;
+
+        if (EstadoPendiente is "RESPONDIDA" or "RECHAZADA" && string.IsNullOrWhiteSpace(RespuestaCambio))
+        {
+            ErrorAccion = EstadoPendiente == "RECHAZADA"
+                ? "Escribe el motivo del rechazo."
+                : "Escribe la respuesta que se entrega al titular.";
+            return;
+        }
+
+        if (EstadoPendiente == "RESPONDIDA" && string.IsNullOrWhiteSpace(MedioCambio))
+        {
+            ErrorAccion = "Selecciona el medio por el que se entrega la respuesta.";
+            return;
+        }
+
+        var estado = EstadoPendiente;
+        var actual = Solicitud;
+
+        await EjecutarAsync(async () =>
+        {
+            await Api.CambiarEstadoSolicitudAsync(
+                actual.Id, estado, actual.Version, ObservacionCambio, RespuestaCambio, MedioCambio);
+
+            EstadoPendiente = null;
+            Mensaje = $"La solicitud pasó a {estado}.";
+        });
+    }
+
+    private async Task VerificarIdentidadAsync()
+    {
+        if (Solicitud == null)
+            return;
+
+        if (Evidencias.Count == 0 && string.IsNullOrWhiteSpace(RutaEvidenciaGuia))
+        {
+            Mensaje = null;
+            ErrorAccion = "Registra la evidencia de identidad (por ejemplo, la copia de la cédula) para continuar.";
+            return;
+        }
+
+        var actual = Solicitud;
+        var ruta = RutaEvidenciaGuia?.Trim();
+        var tipo = TipoEvidenciaGuia;
+
+        await EjecutarAsync(async () =>
+        {
+            if (Evidencias.Count == 0 && !string.IsNullOrEmpty(ruta))
+            {
+                await Api.CrearEvidenciaAsync(actual.Id, new EvidenciaGuardarDto { Tipo = tipo, RutaArchivo = ruta });
+                RutaEvidenciaGuia = null;
+            }
+
+            var version = actual.Version;
+
+            if (actual.Estado == "RECIBIDA")
+            {
+                var validando = await Api.CambiarEstadoSolicitudAsync(
+                    actual.Id, "VALIDANDO", version, "Identidad revisada con la evidencia registrada", null, null);
+                version = validando.Version;
+            }
+
+            await Api.CambiarEstadoSolicitudAsync(actual.Id, "EN_PROCESO", version, null, null, null);
+            Mensaje = "Identidad verificada. La solicitud está en atención.";
+        });
+    }
+
+    private async Task MarcarEnValidacionAsync()
+    {
+        if (Solicitud == null)
+            return;
+
+        var actual = Solicitud;
+
+        await EjecutarAsync(async () =>
+        {
+            await Api.CambiarEstadoSolicitudAsync(
+                actual.Id, "VALIDANDO", actual.Version, "En espera de documentos del solicitante", null, null);
+            Mensaje = "La solicitud quedó en validación mientras llegan los documentos.";
+        });
+    }
+
+    private async Task ResponderAsync()
+    {
+        if (Solicitud == null)
+            return;
+
+        if (string.IsNullOrWhiteSpace(RespuestaGuia))
+        {
+            Mensaje = null;
+            ErrorAccion = "Escribe la respuesta que se entrega al titular.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(MedioGuia))
+        {
+            Mensaje = null;
+            ErrorAccion = "Selecciona el medio por el que se entregó la respuesta.";
+            return;
+        }
+
+        var actual = Solicitud;
+        var respuesta = RespuestaGuia;
+        var medio = MedioGuia;
+
+        await EjecutarAsync(async () =>
+        {
+            await Api.CambiarEstadoSolicitudAsync(actual.Id, "RESPONDIDA", actual.Version, null, respuesta, medio);
+            Mensaje = "Respuesta registrada. Solo falta cerrar la solicitud.";
+        });
+    }
+
+    private async Task CerrarAsync()
+    {
+        if (Solicitud == null)
+            return;
+
+        var actual = Solicitud;
+
+        await EjecutarAsync(async () =>
+        {
+            await Api.CambiarEstadoSolicitudAsync(actual.Id, "CERRADA", actual.Version, null, null, null);
+            Mensaje = "Solicitud cerrada.";
+        });
+    }
+
+    private string SugerirRespuesta()
+    {
+        var entregada = Exportaciones
+            .Where(x => x.Estado == "ENTREGADA")
+            .OrderByDescending(x => x.Id)
+            .FirstOrDefault();
+
+        return entregada == null
+            ? ""
+            : $"Se entregó al titular la exportación #{entregada.Id} con sus datos personales en formato {entregada.Formato} el {FechaCorta(entregada.FechaEntrega ?? entregada.FechaGeneracion)}.";
+    }
+
+    private async Task RegistrarEvidenciaAsync()
+    {
+        await EjecutarAsync(async () =>
+        {
+            await Api.CrearEvidenciaAsync(Id, NuevaEvidencia);
+            NuevaEvidencia = new();
+            Mensaje = "Evidencia registrada.";
+        });
+    }
+
+    private void CambiarSeccion(string codigo, bool elegida)
+    {
+        if (elegida)
+            SeccionesElegidas.Add(codigo);
+        else
+            SeccionesElegidas.Remove(codigo);
+    }
+
+    private async Task GenerarAsync()
+    {
+        if (SeccionesElegidas.Count == 0)
+        {
+            ErrorAccion = "Selecciona al menos una sección para exportar.";
+            return;
+        }
+
+        var secciones = SeccionesElegidas.Count == SeccionesExportables.Length
+            ? null
+            : SeccionesExportables.Select(s => s.Codigo).Where(SeccionesElegidas.Contains).ToList();
+
+        var nombresSecciones = string.Join(", ", SeccionesExportables
+            .Where(s => SeccionesElegidas.Contains(s.Codigo))
+            .Select(s => s.Nombre));
+
+        await EjecutarAsync(async () =>
+        {
+            var exportacion = await Api.GenerarExportacionAsync(Id, Formato, secciones, ObservacionExportacion);
+            ObservacionExportacion = null;
+            UltimaGeneradaId = exportacion.Id;
+            SeccionesUltima = nombresSecciones;
+            HuellaCopiada = false;
+            Mensaje = $"Exportación #{exportacion.Id} generada en {exportacion.Formato}.";
+        });
+    }
+
+    private ExportacionDto? UltimaGenerada => UltimaGeneradaId.HasValue
+        ? Exportaciones.FirstOrDefault(x => x.Id == UltimaGeneradaId.Value && x.Estado == "GENERADA")
+        : null;
+
+    private void CerrarConfirmacion()
+    {
+        UltimaGeneradaId = null;
+        HuellaCopiada = false;
+    }
+
+    private async Task CopiarHuellaAsync()
+    {
+        if (UltimaGenerada?.Huella == null)
+            return;
+
+        try
+        {
+            var modulo = await ObtenerModuloAsync();
+            HuellaCopiada = await modulo.InvokeAsync<bool>("copiarTexto", UltimaGenerada.Huella);
+
+            if (!HuellaCopiada)
+                ErrorAccion = "El navegador no permitió copiar. Selecciona la huella y cópiala manualmente.";
+        }
+        catch (JSException ex)
+        {
+            Logger.LogError(ex, "Error al copiar la huella");
+            ErrorAccion = "El navegador no permitió copiar. Selecciona la huella y cópiala manualmente.";
+        }
+    }
+
+    private async Task CambiarExportacionAsync(ExportacionDto exportacion, string estado)
+    {
+        await EjecutarAsync(async () =>
+        {
+            await Api.CambiarEstadoExportacionAsync(exportacion.Id, estado, null);
+            AnulacionPendiente = null;
+            Mensaje = estado == "ENTREGADA"
+                ? $"Exportación #{exportacion.Id} marcada como entregada."
+                : $"Exportación #{exportacion.Id} anulada.";
+        });
+    }
+
+    private async Task GuardarAsync(ExportacionDto exportacion)
+    {
+        if (Procesando)
+            return;
+
+        var usarDestinoElegido = false;
+
+        ErrorAccion = null;
+        Mensaje = null;
+
+        try
+        {
+            var modulo = await ObtenerModuloAsync();
+
+            if (await modulo.InvokeAsync<bool>("admiteGuardarComo"))
+            {
+                var resultado = await modulo.InvokeAsync<string>(
+                    "elegirDestino",
+                    EsperaDialogoGuardar,
+                    [NombreArchivo(exportacion), TipoContenido(exportacion.Formato)]);
+
+                if (resultado == "cancelado")
+                {
+                    Mensaje = "Guardado cancelado. No se descargó el archivo.";
+                    return;
+                }
+
+                usarDestinoElegido = true;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            ErrorAccion = "Pasó demasiado tiempo sin elegir dónde guardar. Inténtalo de nuevo.";
+            return;
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "El navegador no abrió el cuadro para guardar; se usa la descarga normal");
+        }
+
+        await EjecutarAsync(async () =>
+        {
+            var archivo = await Api.DescargarExportacionAsync(exportacion.Id);
+            var modulo = await ObtenerModuloAsync();
+
+            using var flujo = new DotNetStreamReference(new MemoryStream(archivo.Contenido));
+
+            if (usarDestinoElegido)
+            {
+                await modulo.InvokeVoidAsync("escribirArchivo", flujo);
+                Mensaje = $"Exportación #{exportacion.Id} guardada en la ubicación que elegiste. La integridad del archivo fue verificada.";
+            }
+            else
+            {
+                await modulo.InvokeVoidAsync("descargarArchivo", archivo.NombreArchivo, archivo.TipoContenido, flujo);
+                Mensaje = $"Exportación #{exportacion.Id} descargada en la carpeta de descargas del navegador. La integridad del archivo fue verificada.";
+            }
+        });
+    }
+
+    private async Task GuardarUltimaAsync()
+    {
+        var exportacion = UltimaGenerada;
+
+        if (exportacion != null)
+            await GuardarAsync(exportacion);
+    }
+
+    private async Task<IJSObjectReference> ObtenerModuloAsync()
+    {
+        ModuloDescarga ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", "./Components/Pages/Privacidad/SolicitudDetalle.razor.js");
+
+        return ModuloDescarga;
+    }
+
+    private static string NombreArchivo(ExportacionDto exportacion) => Path.GetFileName(exportacion.RutaArchivo);
+
+    private static string TipoContenido(string formato) => formato == "CSV" ? "text/csv" : "application/json";
+
+    private async Task EjecutarAsync(Func<Task> operacion)
+    {
+        if (Procesando)
+            return;
+
+        Procesando = true;
+        ErrorAccion = null;
+        Mensaje = null;
+
+        try
+        {
+            await operacion();
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorAccion = ex.Message;
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorAccion = "La operación tardó demasiado. Recarga la página para ver su estado.";
+        }
+        catch (HttpRequestException)
+        {
+            ErrorAccion = "No se pudo conectar con PodoFlow.Api. Comprueba que el backend esté ejecutándose.";
+        }
+        catch (JSException ex)
+        {
+            Logger.LogError(ex, "Error al guardar el archivo en el navegador");
+            ErrorAccion = "El archivo se verificó, pero el navegador no pudo guardarlo.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+
+        try
+        {
+            await CargarTodoAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            ErrorAccion ??= "No se pudo recargar la solicitud. Actualiza la página.";
+        }
+    }
+
+    private string Ruta(string seccion) => $"/privacidad/solicitudes/{Id}/{seccion}";
+
+    private string ClasePestana(string seccion) => SeccionActual == seccion ? "active" : "";
+
+    private static string FechaCorta(DateTime fecha) => PrivacidadApi.HoraEcuador(fecha).ToString("dd/MM/yyyy");
+
+    private static string FechaLarga(DateTime fecha) => PrivacidadApi.HoraEcuador(fecha).ToString("dd/MM/yyyy HH:mm");
+
+    private static string TituloCambio(string estado) => estado switch
+    {
+        "VALIDANDO" => "Validar identidad del solicitante",
+        "EN_PROCESO" => "Iniciar la atención",
+        "RESPONDIDA" => "Registrar la respuesta",
+        "CERRADA" => "Cerrar la solicitud",
+        "RECHAZADA" => "Rechazar la solicitud",
+        _ => $"Cambiar a {estado}"
+    };
+
+    private static string AyudaCambio(string estado) => estado switch
+    {
+        "VALIDANDO" => "Confirma que vas a revisar los documentos de identidad del solicitante.",
+        "EN_PROCESO" => "La identidad quedó validada y empieza la atención del derecho.",
+        "RESPONDIDA" => "Registra la respuesta entregada al titular y el medio utilizado.",
+        "CERRADA" => "La solicitud queda cerrada y ya no admite cambios.",
+        "RECHAZADA" => "El rechazo es definitivo. Explica el motivo al titular.",
+        _ => ""
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (ModuloDescarga == null)
+            return;
+
+        try
+        {
+            await ModuloDescarga.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

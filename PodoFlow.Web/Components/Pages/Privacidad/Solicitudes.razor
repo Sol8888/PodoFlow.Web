@@ -1,0 +1,322 @@
+﻿@page "/privacidad/solicitudes"
+@rendermode InteractiveServer
+
+@inject IPrivacidadApi Api
+
+<PageTitle>Solicitudes de derechos | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">
+                PRIVACIDAD Y LOPDP
+            </span>
+
+            @if (Api.EsDemostracion)
+            {
+                <span class="pf-mini-chip warning">DATOS DE DEMOSTRACIÓN</span>
+            }
+
+            <h1>Solicitudes de derechos</h1>
+
+            <p>
+                Gestiona las solicitudes de los titulares conforme a la
+                Ley Orgánica de Protección de Datos Personales.
+            </p>
+        </div>
+
+        <a href="/privacidad/solicitudes/nueva"
+           class="pf-btn pf-btn-main">
+            + Nueva solicitud
+        </a>
+    </div>
+
+    <div class="pf-module-toolbar">
+
+        <input class="pf-field pf-search-field"
+               placeholder="Buscar en esta página por paciente, solicitante o identificación..."
+               @bind="Busqueda"
+               @bind:event="oninput" />
+
+        <select class="pf-field" style="max-width: 220px;" @bind="FiltroEstado">
+            <option value="">Todos los estados</option>
+            @foreach (var estado in Estados)
+            {
+                <option value="@estado">@EstadoPunto.TextoDe(estado)</option>
+            }
+        </select>
+
+        <label class="pf-checkbox">
+            <input type="checkbox" @bind="SoloVencidas" />
+            Solo vencidas
+        </label>
+
+    </div>
+
+    <section class="pf-card pf-directory">
+
+        <div class="pf-card-header">
+            <div>
+                <h2>Solicitudes registradas</h2>
+                <p>De la más reciente a la más antigua. El plazo de respuesta lo calcula la API.</p>
+            </div>
+
+            <span class="pf-soft-chip">
+                @Filtradas.Count visibles
+            </span>
+        </div>
+
+        <div class="pf-detail-muted" style="display: flex; flex-wrap: wrap; gap: 16px; padding: 0 24px 16px; font-size: 12px;">
+            @foreach (var estado in Estados)
+            {
+                <span style="display: inline-flex; align-items: center; gap: 6px;">
+                    <EstadoPunto Estado="@estado" />
+                    @EstadoPunto.TextoDe(estado)
+                </span>
+            }
+        </div>
+
+        @if (Cargando)
+        {
+            <div class="pf-empty">
+                Cargando solicitudes...
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(Error))
+        {
+            <div class="pf-empty">
+                @Error
+            </div>
+        }
+        else if (Filtradas.Count == 0)
+        {
+            <div class="pf-empty">
+                No se encontraron solicitudes.
+            </div>
+        }
+        else
+        {
+            <div class="pf-table-wrap">
+                <table class="pf-table">
+                    <thead>
+                        <tr>
+                            <th>Paciente</th>
+                            <th>Derecho</th>
+                            <th>Solicitante</th>
+                            <th>Recibida</th>
+                            <th>Plazo</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var solicitud in Filtradas)
+                        {
+                            <tr>
+                                <td>
+                                    <div class="pf-patient">
+                                        <div class="pf-patient-avatar">
+                                            @Iniciales(NombrePaciente(solicitud.PacienteId))
+                                        </div>
+
+                                        <strong>
+                                            @NombrePaciente(solicitud.PacienteId)
+                                        </strong>
+                                    </div>
+                                </td>
+
+                                <td>@solicitud.TipoDerecho</td>
+
+                                <td>
+                                    @(solicitud.TipoSolicitante == "TITULAR" ? "Titular" : "Representante")
+                                    · @solicitud.IdentificacionSolicitante
+                                </td>
+
+                                <td>
+                                    @PrivacidadApi.HoraEcuador(solicitud.FechaRecepcion).ToString("dd/MM/yyyy")
+                                </td>
+
+                                <td>
+                                    @if (solicitud.Vencida)
+                                    {
+                                        <span class="pf-status danger">VENCIDA</span>
+                                    }
+                                    else if (solicitud.DiasRestantes.HasValue)
+                                    {
+                                        <span class="pf-status @(solicitud.DiasRestantes <= 3 ? "warning" : "info")">
+                                            @TextoDias(solicitud.DiasRestantes.Value)
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span>—</span>
+                                    }
+                                </td>
+
+                                <td style="text-align: center;">
+                                    <EstadoPunto Estado="@solicitud.Estado" />
+                                </td>
+
+                                <td>
+                                    <a class="pf-action-link"
+                                       href="@($"/privacidad/solicitudes/{solicitud.Id}")">
+                                        Ver solicitud →
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+    </section>
+
+    <div class="pf-pagination">
+
+        <button type="button"
+                disabled="@(Pagina <= 1 || Cargando)"
+                @onclick="AnteriorAsync">
+            Anterior
+        </button>
+
+        <span>Página @Pagina</span>
+
+        <button type="button"
+                disabled="@(ListaSolicitudes.Count < Tamano || Cargando)"
+                @onclick="SiguienteAsync">
+            Siguiente
+        </button>
+
+    </div>
+
+</div>
+
+@code {
+    private static readonly string[] Estados =
+        ["RECIBIDA", "VALIDANDO", "EN_PROCESO", "RESPONDIDA", "CERRADA", "RECHAZADA"];
+
+    private const int Tamano = 10;
+
+    private List<SolicitudDto> ListaSolicitudes = new();
+    private readonly Dictionary<long, string> NombresPacientes = new();
+
+    private bool Cargando = true;
+    private bool SoloVencidas;
+    private string Busqueda = "";
+    private string FiltroEstado = "";
+    private string? Error;
+    private int Pagina = 1;
+
+    private List<SolicitudDto> Filtradas =>
+        ListaSolicitudes.Where(s =>
+            (string.IsNullOrEmpty(FiltroEstado) || s.Estado == FiltroEstado)
+            && (!SoloVencidas || s.Vencida)
+            && (string.IsNullOrWhiteSpace(Busqueda)
+                || NombrePaciente(s.PacienteId).Contains(Busqueda, StringComparison.OrdinalIgnoreCase)
+                || s.NombreSolicitante.Contains(Busqueda, StringComparison.OrdinalIgnoreCase)
+                || s.IdentificacionSolicitante.Contains(Busqueda, StringComparison.OrdinalIgnoreCase)))
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        Cargando = true;
+        Error = null;
+
+        try
+        {
+            ListaSolicitudes = await Api.ListarSolicitudesAsync(Pagina, Tamano);
+            await CargarNombresAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api. Verifica que el backend esté ejecutándose.";
+            ListaSolicitudes.Clear();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+            ListaSolicitudes.Clear();
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private async Task CargarNombresAsync()
+    {
+        var pendientes = ListaSolicitudes
+            .Select(s => s.PacienteId)
+            .Distinct()
+            .Where(id => !NombresPacientes.ContainsKey(id))
+            .ToList();
+
+        foreach (var id in pendientes)
+        {
+            try
+            {
+                var paciente = await Api.ObtenerPacienteAsync(id);
+                NombresPacientes[id] = paciente?.NombreCompleto ?? $"Paciente #{id}";
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException)
+            {
+                NombresPacientes[id] = $"Paciente #{id}";
+            }
+        }
+    }
+
+    private string NombrePaciente(long pacienteId)
+    {
+        return NombresPacientes.TryGetValue(pacienteId, out var nombre) ? nombre : $"Paciente #{pacienteId}";
+    }
+
+    private async Task AnteriorAsync()
+    {
+        if (Pagina <= 1)
+            return;
+
+        Pagina--;
+        await CargarAsync();
+    }
+
+    private async Task SiguienteAsync()
+    {
+        if (Cargando || ListaSolicitudes.Count < Tamano)
+            return;
+
+        Pagina++;
+        await CargarAsync();
+    }
+
+    private static string TextoDias(int dias)
+    {
+        return dias switch
+        {
+            <= 0 => "VENCE HOY",
+            1 => "1 DÍA",
+            _ => $"{dias} DÍAS"
+        };
+    }
+
+    private static string Iniciales(string nombre)
+    {
+        var partes = nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        if (partes.Length == 0)
+            return "?";
+
+        var iniciales = partes.Length == 1
+            ? partes[0][..1]
+            : $"{partes[0][0]}{partes[^1][0]}";
+
+        return iniciales.ToUpperInvariant();
+    }
+}

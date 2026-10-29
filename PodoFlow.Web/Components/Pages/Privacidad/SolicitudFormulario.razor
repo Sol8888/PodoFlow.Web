@@ -1,0 +1,390 @@
+﻿@page "/privacidad/solicitudes/nueva"
+@rendermode InteractiveServer
+
+@inject IPrivacidadApi Api
+@inject NavigationManager Nav
+@inject ILogger<SolicitudFormulario> Logger
+
+<PageTitle>Nueva solicitud de derechos | PodoFlow</PageTitle>
+
+<div class="pf-pacientes pf-form-page">
+
+    <a class="pf-back-link" href="/privacidad/solicitudes">
+        ← Volver a solicitudes
+    </a>
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">PRIVACIDAD Y LOPDP</span>
+            @if (Api.EsDemostracion)
+            {
+                <span class="pf-mini-chip warning">DATOS DE DEMOSTRACIÓN</span>
+            }
+            <h1>Nueva solicitud de derechos</h1>
+            <p>Registra la solicitud tal como la presentó el titular o su representante.</p>
+        </div>
+    </div>
+
+    <section class="pf-card pf-info-card">
+        <div class="pf-form-heading">
+            <div class="pf-form-mark">1</div>
+            <div>
+                <h2>Titular de los datos</h2>
+                <p>Selecciona al paciente sobre cuyos datos se ejerce el derecho.</p>
+            </div>
+        </div>
+
+        @if (CargandoPacientes)
+        {
+            <div class="pf-empty">Cargando pacientes...</div>
+        }
+        else if (ErrorPacientes != null)
+        {
+            <div class="pf-detail-error">@ErrorPacientes</div>
+        }
+        else if (PacienteSeleccionado != null)
+        {
+            <div class="pf-patient" style="justify-content: space-between;">
+                <div class="pf-patient">
+                    <div class="pf-patient-avatar">@Iniciales(PacienteSeleccionado)</div>
+                    <div>
+                        <strong>@PacienteSeleccionado.NombreCompleto</strong>
+                        <p class="pf-detail-muted" style="margin: 0;">
+                            @PacienteSeleccionado.TipoIdentificacion · @PacienteSeleccionado.Identificacion
+                        </p>
+                    </div>
+                </div>
+
+                <button type="button" class="pf-btn pf-btn-neutral" @onclick="QuitarPaciente">
+                    Cambiar paciente
+                </button>
+            </div>
+        }
+        else
+        {
+            <input class="pf-field pf-search-field"
+                   placeholder="Buscar por nombre o identificación..."
+                   @bind="BusquedaPaciente"
+                   @bind:event="oninput" />
+
+            @if (CoincidenciasPacientes.Count == 0)
+            {
+                <div class="pf-empty">
+                    @(string.IsNullOrWhiteSpace(BusquedaPaciente)
+                        ? "No hay pacientes activos registrados."
+                        : $"No hay pacientes activos que coincidan con «{BusquedaPaciente.Trim()}».")
+                </div>
+            }
+            else
+            {
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <tbody>
+                            @foreach (var paciente in CoincidenciasPacientes)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="pf-patient">
+                                            <div class="pf-patient-avatar">@Iniciales(paciente)</div>
+                                            <strong>@paciente.NombreCompleto</strong>
+                                        </div>
+                                    </td>
+                                    <td>@paciente.TipoIdentificacion · @paciente.Identificacion</td>
+                                    <td>
+                                        <button type="button" class="pf-action-link" style="border: none; cursor: pointer;"
+                                                @onclick="() => SeleccionarPaciente(paciente)">
+                                            Seleccionar →
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                @if (TotalCoincidencias > CoincidenciasPacientes.Count)
+                {
+                    <p class="pf-detail-muted" style="margin: 12px 0 0;">
+                        Mostrando @CoincidenciasPacientes.Count de @TotalCoincidencias pacientes.
+                        Escribe nombre o cédula para encontrar al resto.
+                    </p>
+                }
+            }
+        }
+    </section>
+
+    <section class="pf-card pf-info-card" style="margin-top: 22px;">
+        <div class="pf-form-heading">
+            <div class="pf-form-mark">2</div>
+            <div>
+                <h2>Datos de la solicitud</h2>
+                <p>Los campos marcados con * son obligatorios.</p>
+            </div>
+        </div>
+
+        @if (ErrorGuardar != null)
+        {
+            <div class="pf-detail-error">@ErrorGuardar</div>
+        }
+
+        <EditForm Model="@Modelo"
+                  OnValidSubmit="@GuardarAsync"
+                  FormName="form-solicitud">
+
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="pf-patient-form-grid">
+
+                <div class="pf-form-group">
+                    <label>Derecho que se ejerce *</label>
+                    <InputSelect class="pf-field" @bind-Value="Modelo.TipoDerecho">
+                        @foreach (var derecho in Derechos)
+                        {
+                            <option value="@derecho.Codigo">@derecho.Nombre</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="pf-form-group">
+                    <label>Quién presenta la solicitud *</label>
+                    <InputSelect class="pf-field"
+                                 @bind-Value="Modelo.TipoSolicitante"
+                                 @bind-Value:after="AlCambiarSolicitante">
+                        <option value="TITULAR">El titular</option>
+                        <option value="REPRESENTANTE">Un representante</option>
+                    </InputSelect>
+                </div>
+
+                <div class="pf-form-group">
+                    <label>Nombre del solicitante *</label>
+                    <InputText class="pf-field" maxlength="200" @bind-Value="Modelo.NombreSolicitante" />
+                    <ValidationMessage For="@(() => Modelo.NombreSolicitante)" />
+                </div>
+
+                @if (EsRepresentante)
+                {
+                    <div class="pf-form-group">
+                        <label>Tipo de identificación del representante *</label>
+                        <InputSelect class="pf-field" @bind-Value="Modelo.TipoIdentificacion">
+                            <option value="CEDULA">Cédula</option>
+                            <option value="PASAPORTE">Pasaporte</option>
+                        </InputSelect>
+                    </div>
+                }
+
+                <div class="pf-form-group">
+                    <label>Identificación del solicitante *</label>
+                    <InputText class="pf-field" maxlength="50" @bind-Value="Modelo.IdentificacionSolicitante" />
+                    <ValidationMessage For="@(() => Modelo.IdentificacionSolicitante)" />
+                    @if (!EsRepresentante)
+                    {
+                        <small class="pf-detail-muted">Debe coincidir con la identificación del paciente.</small>
+                    }
+                </div>
+
+                <div class="pf-form-group">
+                    <label>Medio de respuesta</label>
+                    <InputSelect class="pf-field" @bind-Value="Modelo.MedioRespuesta">
+                        <option value="">Por definir</option>
+                        <option value="CORREO">Correo electrónico</option>
+                        <option value="PRESENCIAL">Presencial</option>
+                        <option value="WHATSAPP">WhatsApp</option>
+                    </InputSelect>
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label>Detalle de la solicitud</label>
+                    <InputTextArea class="pf-field" rows="4" maxlength="3000" @bind-Value="Modelo.Detalle" />
+                </div>
+
+            </div>
+
+            <div class="pf-form-actions">
+                <a href="/privacidad/solicitudes" class="pf-btn pf-btn-neutral">
+                    Cancelar
+                </a>
+
+                <button type="submit" class="pf-btn pf-btn-main" disabled="@Guardando">
+                    @(Guardando ? "Registrando..." : "Registrar solicitud")
+                </button>
+            </div>
+
+        </EditForm>
+    </section>
+
+</div>
+
+@code {
+    private static readonly (string Codigo, string Nombre)[] Derechos =
+    [
+        ("ACCESO", "Acceso"),
+        ("PORTABILIDAD", "Portabilidad"),
+        ("INFORMACION", "Información"),
+        ("CONSULTA", "Consulta"),
+        ("RECTIFICACION", "Rectificación"),
+        ("ACTUALIZACION", "Actualización"),
+        ("ELIMINACION", "Eliminación"),
+        ("OPOSICION", "Oposición"),
+        ("SUSPENSION", "Suspensión")
+    ];
+
+    private const int MaximoCoincidencias = 8;
+
+    [SupplyParameterFromQuery]
+    public long? PacienteId { get; set; }
+
+    private SolicitudGuardarDto Modelo = new();
+    private List<PacienteDto> ListaPacientes = new();
+    private PacienteDto? PacienteSeleccionado;
+
+    private string BusquedaPaciente = "";
+    private bool CargandoPacientes = true;
+    private bool Guardando;
+    private string? ErrorPacientes;
+    private string? ErrorGuardar;
+
+    private bool EsRepresentante => Modelo.TipoSolicitante == "REPRESENTANTE";
+
+    private IEnumerable<PacienteDto> FiltrarPacientes() =>
+        ListaPacientes.Where(p =>
+            string.IsNullOrWhiteSpace(BusquedaPaciente)
+            || p.NombreCompleto.Contains(BusquedaPaciente, StringComparison.OrdinalIgnoreCase)
+            || p.Identificacion.Contains(BusquedaPaciente, StringComparison.OrdinalIgnoreCase));
+
+    private List<PacienteDto> CoincidenciasPacientes => FiltrarPacientes().Take(MaximoCoincidencias).ToList();
+
+    private int TotalCoincidencias => FiltrarPacientes().Count();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (PacienteId.HasValue)
+            {
+                var paciente = await Api.ObtenerPacienteAsync(PacienteId.Value);
+
+                if (paciente is { Estatus: true })
+                {
+                    SeleccionarPaciente(paciente);
+                    return;
+                }
+            }
+
+            await CargarPacientesAsync();
+        }
+        catch (HttpRequestException)
+        {
+            ErrorPacientes = "No fue posible conectar con PodoFlow.Api. Verifica que el backend esté ejecutándose.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorPacientes = ex.Message;
+        }
+        finally
+        {
+            CargandoPacientes = false;
+        }
+    }
+
+    private async Task CargarPacientesAsync()
+    {
+        ListaPacientes = await Api.ListarPacientesActivosAsync();
+    }
+
+    private void SeleccionarPaciente(PacienteDto paciente)
+    {
+        PacienteSeleccionado = paciente;
+        Modelo.PacienteId = paciente.Id;
+        AlCambiarSolicitante();
+    }
+
+    private async Task QuitarPaciente()
+    {
+        PacienteSeleccionado = null;
+        Modelo.PacienteId = 0;
+
+        if (ListaPacientes.Count == 0)
+        {
+            CargandoPacientes = true;
+
+            try
+            {
+                await CargarPacientesAsync();
+            }
+            catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+            {
+                ErrorPacientes = "No se pudo cargar la lista de pacientes.";
+            }
+            finally
+            {
+                CargandoPacientes = false;
+            }
+        }
+    }
+
+    private void AlCambiarSolicitante()
+    {
+        if (PacienteSeleccionado == null)
+            return;
+
+        if (EsRepresentante)
+        {
+            Modelo.NombreSolicitante = "";
+            Modelo.IdentificacionSolicitante = "";
+            Modelo.TipoIdentificacion ??= "CEDULA";
+            return;
+        }
+
+        Modelo.NombreSolicitante = PacienteSeleccionado.NombreCompleto;
+        Modelo.IdentificacionSolicitante = PacienteSeleccionado.Identificacion;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Guardando)
+            return;
+
+        ErrorGuardar = null;
+
+        if (PacienteSeleccionado == null)
+        {
+            ErrorGuardar = "Selecciona el paciente titular de los datos.";
+            return;
+        }
+
+        Guardando = true;
+
+        try
+        {
+            var creada = await Api.CrearSolicitudAsync(Modelo);
+            Nav.NavigateTo($"/privacidad/solicitudes/{creada.Id}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorGuardar = ex.Message;
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorGuardar = "La solicitud tardó demasiado. Revisa el listado antes de intentarlo de nuevo.";
+        }
+        catch (HttpRequestException)
+        {
+            ErrorGuardar = "No se pudo conectar con PodoFlow.Api. Comprueba que el backend esté ejecutándose.";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error al registrar una solicitud de derechos");
+            ErrorGuardar = "Ocurrió un error inesperado. Revisa la consola de PodoFlow.Web.";
+        }
+        finally
+        {
+            Guardando = false;
+        }
+    }
+
+    private static string Iniciales(PacienteDto paciente)
+    {
+        return $"{paciente.Nombres.FirstOrDefault()}{paciente.Apellidos.FirstOrDefault()}".ToUpperInvariant();
+    }
+}
