@@ -1,0 +1,34 @@
+﻿.estado-punto {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    vertical-align: middle;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+.gris {
+    background: #9aa5b5;
+}
+
+.azul {
+    background: var(--pf-blue);
+}
+
+.naranja {
+    background: var(--pf-orange);
+}
+
+.verde {
+    background: var(--pf-green);
+}
+
+.verde-anillo {
+    background: transparent;
+    border: 3px solid var(--pf-green);
+}
+
+.rojo {
+    background: var(--pf-red);
+}

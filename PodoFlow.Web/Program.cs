@@ -1,9 +1,12 @@
 using PodoFlow.Web.Components;
+using PodoFlow.Web.Seguridad;
 using PodoFlow.Web.Servicios;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
+
+builder.Services.AddTransient<TokenDesarrolloHandler>();
 
 builder.Services.AddHttpClient<PacientesApi>(client =>
 {
@@ -13,6 +16,15 @@ builder.Services.AddHttpClient<PacientesApi>(client =>
             "No se configuró la URL de PodoFlow.Api."));
     client.Timeout = TimeSpan.FromSeconds(10);
 }); 
+
+builder.Services.AddHttpClient<IPrivacidadApi, PrivacidadApi>(client =>
+{
+    client.BaseAddress = new Uri(
+        builder.Configuration["Api:BaseUrl"]
+        ?? throw new InvalidOperationException(
+            "No se configuró la URL de PodoFlow.Api."));
+    client.Timeout = TimeSpan.FromSeconds(30);
+}).AddHttpMessageHandler<TokenDesarrolloHandler>();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
