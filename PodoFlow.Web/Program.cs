@@ -12,7 +12,7 @@ builder.Services.AddHttpClient<PacientesApi>(client =>
         ?? throw new InvalidOperationException(
             "No se configuró la URL de PodoFlow.Api."));
     client.Timeout = TimeSpan.FromSeconds(10);
-});
+}); 
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
