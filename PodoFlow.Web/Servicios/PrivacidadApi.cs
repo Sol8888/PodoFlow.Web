@@ -14,10 +14,10 @@ namespace PodoFlow.Web.Servicios
         private static readonly TimeZoneInfo ZonaEcuador = ObtenerZonaEcuador();
 
         private readonly HttpClient _http;
-        private readonly PacientesApi _pacientes;
+        private readonly IPacientesApi _pacientes;
         private readonly long? _usuarioId;
 
-        public PrivacidadApi(HttpClient http, PacientesApi pacientes, IConfiguration configuration)
+        public PrivacidadApi(HttpClient http, IPacientesApi pacientes, IConfiguration configuration)
         {
             _http = http;
             _pacientes = pacientes;

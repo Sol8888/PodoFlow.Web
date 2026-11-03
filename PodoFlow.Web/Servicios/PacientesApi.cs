@@ -1,5 +1,4 @@
 ﻿
-
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -7,7 +6,7 @@ using PodoFlow.Web.Modelos.Pacientes;
 
 namespace PodoFlow.Web.Servicios;
 
-public class PacientesApi
+public class PacientesApi : IPacientesApi
 {
     private readonly HttpClient _http;
 
@@ -26,13 +25,16 @@ public class PacientesApi
         int pagina = 1,
         int tamano = 10)
     {
+        ValidarPaginacion(pagina, tamano);
+
         string url =
             $"api/pacientes" +
             $"?incluirInactivos={incluirInactivos.ToString().ToLowerInvariant()}" +
             $"&pagina={pagina}" +
             $"&tamano={tamano}";
 
-        using var respuesta = await _http.GetAsync(url);
+        using var respuesta = await EjecutarAsync(
+            () => _http.GetAsync(url));
 
         await ValidarRespuestaAsync(respuesta);
 
@@ -43,8 +45,10 @@ public class PacientesApi
     // GET: api/pacientes/{id}
     public async Task<PacienteDto?> ObtenerAsync(long id)
     {
-        using var respuesta =
-            await _http.GetAsync($"api/pacientes/{id}");
+        ValidarId(id);
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.GetAsync($"api/pacientes/{id}"));
 
         if (respuesta.StatusCode == HttpStatusCode.NotFound)
             return null;
@@ -59,17 +63,21 @@ public class PacientesApi
     public async Task<PacienteDto> CrearAsync(
         PacienteGuardarDto dto)
     {
-        using var respuesta = await _http.PostAsJsonAsync(
-            "api/pacientes", dto);
+        ArgumentNullException.ThrowIfNull(dto);
 
-        // Si ocurre un 400 o 409, recuperamos
-        // el mensaje que devolvió PacienteController.
+        dto.Normalizar();
+
+        ValidarModelo(dto);
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.PostAsJsonAsync("api/pacientes", dto));
+
         await ValidarRespuestaAsync(respuesta);
 
         return await respuesta.Content
             .ReadFromJsonAsync<PacienteDto>()
             ?? throw new InvalidOperationException(
-                "El servidor no devolvió los datos del paciente.");
+                "El servidor no devolvió los datos del paciente creado.");
     }
 
     // PUT: api/pacientes/{id}
@@ -77,23 +85,50 @@ public class PacientesApi
         long id,
         PacienteGuardarDto dto)
     {
-        using var respuesta = await _http.PutAsJsonAsync(
-            $"api/pacientes/{id}", dto);
+        ValidarId(id);
+        ArgumentNullException.ThrowIfNull(dto);
+
+        dto.Normalizar();
+
+        ValidarModelo(dto);
+
+        if (string.IsNullOrWhiteSpace(dto.Version))
+        {
+            throw new InvalidOperationException(
+                "No se encontró la versión del paciente. " +
+                "Actualiza la ficha antes de guardar los cambios.");
+        }
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.PutAsJsonAsync(
+                $"api/pacientes/{id}", dto));
 
         await ValidarRespuestaAsync(respuesta);
     }
 
     // DELETE: api/pacientes/{id}?motivo=...
-    // Baja lógica, no eliminación física.
+    // Baja lógica: no elimina físicamente al paciente.
     public async Task DesactivarAsync(
         long id,
         string motivo)
     {
+        ValidarId(id);
+
+        if (string.IsNullOrWhiteSpace(motivo))
+        {
+            throw new ArgumentException(
+                "Debes ingresar el motivo de desactivación.",
+                nameof(motivo));
+        }
+
+        string motivoNormalizado = motivo.Trim();
+
         string url =
             $"api/pacientes/{id}?motivo=" +
-            Uri.EscapeDataString(motivo);
+            Uri.EscapeDataString(motivoNormalizado);
 
-        using var respuesta = await _http.DeleteAsync(url);
+        using var respuesta = await EjecutarAsync(
+            () => _http.DeleteAsync(url));
 
         await ValidarRespuestaAsync(respuesta);
     }
@@ -101,9 +136,12 @@ public class PacientesApi
     // PATCH: api/pacientes/{id}/reactivar
     public async Task ReactivarAsync(long id)
     {
-        using var respuesta = await _http.PatchAsync(
-            $"api/pacientes/{id}/reactivar",
-            content: null);
+        ValidarId(id);
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.PatchAsync(
+                $"api/pacientes/{id}/reactivar",
+                content: null));
 
         await ValidarRespuestaAsync(respuesta);
     }
@@ -116,6 +154,8 @@ public class PacientesApi
     public async Task<List<ContactoPacienteDto>> ContactosAsync(
         long pacienteId)
     {
+        ValidarId(pacienteId);
+
         string url =
             $"api/datos-contacto" +
             $"?pacienteId={pacienteId}" +
@@ -123,7 +163,8 @@ public class PacientesApi
             $"&pagina=1" +
             $"&tamano=100";
 
-        using var respuesta = await _http.GetAsync(url);
+        using var respuesta = await EjecutarAsync(
+            () => _http.GetAsync(url));
 
         await ValidarRespuestaAsync(respuesta);
 
@@ -136,6 +177,13 @@ public class PacientesApi
         long pacienteId,
         ContactoGuardarDto dto)
     {
+        ValidarId(pacienteId);
+        ArgumentNullException.ThrowIfNull(dto);
+
+        dto.Normalizar();
+
+        ValidarModelo(dto);
+
         var datos = new
         {
             PacienteId = pacienteId,
@@ -144,8 +192,9 @@ public class PacientesApi
             dto.Principal
         };
 
-        using var respuesta = await _http.PostAsJsonAsync(
-            "api/datos-contacto", datos);
+        using var respuesta = await EjecutarAsync(
+            () => _http.PostAsJsonAsync(
+                "api/datos-contacto", datos));
 
         await ValidarRespuestaAsync(respuesta);
 
@@ -160,8 +209,16 @@ public class PacientesApi
         long contactoId,
         ContactoGuardarDto dto)
     {
-        using var respuesta = await _http.PutAsJsonAsync(
-            $"api/datos-contacto/{contactoId}", dto);
+        ValidarId(contactoId);
+        ArgumentNullException.ThrowIfNull(dto);
+
+        dto.Normalizar();
+
+        ValidarModelo(dto);
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.PutAsJsonAsync(
+                $"api/datos-contacto/{contactoId}", dto));
 
         await ValidarRespuestaAsync(respuesta);
     }
@@ -169,8 +226,11 @@ public class PacientesApi
     // DELETE: api/datos-contacto/{id}
     public async Task DesactivarContactoAsync(long contactoId)
     {
-        using var respuesta = await _http.DeleteAsync(
-            $"api/datos-contacto/{contactoId}");
+        ValidarId(contactoId);
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.DeleteAsync(
+                $"api/datos-contacto/{contactoId}"));
 
         await ValidarRespuestaAsync(respuesta);
     }
@@ -178,9 +238,12 @@ public class PacientesApi
     // PATCH: api/datos-contacto/{id}/reactivar
     public async Task ReactivarContactoAsync(long contactoId)
     {
-        using var respuesta = await _http.PatchAsync(
-            $"api/datos-contacto/{contactoId}/reactivar",
-            content: null);
+        ValidarId(contactoId);
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.PatchAsync(
+                $"api/datos-contacto/{contactoId}/reactivar",
+                content: null));
 
         await ValidarRespuestaAsync(respuesta);
     }
@@ -192,19 +255,23 @@ public class PacientesApi
     public async Task<List<CitaPacienteDto>> CitasAsync(
         long pacienteId)
     {
+        ValidarId(pacienteId);
+
         var resultado = new List<CitaPacienteDto>();
 
-        // Consulta provisional hasta implementar
-        // paginación visual de las citas.
-        for (int pagina = 1; pagina <= 50; pagina++)
+        const int tamano = 100;
+        const int maxPaginas = 50;
+
+        for (int pagina = 1; pagina <= maxPaginas; pagina++)
         {
             string url =
                 $"api/citas" +
                 $"?pacienteId={pacienteId}" +
                 $"&pagina={pagina}" +
-                $"&tamano=100";
+                $"&tamano={tamano}";
 
-            using var respuesta = await _http.GetAsync(url);
+            using var respuesta = await EjecutarAsync(
+                () => _http.GetAsync(url));
 
             await ValidarRespuestaAsync(respuesta);
 
@@ -213,33 +280,39 @@ public class PacientesApi
 
             resultado.AddRange(lote);
 
-            if (lote.Count < 100)
+            if (lote.Count < tamano)
                 return resultado;
         }
 
         throw new InvalidOperationException(
             "Se alcanzó el límite de citas por consulta. " +
-            "Es necesario utilizar paginación.");
+            "Es necesario implementar paginación visual.");
     }
 
     // ============================================
     // PRESTACIONES DEL PACIENTE
     // ============================================
 
-    public async Task<List<PrestacionPacienteDto>>
-        PrestacionesAsync(long pacienteId)
+    public async Task<List<PrestacionPacienteDto>> PrestacionesAsync(
+        long pacienteId)
     {
+        ValidarId(pacienteId);
+
         var resultado = new List<PrestacionPacienteDto>();
 
-        for (int pagina = 1; pagina <= 50; pagina++)
+        const int tamano = 100;
+        const int maxPaginas = 50;
+
+        for (int pagina = 1; pagina <= maxPaginas; pagina++)
         {
             string url =
                 $"api/prestaciones" +
                 $"?pacienteId={pacienteId}" +
                 $"&pagina={pagina}" +
-                $"&tamano=100";
+                $"&tamano={tamano}";
 
-            using var respuesta = await _http.GetAsync(url);
+            using var respuesta = await EjecutarAsync(
+                () => _http.GetAsync(url));
 
             await ValidarRespuestaAsync(respuesta);
 
@@ -248,13 +321,104 @@ public class PacientesApi
 
             resultado.AddRange(lote);
 
-            if (lote.Count < 100)
+            if (lote.Count < tamano)
                 return resultado;
         }
 
         throw new InvalidOperationException(
             "Se alcanzó el límite de prestaciones por consulta. " +
-            "Es necesario utilizar paginación.");
+            "Es necesario implementar paginación visual.");
+    }
+
+    // ============================================
+    // VALIDACIONES LOCALES
+    // ============================================
+
+    private static void ValidarId(long id)
+    {
+        if (id <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(id),
+                "El identificador debe ser mayor que cero.");
+        }
+    }
+
+    private static void ValidarPaginacion(int pagina, int tamano)
+    {
+        if (pagina < 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(pagina),
+                "La página debe ser mayor o igual a uno.");
+        }
+
+        if (tamano < 1 || tamano > 100)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(tamano),
+                "El tamaño de página debe estar entre 1 y 100.");
+        }
+    }
+
+    private static void ValidarModelo<T>(T modelo)
+        where T : class
+    {
+        var contexto =
+            new System.ComponentModel.DataAnnotations.ValidationContext(
+                modelo);
+
+        var resultados =
+            new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+
+        bool valido =
+            System.ComponentModel.DataAnnotations.Validator.TryValidateObject(
+                modelo,
+                contexto,
+                resultados,
+                validateAllProperties: true);
+
+        if (!valido)
+        {
+            string mensaje = string.Join(
+                " ",
+                resultados
+                    .Select(x => x.ErrorMessage)
+                    .Where(x => !string.IsNullOrWhiteSpace(x)));
+
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(mensaje)
+                    ? "Revisa los datos ingresados."
+                    : mensaje);
+        }
+    }
+
+    // ============================================
+    // ERRORES DE CONEXIÓN
+    // ============================================
+
+    private static async Task<HttpResponseMessage> EjecutarAsync(
+        Func<Task<HttpResponseMessage>> solicitud)
+    {
+        try
+        {
+            return await solicitud();
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new InvalidOperationException(
+                "No fue posible conectar con PodoFlow.Api. " +
+                "Verifica que el backend esté ejecutándose " +
+                "y que la URL esté correctamente configurada.",
+                ex);
+        }
+        catch (TaskCanceledException ex)
+        {
+            throw new InvalidOperationException(
+                "La solicitud tardó demasiado o fue cancelada. " +
+                "Intenta nuevamente.",
+                ex);
+        }
     }
 
     // ============================================
@@ -264,16 +428,14 @@ public class PacientesApi
     private static async Task ValidarRespuestaAsync(
         HttpResponseMessage respuesta)
     {
-        // Una respuesta 2xx significa que la operación
-        // HTTP se completó correctamente.
         if (respuesta.IsSuccessStatusCode)
             return;
 
-        // Primero distinguimos errores de acceso.
         if (respuesta.StatusCode == HttpStatusCode.Unauthorized)
         {
             throw new InvalidOperationException(
-                "Debes iniciar sesión para continuar.");
+                "Tu sesión no es válida o ha expirado. " +
+                "Inicia sesión nuevamente.");
         }
 
         if (respuesta.StatusCode == HttpStatusCode.Forbidden)
@@ -288,14 +450,12 @@ public class PacientesApi
                 "No se encontró el registro solicitado.");
         }
 
-        // Leemos el contenido que devuelve la API.
-        string contenido = await respuesta.Content
-            .ReadAsStringAsync();
+        string contenido =
+            await respuesta.Content.ReadAsStringAsync();
 
-        // Solamente mostramos mensajes de validación
-        // y reglas de negocio en respuestas 400 y 409.
         if (respuesta.StatusCode == HttpStatusCode.BadRequest ||
-            respuesta.StatusCode == HttpStatusCode.Conflict)
+            respuesta.StatusCode == HttpStatusCode.Conflict ||
+            (int)respuesta.StatusCode == 422)
         {
             string? mensajeApi = ExtraerMensaje(contenido);
 
@@ -310,15 +470,15 @@ public class PacientesApi
                     : mensajeApi);
         }
 
-        // No mostramos directamente contenido HTTP 500,
-        // ya que puede contener información interna.
         throw new InvalidOperationException(
-            $"No se pudo completar la operación. " +
+            "No se pudo completar la operación. " +
             $"Código HTTP: {(int)respuesta.StatusCode}.");
     }
 
-    // Admite texto plano, cadenas JSON
-    // y respuestas JSON con una propiedad "mensaje".
+    // ============================================
+    // EXTRAER MENSAJES DE LA API
+    // ============================================
+
     private static string? ExtraerMensaje(string contenido)
     {
         if (string.IsNullOrWhiteSpace(contenido))
@@ -329,36 +489,76 @@ public class PacientesApi
         try
         {
             using var documento = JsonDocument.Parse(texto);
-            var raiz = documento.RootElement;
+
+            JsonElement raiz = documento.RootElement;
 
             if (raiz.ValueKind == JsonValueKind.String)
                 return LimitarMensaje(raiz.GetString());
 
             if (raiz.ValueKind == JsonValueKind.Object)
             {
-                if (raiz.TryGetProperty("mensaje", out var mensaje) &&
-                    mensaje.ValueKind == JsonValueKind.String)
+                foreach (string propiedad in new[]
                 {
-                    return LimitarMensaje(mensaje.GetString());
+                    "mensaje",
+                    "message",
+                    "detail",
+                    "title"
+                })
+                {
+                    if (raiz.TryGetProperty(
+                            propiedad,
+                            out var valor) &&
+                        valor.ValueKind == JsonValueKind.String)
+                    {
+                        return LimitarMensaje(valor.GetString());
+                    }
                 }
 
-                if (raiz.TryGetProperty("message", out var message) &&
-                    message.ValueKind == JsonValueKind.String)
+                // Respuestas de validación de ASP.NET Core
+                // con estructura ValidationProblemDetails.
+                if (raiz.TryGetProperty(
+                        "errors",
+                        out var errores) &&
+                    errores.ValueKind == JsonValueKind.Object)
                 {
-                    return LimitarMensaje(message.GetString());
-                }
+                    var mensajes = new List<string>();
 
-                if (raiz.TryGetProperty("title", out var titulo) &&
-                    titulo.ValueKind == JsonValueKind.String)
-                {
-                    return LimitarMensaje(titulo.GetString());
+                    foreach (var campo in errores.EnumerateObject())
+                    {
+                        if (campo.Value.ValueKind !=
+                            JsonValueKind.Array)
+                            continue;
+
+                        foreach (var error in
+                                 campo.Value.EnumerateArray())
+                        {
+                            if (error.ValueKind ==
+                                JsonValueKind.String)
+                            {
+                                string? mensaje = error.GetString();
+
+                                if (!string.IsNullOrWhiteSpace(mensaje))
+                                    mensajes.Add(mensaje);
+                            }
+                        }
+                    }
+
+                    if (mensajes.Count > 0)
+                    {
+                        return LimitarMensaje(
+                            string.Join(" ", mensajes));
+                    }
                 }
             }
         }
         catch (JsonException)
         {
-            // El backend también puede enviar texto plano.
+            // La API puede responder con texto plano.
+            // Evitamos mostrar HTML o errores internos.
         }
+
+        if (texto.StartsWith("<", StringComparison.Ordinal))
+            return null;
 
         return LimitarMensaje(texto.Trim('"'));
     }
@@ -375,3 +575,4 @@ public class PacientesApi
             : texto[..300] + "...";
     }
 }
+

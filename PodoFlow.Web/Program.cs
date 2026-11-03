@@ -1,49 +1,78 @@
+
 using PodoFlow.Web.Components;
 using PodoFlow.Web.Seguridad;
 using PodoFlow.Web.Servicios;
 
-
 var builder = WebApplication.CreateBuilder(args);
 
+// SEGURIDAD
 
+// Handler de autenticación para desarrollo
 builder.Services.AddTransient<TokenDesarrolloHandler>();
 
-builder.Services.AddHttpClient<PacientesApi>(client =>
-{
-    client.BaseAddress = new Uri(
-        builder.Configuration["Api:BaseUrl"]
-        ?? throw new InvalidOperationException(
-            "No se configuró la URL de PodoFlow.Api."));
-    client.Timeout = TimeSpan.FromSeconds(10);
-}); 
+// CONFIGURACIÓN DE API
 
-builder.Services.AddHttpClient<IPrivacidadApi, PrivacidadApi>(client =>
-{
-    client.BaseAddress = new Uri(
-        builder.Configuration["Api:BaseUrl"]
-        ?? throw new InvalidOperationException(
-            "No se configuró la URL de PodoFlow.Api."));
-    client.Timeout = TimeSpan.FromSeconds(30);
-}).AddHttpMessageHandler<TokenDesarrolloHandler>();
+var apiBaseUrl = builder.Configuration["Api:BaseUrl"]
+    ?? throw new InvalidOperationException(
+        "No se configuró la URL de PodoFlow.Api.");
 
-// Add services to the container.
+// SERVICIO DE PACIENTES
+
+
+builder.Services.AddHttpClient<IPacientesApi, PacientesApi>(
+    client =>
+    {
+        client.BaseAddress = new Uri(apiBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(30);
+    })
+    .AddHttpMessageHandler<TokenDesarrolloHandler>();
+
+
+// SERVICIO DE PRIVACIDAD
+
+
+builder.Services.AddHttpClient<IPrivacidadApi, PrivacidadApi>(
+    client =>
+    {
+        client.BaseAddress = new Uri(apiBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(30);
+    })
+    .AddHttpMessageHandler<TokenDesarrolloHandler>();
+
+
+// COMPONENTES BLAZOR
+
+
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+
+
+// CONSTRUCCIÓN DE LA APLICACIÓN
+
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+
+// MIDDLEWARE
+
+
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    app.UseExceptionHandler(
+        "/Error",
+        createScopeForErrors: true);
+
     app.UseHsts();
 }
 
 app.UseHttpsRedirection();
 
 app.UseStaticFiles();
+
 app.UseAntiforgery();
+
+
+// MAPEO DE COMPONENTES
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
