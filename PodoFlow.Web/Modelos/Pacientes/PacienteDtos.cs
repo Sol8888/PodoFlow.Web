@@ -72,6 +72,28 @@ public class PacienteGuardarDto : IValidatableObject
                 new[] { nameof(Identificacion) });
         }
 
+
+        if (TipoIdentificacion == "CEDULA" &&
+            !string.IsNullOrWhiteSpace(Identificacion))
+        {
+            string cedula = Identificacion.Trim();
+
+            if (cedula.Length != 10 ||
+                !cedula.All(char.IsAsciiDigit))
+            {
+                yield return new ValidationResult(
+                    "La cédula debe contener exactamente 10 números, sin letras ni espacios.",
+                    new[] { nameof(Identificacion) });
+            }
+            else if (!CedulaEcuatorianaValida(cedula))
+            {
+                yield return new ValidationResult(
+                    "La cédula ecuatoriana ingresada no es válida.",
+                    new[] { nameof(Identificacion) });
+            }
+        }
+
+
         if (string.IsNullOrWhiteSpace(Nombres))
         {
             yield return new ValidationResult(
@@ -111,6 +133,43 @@ public class PacienteGuardarDto : IValidatableObject
         Direccion = string.IsNullOrWhiteSpace(Direccion)
             ? null
             : Direccion.Trim();
+    }
+
+
+    private static bool CedulaEcuatorianaValida(string cedula)
+    {
+        if (cedula.Length != 10 ||
+            !cedula.All(char.IsAsciiDigit))
+            return false;
+
+        int provincia = int.Parse(cedula[..2]);
+        int tercerDigito = cedula[2] - '0';
+
+        if (provincia < 1 || provincia > 24 ||
+            tercerDigito >= 6)
+            return false;
+
+        int[] coeficientes =
+        {
+        2, 1, 2, 1, 2, 1, 2, 1, 2
+    };
+
+        int suma = 0;
+
+        for (int i = 0; i < 9; i++)
+        {
+            int digito = cedula[i] - '0';
+            int producto = digito * coeficientes[i];
+
+            if (producto >= 10)
+                producto -= 9;
+
+            suma += producto;
+        }
+
+        int verificador = (10 - (suma % 10)) % 10;
+
+        return verificador == cedula[9] - '0';
     }
 
     public static PacienteGuardarDto Desde(PacienteDto paciente)
