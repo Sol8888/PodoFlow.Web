@@ -1869,19 +1869,15 @@ html, body {
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 16px;
-    margin-bottom: 24px;
+    gap: 12px 16px;
+    margin-bottom: 18px;
 }
 
     .pf-clinic-toolbar h2 {
-        margin: 0 0 5px;
+        margin: 0;
         font-size: 17px;
         font-weight: 700;
         color: var(--pf-navy);
-    }
-
-    .pf-clinic-toolbar p {
-        margin: 0;
     }
 
 .pf-clinic-actions {
@@ -1895,186 +1891,393 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
     gap: 12px;
-    margin: 24px 0 14px;
+    margin: 0 0 14px;
 }
 
     .pf-clinic-section-heading h3 {
-        margin: 0 0 4px;
+        margin: 0;
         color: var(--pf-navy);
         font-size: 15px;
         font-weight: 700;
     }
 
+        .pf-clinic-section-heading h3:focus {
+            outline: none;
+        }
+
     .pf-clinic-section-heading p {
-        margin: 0;
+        margin: 4px 0 0;
     }
 
-/* Ficha principal de la atencion */
+/* Resumen de la historia */
 
-.pf-clinic-record {
-    overflow: hidden;
+.pf-clinic-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 0 0 20px;
     border: 1px solid var(--pf-border);
-    border-radius: 12px;
-    background: var(--pf-surface);
-}
-
-.pf-clinic-record-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 18px;
-    padding: 16px 20px;
+    border-radius: 10px;
     background: var(--pf-surface-soft);
-    border-bottom: 1px solid var(--pf-border);
 }
 
-.pf-clinic-record-title {
+    .pf-clinic-summary > div {
+        min-width: 0;
+        padding: 12px 16px;
+    }
+
+        .pf-clinic-summary > div + div {
+            border-left: 1px solid var(--pf-border);
+        }
+
+    .pf-clinic-summary dt {
+        margin-bottom: 4px;
+        color: var(--pf-text-soft);
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .pf-clinic-summary dd {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 2px 8px;
+        min-height: 24px;
+        margin: 0;
+        font-size: 12px;
+        color: var(--pf-text-soft);
+    }
+
+        .pf-clinic-summary dd strong {
+            color: var(--pf-navy);
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+/* Avisos */
+
+.pf-clinic-notice {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 18px;
+    padding: 11px 14px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    animation: pf-clinic-aparecer 0.2s ease-out;
+}
+
+.pf-clinic-notice-close {
+    flex: none;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+    .pf-clinic-notice-close:hover {
+        background: rgba(15, 23, 42, 0.06);
+    }
+
+/* Deja visible el elemento enfocado bajo la barra superior fija */
+
+.pf-clinic-notice:focus {
+    outline: none;
+}
+
+.pf-clinic-notice,
+.pf-clinic-section-heading h3,
+.pf-clinic-form-panel textarea {
+    scroll-margin-top: 110px;
+}
+
+/* Línea de tiempo */
+
+.pf-clinic-timeline {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 0 0 0 22px;
+    list-style: none;
+}
+
+    .pf-clinic-timeline::before {
+        content: "";
+        position: absolute;
+        top: 12px;
+        bottom: 12px;
+        left: 5px;
+        width: 2px;
+        background: var(--pf-border);
+    }
+
+.pf-clinic-entry {
+    position: relative;
+    min-width: 0;
+    border: 1px solid var(--pf-border);
+    border-radius: 10px;
+    background: var(--pf-surface);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+    .pf-clinic-entry::before {
+        content: "";
+        position: absolute;
+        top: 26px;
+        left: -22px;
+        width: 12px;
+        height: 12px;
+        border: 2px solid var(--pf-blue-line);
+        border-radius: 50%;
+        background: var(--pf-surface);
+        transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .pf-clinic-entry:hover {
+        border-color: var(--pf-blue-line);
+    }
+
+    .pf-clinic-entry.is-open {
+        border-color: var(--pf-blue-line);
+        box-shadow: var(--pf-shadow-md);
+    }
+
+        .pf-clinic-entry.is-open::before {
+            border-color: var(--pf-blue);
+            background: var(--pf-blue);
+        }
+
+    .pf-clinic-entry.is-new {
+        animation: pf-clinic-resaltar 2.4s ease-out;
+    }
+
+    .pf-clinic-entry h4 {
+        margin: 0;
+        font: inherit;
+    }
+
+.pf-clinic-entry-toggle {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 12px 14px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+    .pf-clinic-entry-toggle:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(20, 93, 160, 0.3);
+    }
+
+.pf-clinic-date {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 2px;
+    border-radius: 8px;
+    background: var(--pf-blue-soft);
+    color: var(--pf-blue);
+    line-height: 1.15;
+}
+
+    .pf-clinic-date strong {
+        font-size: 18px;
+        font-weight: 700;
+    }
+
+    .pf-clinic-date span {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: capitalize;
+    }
+
+    .pf-clinic-date small {
+        color: var(--pf-text-soft);
+        font-size: 11px;
+    }
+
+.pf-clinic-entry-main {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
     min-width: 0;
 }
 
-.pf-clinic-eyebrow {
-    display: block;
-    margin-bottom: 5px;
-    color: var(--pf-blue);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.8px;
-}
-
-.pf-clinic-record-title h3 {
-    margin: 0;
+.pf-clinic-entry-motivo {
+    display: -webkit-box;
+    overflow: hidden;
     color: var(--pf-navy);
-    font-size: 17px;
-    font-weight: 700;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 
-.pf-clinic-record-title p {
-    margin: 5px 0 0;
+.is-open .pf-clinic-entry-motivo {
+    display: block;
+    white-space: pre-wrap;
+}
+
+.pf-clinic-entry-preview {
+    overflow: hidden;
+    color: var(--pf-text);
+    font-size: 13px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.pf-clinic-entry-meta {
     color: var(--pf-text-soft);
     font-size: 12px;
 }
 
-.pf-clinic-record-body {
+.pf-clinic-entry-side {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+/* Mismo ancho de estado en todas las filas para que formen una columna */
+.pf-clinic-entry-side .pf-status {
+    min-width: 72px;
+    text-align: center;
+}
+
+.pf-clinic-latest {
+    color: var(--pf-orange-dark);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.pf-clinic-chevron {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    margin: 0 4px 3px 6px;
+    border-right: 2px solid var(--pf-text-soft);
+    border-bottom: 2px solid var(--pf-text-soft);
+    transform: rotate(45deg);
+    transition: transform 0.2s ease;
+}
+
+.is-open .pf-clinic-chevron {
+    margin-bottom: -3px;
+    transform: rotate(-135deg);
+}
+
+/* Detalle de la atención */
+
+.pf-clinic-entry-detail {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px 24px;
-    padding: 20px;
+    gap: 10px;
+    padding: 14px;
+    border-top: 1px solid var(--pf-border-soft);
+    animation: pf-clinic-aparecer 0.2s ease-out;
 }
 
 .pf-clinic-field {
     min-width: 0;
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: var(--pf-surface-soft);
 }
 
-    .pf-clinic-field > span,
-    .pf-clinic-treatment-title {
+    .pf-clinic-field > span {
         display: block;
-        margin-bottom: 6px;
+        margin-bottom: 5px;
         color: var(--pf-text-soft);
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 600;
     }
 
-    .pf-clinic-field > p,
-    .pf-clinic-treatment > p {
+    .pf-clinic-field > p {
         margin: 0;
         color: var(--pf-text-strong);
         font-size: 13px;
-        line-height: 1.65;
-        font-weight: 500;
+        line-height: 1.6;
         white-space: pre-wrap;
         overflow-wrap: anywhere;
     }
+
+        .pf-clinic-field > p.pf-clinic-empty-value {
+            color: var(--pf-text-soft);
+            font-style: italic;
+        }
 
 .pf-clinic-full {
     grid-column: 1 / -1;
 }
 
-/* Tratamiento destacado */
-
-.pf-clinic-treatment {
-    min-width: 0;
-    padding: 14px 16px;
-    background: var(--pf-blue-soft);
-    border: 1px solid var(--pf-blue-line);
-    border-left: 3px solid var(--pf-orange);
-    border-radius: 8px;
+.pf-clinic-entry-footer {
+    margin: 2px 0 0;
+    color: var(--pf-text-soft);
+    font-size: 12px;
 }
 
-.pf-clinic-treatment-title {
-    color: var(--pf-blue);
-    font-weight: 700;
-}
+/* Búsqueda e historial */
 
-/* Historial de atenciones */
-
-.pf-clinic-history {
-    margin-top: 28px;
-}
-
-.pf-clinic-history-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.pf-clinic-history-item {
+.pf-clinic-search {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 14px 16px;
-    background: var(--pf-surface);
-    border: 1px solid var(--pf-border);
-    border-radius: 8px;
-}
-
-.pf-clinic-history-main {
-    flex: 1;
+    gap: 10px;
+    flex: 0 1 300px;
     min-width: 0;
 }
 
-.pf-clinic-history-top {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 5px;
-}
-
-    .pf-clinic-history-top strong {
-        color: var(--pf-navy);
-        font-size: 13px;
-        font-weight: 700;
+    .pf-clinic-search .pf-field {
+        flex: 1;
+        width: 100%;
+        min-width: 0;
     }
 
-.pf-clinic-history-main small {
-    display: block;
-    color: var(--pf-text-soft);
-    font-size: 11px;
-}
-
-.pf-clinic-history-main p {
-    margin: 7px 0 0;
-    color: var(--pf-text);
-    font-size: 12px;
-    line-height: 1.5;
-    overflow-wrap: anywhere;
-}
+    .pf-clinic-search small {
+        flex: none;
+        color: var(--pf-text-soft);
+        font-size: 12px;
+    }
 
 .pf-clinic-history-empty {
-    padding: 18px;
+    padding: 24px 18px;
     background: var(--pf-surface-soft);
     border: 1px dashed var(--pf-border);
     border-radius: 8px;
     color: var(--pf-text-soft);
     text-align: center;
-    font-size: 12px;
+    font-size: 13px;
 }
 
-.pf-clinic-record-secondary {
-    margin-bottom: 8px;
-}
+    .pf-clinic-history-empty p {
+        margin: 0 0 8px;
+    }
+
+        .pf-clinic-history-empty p:last-child {
+            margin-bottom: 0;
+        }
 
 .pf-clinic-pagination {
     margin-top: 18px;
@@ -2084,18 +2287,45 @@ html, body {
     margin-top: 12px;
 }
 
+.pf-clinic-empty-action {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 6px;
+    text-decoration: none;
+}
+
+/* Carga */
+
+.pf-clinic-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.pf-clinic-skeleton-row {
+    height: 76px;
+    border-radius: 10px;
+    background: var(--pf-border-soft);
+    animation: pf-clinic-pulso 1.2s ease-in-out infinite;
+}
+
 /* Formulario de nuevas atenciones */
 
 .pf-clinic-form-panel {
-    margin: 20px 0 26px;
+    margin: 0 0 24px;
     padding: 20px;
     background: var(--pf-surface-soft);
-    border: 1px solid var(--pf-border);
+    border: 1px solid var(--pf-blue-line);
     border-radius: 12px;
+    animation: pf-clinic-aparecer 0.2s ease-out;
 }
 
     .pf-clinic-form-panel .pf-clinic-section-heading {
-        margin: 0 0 20px;
+        margin-bottom: 18px;
+    }
+
+    .pf-clinic-form-panel .pf-clinic-notice {
+        margin: 16px 0 0;
     }
 
 .pf-clinic-form-grid {
@@ -2114,14 +2344,105 @@ html, body {
         resize: vertical;
     }
 
+.pf-clinic-professional select.pf-field {
+    width: 100%;
+    max-width: 420px;
+}
+
+.pf-clinic-field-error {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    margin-top: 6px;
+    color: #b91c1c;
+    font-size: 12px;
+}
+
+.pf-clinic-discard {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    margin-top: 18px;
+    padding: 10px 14px;
+    border: 1px solid var(--pf-orange-line);
+    border-radius: 8px;
+    background: var(--pf-orange-soft);
+    color: var(--pf-orange-dark);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* Animaciones */
+
+@keyframes pf-clinic-aparecer {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes pf-clinic-resaltar {
+    0%, 40% {
+        border-color: var(--pf-green);
+        box-shadow: 0 0 0 3px var(--pf-green-soft);
+    }
+}
+
+@keyframes pf-clinic-pulso {
+    50% {
+        opacity: 0.5;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pf-clinic-notice,
+    .pf-clinic-entry.is-new,
+    .pf-clinic-entry-detail,
+    .pf-clinic-form-panel,
+    .pf-clinic-skeleton-row {
+        animation: none;
+    }
+
+    .pf-clinic-chevron {
+        transition: none;
+    }
+}
+
 /* Diseño adaptable */
 
 @media (max-width: 720px) {
-    .pf-clinic-toolbar {
-        align-items: flex-start;
+    .pf-clinic-summary {
+        grid-template-columns: 1fr;
     }
 
-    .pf-clinic-record-body,
+        .pf-clinic-summary > div + div {
+            border-top: 1px solid var(--pf-border);
+            border-left: 0;
+        }
+
+    .pf-clinic-entry-toggle {
+        grid-template-columns: 48px minmax(0, 1fr);
+        gap: 10px 12px;
+    }
+
+    .pf-clinic-entry-side {
+        grid-column: 1 / -1;
+        justify-content: flex-start;
+    }
+
+    .pf-clinic-chevron {
+        margin-left: auto;
+    }
+
+    .pf-clinic-entry-detail,
     .pf-clinic-form-grid {
         grid-template-columns: 1fr;
     }
@@ -2130,17 +2451,8 @@ html, body {
         grid-column: auto;
     }
 
-    .pf-clinic-record-header {
-        padding: 14px 16px;
-    }
-
-    .pf-clinic-record-body {
-        padding: 16px;
-    }
-
-    .pf-clinic-history-item {
-        align-items: flex-start;
-        flex-direction: column;
+    .pf-clinic-search {
+        flex-basis: 100%;
     }
 
     .pf-clinic-form-panel {
