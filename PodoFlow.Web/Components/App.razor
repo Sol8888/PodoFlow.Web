@@ -1,4 +1,6 @@
-﻿<!DOCTYPE html>
+﻿@inject IWebHostEnvironment Entorno
+
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -6,7 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
     <link rel="stylesheet" href="bootstrap/bootstrap.min.css" />
-    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="@UrlAppCss" />
     <link rel="stylesheet" href="tema.css" />
     <link rel="stylesheet" href="PodoFlow.Web.styles.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
@@ -19,3 +21,18 @@
 </body>
 
 </html>
+@code {
+    private string UrlAppCss
+    {
+        get
+        {
+            var archivo = Entorno.WebRootFileProvider
+                .GetFileInfo("app.css");
+
+            var version = archivo.Exists
+                ? archivo.LastModified.ToUnixTimeMilliseconds()
+                : 0;
+            return $"/app.css?v={version}";
+        }
+    }
+}

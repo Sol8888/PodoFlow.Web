@@ -2,6 +2,7 @@
 @page "/pacientes/{Id:long}/editar"
 @rendermode InteractiveServer
 
+@using System.ComponentModel.DataAnnotations
 @using PodoFlow.Web.Modelos.Pacientes
 @using PodoFlow.Web.Servicios
 
@@ -10,7 +11,7 @@
 @inject ILogger<PacienteFormulario> Logger
 
 <PageTitle>
-    @(Id.HasValue ? "Editar paciente" : "Nuevo paciente") | PodoFlow
+    @(EsEdicion ? "Editar paciente" : "Nuevo paciente") | PodoFlow
 </PageTitle>
 
 <div class="pf-pacientes pf-form-page">
@@ -21,12 +22,18 @@
 
     <div class="pf-module-header">
         <div>
-            <span class="pf-module-eyebrow">GESTIÓN CLÍNICA</span>
-            <h1>@(Id.HasValue ? "Editar paciente" : "Nuevo paciente")</h1>
+            <span class="pf-module-eyebrow">
+                GESTIÓN CLÍNICA
+            </span>
+
+            <h1>
+                @(EsEdicion ? "Editar paciente" : "Nuevo paciente")
+            </h1>
+
             <p>
-                @(Id.HasValue
-                    ? "Actualiza la información del paciente."
-                    : "Registra un nuevo paciente en PodoFlow.")
+                @(EsEdicion
+                    ? "Actualiza la información personal del paciente."
+                    : "Registra un nuevo paciente en el Centro Podológico TODO PIE.")
             </p>
         </div>
     </div>
@@ -34,27 +41,55 @@
     @if (Cargando)
     {
         <section class="pf-card pf-info-card">
-            Cargando información...
+            <div class="pf-empty" role="status">
+                <p>Cargando información del paciente...</p>
+            </div>
         </section>
     }
-    else if (ErrorCarga != null)
+    else if (!string.IsNullOrWhiteSpace(ErrorCarga))
     {
-        <div class="pf-detail-error">@ErrorCarga</div>
+        <section class="pf-card pf-info-card">
+            <div class="pf-detail-error" role="alert">
+                @ErrorCarga
+            </div>
+
+            <div class="pf-form-actions">
+                <a href="@RutaVolver"
+                   class="pf-btn pf-btn-neutral">
+                    Volver
+                </a>
+
+                <button type="button"
+                        class="pf-btn pf-btn-main"
+                        @onclick="CargarFormularioAsync">
+                    Reintentar
+                </button>
+            </div>
+        </section>
     }
     else
     {
         <section class="pf-card pf-info-card">
+
             <div class="pf-form-heading">
-                <div class="pf-form-mark">PF</div>
+                <div class="pf-form-mark">
+                    PF
+                </div>
+
                 <div>
                     <h2>Información personal</h2>
-                    <p>Los campos marcados con * son obligatorios.</p>
+
+                    <p>
+                        Los campos marcados con * son obligatorios.
+                    </p>
                 </div>
             </div>
 
-            @if (ErrorGuardar != null)
+            @if (!string.IsNullOrWhiteSpace(ErrorGuardar))
             {
-                <div class="pf-detail-error">@ErrorGuardar</div>
+                <div class="pf-detail-error" role="alert">
+                    @ErrorGuardar
+                </div>
             }
 
             <EditForm Model="@Modelo"
@@ -62,72 +97,145 @@
                       FormName="form-paciente">
 
                 <DataAnnotationsValidator />
-                <ValidationSummary />
 
                 <div class="pf-patient-form-grid">
 
                     <div class="pf-form-group">
-                        <label>Tipo de identificación *</label>
-                        <InputSelect class="pf-field"
-                                     @bind-Value="Modelo.TipoIdentificacion">
+
+                        <label for="tipoIdentificacion">
+                            Tipo de identificación *
+                        </label>
+
+                        <InputSelect id="tipoIdentificacion"
+                                     class="pf-field"
+                                     @bind-Value="Modelo.TipoIdentificacion"
+                                     disabled="@Guardando">
+
                             <option value="CEDULA">Cédula</option>
                             <option value="PASAPORTE">Pasaporte</option>
                             <option value="RUC">RUC</option>
                             <option value="OTRO">Otro</option>
+
                         </InputSelect>
+
+                        <ValidationMessage For="@(() => Modelo.TipoIdentificacion)" />
+
                     </div>
 
                     <div class="pf-form-group">
-                        <label>Identificación *</label>
-                        <InputText class="pf-field"
+
+                        <label for="identificacion">
+                            Número de identificación *
+                        </label>
+
+                        <InputText id="identificacion"
+                                   class="pf-field"
                                    maxlength="30"
-                                   @bind-Value="Modelo.Identificacion" />
+                                   placeholder="Ingresa la identificación"
+                                   autocomplete="off"
+                                   @bind-Value="Modelo.Identificacion"
+                                   disabled="@Guardando" />
+
                         <ValidationMessage For="@(() => Modelo.Identificacion)" />
+
                     </div>
 
                     <div class="pf-form-group">
-                        <label>Nombres *</label>
-                        <InputText class="pf-field"
+
+                        <label for="nombres">
+                            Nombres *
+                        </label>
+
+                        <InputText id="nombres"
+                                   class="pf-field"
                                    maxlength="100"
-                                   @bind-Value="Modelo.Nombres" />
+                                   placeholder="Nombres del paciente"
+                                   autocomplete="off"
+                                   @bind-Value="Modelo.Nombres"
+                                   disabled="@Guardando" />
+
                         <ValidationMessage For="@(() => Modelo.Nombres)" />
+
                     </div>
 
                     <div class="pf-form-group">
-                        <label>Apellidos *</label>
-                        <InputText class="pf-field"
+
+                        <label for="apellidos">
+                            Apellidos *
+                        </label>
+
+                        <InputText id="apellidos"
+                                   class="pf-field"
                                    maxlength="100"
-                                   @bind-Value="Modelo.Apellidos" />
+                                   placeholder="Apellidos del paciente"
+                                   autocomplete="off"
+                                   @bind-Value="Modelo.Apellidos"
+                                   disabled="@Guardando" />
+
                         <ValidationMessage For="@(() => Modelo.Apellidos)" />
+
                     </div>
 
                     <div class="pf-form-group">
-                        <label>Fecha de nacimiento</label>
-                        <InputDate class="pf-field"
-                                   @bind-Value="Modelo.FechaNacimiento" />
+
+                        <label for="fechaNacimiento">
+                            Fecha de nacimiento
+                        </label>
+
+                        <InputDate id="fechaNacimiento"
+                                   class="pf-field"
+                                   max="@DateTime.Today.ToString("yyyy-MM-dd")"
+                                   @bind-Value="Modelo.FechaNacimiento"
+                                   disabled="@Guardando" />
+
+                        <ValidationMessage For="@(() => Modelo.FechaNacimiento)" />
+
                     </div>
 
                     <div class="pf-form-group">
-                        <label>Género</label>
-                        <InputSelect class="pf-field"
-                                     @bind-Value="Modelo.Genero">
+
+                        <label for="genero">
+                            Género
+                        </label>
+
+                        <InputSelect id="genero"
+                                     class="pf-field"
+                                     @bind-Value="Modelo.Genero"
+                                     disabled="@Guardando">
+
                             <option value="">No especificado</option>
                             <option value="FEMENINO">Femenino</option>
                             <option value="MASCULINO">Masculino</option>
                             <option value="OTRO">Otro</option>
+
                         </InputSelect>
+
+                        <ValidationMessage For="@(() => Modelo.Genero)" />
+
                     </div>
 
                     <div class="pf-form-group pf-form-full">
-                        <label>Dirección</label>
-                        <InputText class="pf-field"
+
+                        <label for="direccion">
+                            Dirección
+                        </label>
+
+                        <InputText id="direccion"
+                                   class="pf-field"
                                    maxlength="300"
-                                   @bind-Value="Modelo.Direccion" />
+                                   placeholder="Dirección del paciente (opcional)"
+                                   autocomplete="off"
+                                   @bind-Value="Modelo.Direccion"
+                                   disabled="@Guardando" />
+
+                        <ValidationMessage For="@(() => Modelo.Direccion)" />
+
                     </div>
 
                 </div>
 
                 <div class="pf-form-actions">
+
                     <a href="@RutaVolver"
                        class="pf-btn pf-btn-neutral">
                         Cancelar
@@ -136,38 +244,78 @@
                     <button type="submit"
                             class="pf-btn pf-btn-main"
                             disabled="@Guardando">
-                        @(Guardando ? "Guardando..." :
-                          Id.HasValue ? "Guardar cambios" : "Registrar paciente")
+
+                        @if (Guardando)
+                        {
+                            <span>Guardando...</span>
+                        }
+                        else if (EsEdicion)
+                        {
+                            <span>Guardar cambios</span>
+                        }
+                        else
+                        {
+                            <span>Registrar paciente</span>
+                        }
+
                     </button>
+
                 </div>
 
             </EditForm>
+
         </section>
     }
 
 </div>
 
 @code {
+
     [Parameter]
     public long? Id { get; set; }
 
+    // ============================================
+    // ESTADO DEL FORMULARIO
+    // ============================================
+
     private PacienteGuardarDto Modelo = new();
+
     private bool Cargando;
+
     private bool Guardando;
+
     private string? ErrorCarga;
+
     private string? ErrorGuardar;
 
+    private bool EsEdicion => Id.HasValue;
+
     private string RutaVolver =>
-        Id.HasValue ? $"/pacientes/{Id.Value}" : "/pacientes";
+        Id.HasValue
+            ? $"/pacientes/{Id.Value}"
+            : "/pacientes";
+
+    // ============================================
+    // INICIALIZACIÓN
+    // ============================================
 
     protected override async Task OnParametersSetAsync()
+    {
+        await CargarFormularioAsync();
+    }
+
+    // ============================================
+    // CARGAR FORMULARIO
+    // ============================================
+
+    private async Task CargarFormularioAsync()
     {
         ErrorCarga = null;
         ErrorGuardar = null;
 
-        if (!Id.HasValue)
+        if (!EsEdicion)
         {
-            Modelo = new();
+            Modelo = new PacienteGuardarDto();
             Cargando = false;
             return;
         }
@@ -176,27 +324,39 @@
 
         try
         {
-            var paciente = await Api.ObtenerAsync(Id.Value);
+            var paciente = await Api.ObtenerAsync(Id!.Value);
 
-            if (paciente == null)
+            if (paciente is null)
             {
-                ErrorCarga = "El paciente no existe.";
+                ErrorCarga = "No se encontró el paciente solicitado.";
                 return;
             }
 
             if (!paciente.Estatus)
             {
                 ErrorCarga =
-                    "No puedes editar un paciente inactivo. " +
-                    "Primero debes reactivarlo desde su ficha.";
+                    "Este paciente se encuentra inactivo. " +
+                    "Para editarlo, primero debes reactivarlo " +
+                    "desde su ficha.";
                 return;
             }
 
             Modelo = PacienteGuardarDto.Desde(paciente);
         }
-        catch (Exception)
+        catch (InvalidOperationException ex)
         {
-            ErrorCarga = "No se pudo cargar la información.";
+            ErrorCarga = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Error al cargar el paciente {PacienteId}",
+                Id);
+
+            ErrorCarga =
+                "No se pudo cargar la información del paciente. " +
+                "Comprueba la conexión e intenta nuevamente.";
         }
         finally
         {
@@ -204,66 +364,53 @@
         }
     }
 
-    
+    // ============================================
+    // GUARDAR PACIENTE
+    // ============================================
+
     private async Task GuardarAsync()
     {
-        if (Guardando)
+        if (Guardando || Cargando)
             return;
-
-        ErrorGuardar = null;
-
-        if (Modelo.FechaNacimiento.HasValue &&
-            Modelo.FechaNacimiento.Value.Date > DateTime.Today)
-        {
-            ErrorGuardar =
-                "La fecha de nacimiento no puede ser futura.";
-            return;
-        }
 
         Guardando = true;
 
+        ErrorGuardar = null;
+
         try
         {
-            if (Id.HasValue)
-            {
-                await Api.ActualizarAsync(Id.Value, Modelo);
+            // El servicio normaliza y valida el DTO
+            // antes de enviarlo al backend.
 
-                Nav.NavigateTo(
-                    $"/pacientes/{Id.Value}");
+            if (EsEdicion)
+            {
+                await ActualizarPacienteAsync();
             }
             else
             {
-                var creado = await Api.CrearAsync(Modelo);
-
-                Nav.NavigateTo(
-                    $"/pacientes/{creado.Id}");
+                await CrearPacienteAsync();
             }
         }
         catch (InvalidOperationException ex)
         {
             ErrorGuardar = ex.Message;
         }
-        catch (TaskCanceledException)
+        catch (ArgumentException ex)
         {
-            ErrorGuardar =
-                "La solicitud tardó demasiado. " +
-                "Comprueba en el directorio si se guardó " +
-                "antes de intentarlo nuevamente.";
-        }
-        catch (HttpRequestException)
-        {
-            ErrorGuardar =
-                "No se pudo conectar con PodoFlow.Api. " +
-                "Comprueba que el backend esté ejecutándose.";
+            ErrorGuardar = ex.Message;
         }
         catch (Exception ex)
         {
             Logger.LogError(
-                ex, "Error al guardar un paciente");
+                ex,
+                "Error al guardar paciente. Id: {PacienteId}",
+                Id);
 
             ErrorGuardar =
-                "Ocurrió un error inesperado. " +
-                "Revisa la consola de PodoFlow.Web.";
+                "No fue posible completar la operación. " +
+                "Si estabas registrando un paciente, " +
+                "comprueba primero si aparece en el directorio " +
+                "antes de intentarlo nuevamente.";
         }
         finally
         {
@@ -271,4 +418,51 @@
         }
     }
 
+    // ============================================
+    // CREAR PACIENTE
+    // ============================================
+
+    private async Task CrearPacienteAsync()
+    {
+        var pacienteCreado = await Api.CrearAsync(Modelo);
+
+        Logger.LogInformation(
+            "Paciente registrado correctamente. Id: {PacienteId}",
+            pacienteCreado.Id);
+
+        Nav.NavigateTo(
+            $"/pacientes/{pacienteCreado.Id}");
+    }
+
+    // ============================================
+    // ACTUALIZAR PACIENTE
+    // ============================================
+
+    private async Task ActualizarPacienteAsync()
+    {
+        if (!Id.HasValue)
+        {
+            throw new InvalidOperationException(
+                "No se encontró el identificador del paciente.");
+        }
+
+        if (string.IsNullOrWhiteSpace(Modelo.Version))
+        {
+            throw new InvalidOperationException(
+                "No se encontró la versión del registro. " +
+                "Vuelve a cargar el paciente antes de editarlo.");
+        }
+
+        await Api.ActualizarAsync(
+            Id.Value,
+            Modelo);
+
+        Logger.LogInformation(
+            "Paciente actualizado correctamente. Id: {PacienteId}",
+            Id.Value);
+
+        Nav.NavigateTo(
+            $"/pacientes/{Id.Value}");
+    }
 }
+

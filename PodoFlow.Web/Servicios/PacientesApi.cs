@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using PodoFlow.Web.Modelos.Pacientes;
+using PodoFlow.Web.Modelos.Atenciones;
 
 namespace PodoFlow.Web.Servicios;
 
@@ -574,5 +575,242 @@ public class PacientesApi : IPacientesApi
             ? texto
             : texto[..300] + "...";
     }
+
+    // ============================================
+    // HISTORIA CLÍNICA DEL PACIENTE
+    // ============================================
+
+    // GET: api/historias/paciente/{pacienteId}
+    public async Task<HistoriaPacienteDto?>
+        ObtenerHistoriaPacienteAsync(long pacienteId)
+    {
+        ValidarId(pacienteId);
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.GetAsync(
+                $"api/historias/paciente/{pacienteId}"));
+
+        if (respuesta.StatusCode == HttpStatusCode.NotFound)
+            return null;
+
+        await ValidarRespuestaAsync(respuesta);
+
+        return await respuesta.Content
+            .ReadFromJsonAsync<HistoriaPacienteDto>();
+    }
+
+    // ============================================
+    // ANTECEDENTES DE LA HISTORIA
+    // ============================================
+
+    // GET: api/antecedentes
+    public async Task<List<AntecedenteDto>> ListarAntecedentesAsync(
+        long historiaId,
+        bool incluirInactivos = false,
+        int pagina = 1,
+        int tamano = 10)
+    {
+        ValidarId(historiaId);
+        ValidarPaginacion(pagina, tamano);
+
+        string url =
+            $"api/antecedentes" +
+            $"?historiaId={historiaId}" +
+            $"&incluirInactivos={incluirInactivos.ToString().ToLowerInvariant()}" +
+            $"&pagina={pagina}" +
+            $"&tamano={tamano}";
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.GetAsync(url));
+
+        await ValidarRespuestaAsync(respuesta);
+
+        return await respuesta.Content
+            .ReadFromJsonAsync<List<AntecedenteDto>>() ?? [];
+    }
+
+
+    // ============================================
+    // CREAR ANTECEDENTE
+    // ============================================
+
+    public async Task<AntecedenteDto> CrearAntecedenteAsync(
+        long historiaId,
+        AntecedenteGuardarDto dto)
+    {
+        ValidarId(historiaId);
+        ArgumentNullException.ThrowIfNull(dto);
+
+        dto.Normalizar();
+        ValidarModelo(dto);
+
+        var datos = new
+        {
+            HistoriaId = historiaId,
+            dto.Tipo,
+            dto.Descripcion
+        };
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.PostAsJsonAsync(
+                "api/antecedentes", datos));
+
+        await ValidarRespuestaAsync(respuesta);
+
+        return await respuesta.Content
+            .ReadFromJsonAsync<AntecedenteDto>()
+            ?? throw new InvalidOperationException(
+                "El servidor no devolvió el antecedente creado.");
+    }
+
+    // ============================================
+    // ACTUALIZAR ANTECEDENTE
+    // ============================================
+
+    public async Task ActualizarAntecedenteAsync(
+        long antecedenteId,
+        AntecedenteGuardarDto dto)
+    {
+        ValidarId(antecedenteId);
+        ArgumentNullException.ThrowIfNull(dto);
+
+        dto.Normalizar();
+        ValidarModelo(dto);
+
+        var datos = new
+        {
+            dto.Tipo,
+            dto.Descripcion
+        };
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.PutAsJsonAsync(
+                $"api/antecedentes/{antecedenteId}",
+                datos));
+
+        await ValidarRespuestaAsync(respuesta);
+    }
+
+    // ============================================
+    // DESACTIVAR ANTECEDENTE
+    // ============================================
+
+    public async Task DesactivarAntecedenteAsync(
+        long antecedenteId)
+    {
+        ValidarId(antecedenteId);
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.DeleteAsync(
+                $"api/antecedentes/{antecedenteId}"));
+
+        await ValidarRespuestaAsync(respuesta);
+    }
+
+    // ============================================
+    // REACTIVAR ANTECEDENTE
+    // ============================================
+
+    public async Task ReactivarAntecedenteAsync(
+        long antecedenteId)
+    {
+        ValidarId(antecedenteId);
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.PatchAsync(
+                $"api/antecedentes/{antecedenteId}/reactivar",
+                content: null));
+
+        await ValidarRespuestaAsync(respuesta);
+    }
+
+    public async Task<HistoriaPacienteDto> CrearHistoriaPacienteAsync(long pacienteId)
+    {
+        ValidarId(pacienteId);
+
+        var datos = new
+        {
+            PacienteId = pacienteId
+        };
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.PostAsJsonAsync("api/historias", datos));
+
+        await ValidarRespuestaAsync(respuesta);
+
+        return await respuesta.Content
+            .ReadFromJsonAsync<HistoriaPacienteDto>()
+            ?? throw new InvalidOperationException(
+                "El servidor no devolvió la historia clínica creada.");
+    }
+
+    public async Task<List<AtencionDto>> ListarAtencionesAsync(
+        long historiaId,
+        int pagina = 1,
+        int tamano = 10)
+    {
+        ValidarId(historiaId);
+        ValidarPaginacion(pagina, tamano);
+
+        string url =
+            $"api/atenciones?historiaId={historiaId}" +
+            $"&pagina={pagina}&tamano={tamano}";
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.GetAsync(url));
+
+        await ValidarRespuestaAsync(respuesta);
+
+        return await respuesta.Content
+            .ReadFromJsonAsync<List<AtencionDto>>() ?? [];
+    }
+
+
+    public async Task<AtencionDto> CrearAtencionAsync(
+        long historiaId,
+        AtencionCrearDto dto)
+    {
+        ValidarId(historiaId);
+
+        ArgumentNullException.ThrowIfNull(dto);
+
+        if (dto.UsuarioId <= 0)
+        {
+            throw new ArgumentException(
+                "Selecciona un profesional responsable válido.");
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.MotivoConsulta))
+        {
+            throw new ArgumentException(
+                "El motivo de consulta es obligatorio.");
+        }
+
+        var datos = new
+        {
+            HistoriaId = historiaId,
+            CitaId = (long?)null,
+            dto.UsuarioId,
+            MotivoConsulta = dto.MotivoConsulta.Trim(),
+            ValoracionClinica = dto.ValoracionClinica?.Trim(),
+            Diagnostico = dto.Diagnostico?.Trim(),
+            Tratamiento = dto.Tratamiento?.Trim(),
+            Observaciones = dto.Observaciones?.Trim()
+        };
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.PostAsJsonAsync(
+                "api/atenciones",
+                datos));
+
+        await ValidarRespuestaAsync(respuesta);
+
+        return await respuesta.Content
+            .ReadFromJsonAsync<AtencionDto>()
+            ?? throw new InvalidOperationException(
+                "El servidor no devolvió la atención creada.");
+    }
+
+
 }
 
