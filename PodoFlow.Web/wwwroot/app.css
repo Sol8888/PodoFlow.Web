@@ -1,4 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@code {
+    private string UrlAppCss {
+        get {
+            var archivo = Entorno.WebRootFileProvider .GetFileInfo("app.css");
+            var version = archivo.Exists ? archivo.LastModified.ToUnixTimeSeconds() : 0;
+            return $"/app.css?v={version}";
+        }
+    }
+}
 
 /* ========= BASE ========= */
 :root {
@@ -1738,5 +1747,403 @@ html, body {
 
     .pf-contact-buttons {
         justify-content: flex-start;
+    }
+}
+
+
+/* ==========================================
+   PODOFLOW - FICHA DE ATENCION CLINICA
+   ========================================== */
+
+.pf-atencion-ultima {
+    margin: 18px 0 28px;
+    background: #ffffff;
+    border: 1px solid var(--pf-border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.pf-atencion-encabezado {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px 24px;
+    background: var(--pf-surface-soft);
+    border-bottom: 1px solid var(--pf-border);
+}
+
+.pf-atencion-etiqueta {
+    display: block;
+    margin-bottom: 7px;
+    color: var(--pf-blue);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.pf-atencion-encabezado h3 {
+    margin: 0;
+    color: var(--pf-navy);
+    font-size: 19px;
+    font-weight: 700;
+}
+
+.pf-atencion-encabezado p {
+    margin: 6px 0 0;
+}
+
+.pf-atencion-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 28px;
+    padding: 24px;
+}
+
+.pf-atencion-ancho {
+    grid-column: 1 / -1;
+}
+
+.pf-atencion-dato {
+    min-width: 0;
+}
+
+    .pf-atencion-dato > span,
+    .pf-atencion-tratamiento > span {
+        display: block;
+        margin-bottom: 7px;
+        color: var(--pf-text-soft);
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .pf-atencion-dato > p,
+    .pf-atencion-tratamiento > p {
+        margin: 0;
+        color: var(--pf-text);
+        font-size: 13px;
+        line-height: 1.7;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+.pf-atencion-tratamiento {
+    padding: 16px 18px;
+    border: 1px solid var(--pf-blue-line);
+    border-left: 3px solid var(--pf-blue);
+    border-radius: 8px;
+    background: var(--pf-blue-soft);
+}
+
+    .pf-atencion-tratamiento > span {
+        color: var(--pf-blue);
+        font-weight: 700;
+    }
+
+@media (max-width: 650px) {
+    .pf-atencion-encabezado {
+        padding: 16px;
+    }
+
+    .pf-atencion-grid {
+        grid-template-columns: 1fr;
+        gap: 18px;
+        padding: 18px 16px;
+    }
+
+    .pf-atencion-ancho {
+        grid-column: auto;
+    }
+}
+
+/* ============================================
+   PODOFLOW - ATENCIONES CLINICAS
+   ============================================ */
+
+.pf-clinic-panel {
+    min-width: 0;
+}
+
+.pf-clinic-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+    .pf-clinic-toolbar h2 {
+        margin: 0 0 5px;
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--pf-navy);
+    }
+
+    .pf-clinic-toolbar p {
+        margin: 0;
+    }
+
+.pf-clinic-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.pf-clinic-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 24px 0 14px;
+}
+
+    .pf-clinic-section-heading h3 {
+        margin: 0 0 4px;
+        color: var(--pf-navy);
+        font-size: 15px;
+        font-weight: 700;
+    }
+
+    .pf-clinic-section-heading p {
+        margin: 0;
+    }
+
+/* Ficha principal de la atencion */
+
+.pf-clinic-record {
+    overflow: hidden;
+    border: 1px solid var(--pf-border);
+    border-radius: 12px;
+    background: var(--pf-surface);
+}
+
+.pf-clinic-record-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 16px 20px;
+    background: var(--pf-surface-soft);
+    border-bottom: 1px solid var(--pf-border);
+}
+
+.pf-clinic-record-title {
+    min-width: 0;
+}
+
+.pf-clinic-eyebrow {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--pf-blue);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+}
+
+.pf-clinic-record-title h3 {
+    margin: 0;
+    color: var(--pf-navy);
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.pf-clinic-record-title p {
+    margin: 5px 0 0;
+    color: var(--pf-text-soft);
+    font-size: 12px;
+}
+
+.pf-clinic-record-body {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 24px;
+    padding: 20px;
+}
+
+.pf-clinic-field {
+    min-width: 0;
+}
+
+    .pf-clinic-field > span,
+    .pf-clinic-treatment-title {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--pf-text-soft);
+        font-size: 11px;
+        font-weight: 600;
+    }
+
+    .pf-clinic-field > p,
+    .pf-clinic-treatment > p {
+        margin: 0;
+        color: var(--pf-text-strong);
+        font-size: 13px;
+        line-height: 1.65;
+        font-weight: 500;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+.pf-clinic-full {
+    grid-column: 1 / -1;
+}
+
+/* Tratamiento destacado */
+
+.pf-clinic-treatment {
+    min-width: 0;
+    padding: 14px 16px;
+    background: var(--pf-blue-soft);
+    border: 1px solid var(--pf-blue-line);
+    border-left: 3px solid var(--pf-orange);
+    border-radius: 8px;
+}
+
+.pf-clinic-treatment-title {
+    color: var(--pf-blue);
+    font-weight: 700;
+}
+
+/* Historial de atenciones */
+
+.pf-clinic-history {
+    margin-top: 28px;
+}
+
+.pf-clinic-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.pf-clinic-history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 16px;
+    background: var(--pf-surface);
+    border: 1px solid var(--pf-border);
+    border-radius: 8px;
+}
+
+.pf-clinic-history-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.pf-clinic-history-top {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 5px;
+}
+
+    .pf-clinic-history-top strong {
+        color: var(--pf-navy);
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+.pf-clinic-history-main small {
+    display: block;
+    color: var(--pf-text-soft);
+    font-size: 11px;
+}
+
+.pf-clinic-history-main p {
+    margin: 7px 0 0;
+    color: var(--pf-text);
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.pf-clinic-history-empty {
+    padding: 18px;
+    background: var(--pf-surface-soft);
+    border: 1px dashed var(--pf-border);
+    border-radius: 8px;
+    color: var(--pf-text-soft);
+    text-align: center;
+    font-size: 12px;
+}
+
+.pf-clinic-record-secondary {
+    margin-bottom: 8px;
+}
+
+.pf-clinic-pagination {
+    margin-top: 18px;
+}
+
+.pf-clinic-retry {
+    margin-top: 12px;
+}
+
+/* Formulario de nuevas atenciones */
+
+.pf-clinic-form-panel {
+    margin: 20px 0 26px;
+    padding: 20px;
+    background: var(--pf-surface-soft);
+    border: 1px solid var(--pf-border);
+    border-radius: 12px;
+}
+
+    .pf-clinic-form-panel .pf-clinic-section-heading {
+        margin: 0 0 20px;
+    }
+
+.pf-clinic-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 20px;
+}
+
+    .pf-clinic-form-grid .pf-form-group {
+        min-width: 0;
+    }
+
+    .pf-clinic-form-grid textarea.pf-field {
+        width: 100%;
+        height: auto;
+        resize: vertical;
+    }
+
+/* Diseño adaptable */
+
+@media (max-width: 720px) {
+    .pf-clinic-toolbar {
+        align-items: flex-start;
+    }
+
+    .pf-clinic-record-body,
+    .pf-clinic-form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .pf-clinic-full {
+        grid-column: auto;
+    }
+
+    .pf-clinic-record-header {
+        padding: 14px 16px;
+    }
+
+    .pf-clinic-record-body {
+        padding: 16px;
+    }
+
+    .pf-clinic-history-item {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .pf-clinic-form-panel {
+        padding: 16px;
     }
 }

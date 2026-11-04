@@ -1,0 +1,714 @@
+﻿@using PodoFlow.Web.Modelos.Pacientes
+@using PodoFlow.Web.Servicios
+
+@inject IPacientesApi Api
+@inject ILogger<AntecedentesPanel> Logger
+
+<div class="pf-pacientes">
+
+    @if (CargandoGeneral)
+    {
+        <div class="pf-detail-empty" role="status">
+            Cargando historia clínica...
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(ErrorHistoria))
+    {
+        <div class="pf-detail-error" role="alert">
+            @ErrorHistoria
+        </div>
+    }
+    else
+    {
+
+        <div class="pf-detail-grid">
+
+            <section class="pf-card pf-info-card">
+
+                <div class="pf-detail-heading">
+                    <div>
+                        <h2>Antecedentes registrados</h2>
+                        <p class="pf-detail-muted">
+                            Consulta los antecedentes del paciente.
+                            Los más recientes aparecen primero.
+                        </p>
+                    </div>
+                    <button type="button"
+                            class="pf-btn pf-btn-neutral"
+                            disabled="@CargandoGeneral"
+                            @onclick="RecargarAsync">
+                        Actualizar
+                    </button>
+                </div>
+                
+
+                @if (Historia is null)
+                {
+                    <div class="pf-detail-empty">
+                        Este paciente todavía no tiene
+                        una historia clínica registrada.
+                    </div>
+                }
+                else
+                {
+                    <label class="pf-checkbox">
+                        <input type="checkbox"
+                               @bind="IncluirInactivos"
+                               @bind:after="CambiarFiltroAsync"
+                               disabled="@CargandoAntecedentes" />
+
+                        Incluir inactivos
+                    </label>
+
+                    @if (!string.IsNullOrWhiteSpace(ErrorOperacion))
+                    {
+                        <div class="pf-detail-error" role="alert">
+                            @ErrorOperacion
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(Mensaje))
+                    {
+                        <div class="pf-contact-success" role="status">
+                            @Mensaje
+                        </div>
+                    }
+
+                    @if (CargandoAntecedentes)
+                    {
+                        <div class="pf-detail-empty">
+                            Cargando antecedentes...
+                        </div>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(ErrorAntecedentes))
+                    {
+                        <div class="pf-detail-error" role="alert">
+                            @ErrorAntecedentes
+                        </div>
+                    }
+                    else if (AntecedentesOrdenados.Count == 0)
+                    {
+                        <div class="pf-detail-empty">
+                            No hay antecedentes registrados
+                            con los filtros seleccionados.
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var antecedente in AntecedentesOrdenados)
+                        {
+                            <div class="pf-contact-entry"
+                                 @key="antecedente.Id">
+
+                                <div>
+                                    <strong>@antecedente.Tipo</strong>
+
+                                    <p class="pf-detail-muted">
+                                        @antecedente.Descripcion
+                                    </p>
+
+                                    <span>
+                                        @antecedente.FechaRegistro.ToString("dd/MM/yyyy")
+                                        ·
+                                        @(antecedente.Estatus ? "Activo" : "Inactivo")
+                                    </span>
+
+                                    @if (Confirmacion?.Id == antecedente.Id)
+                                    {
+                                        <div class="pf-contact-editor">
+                                            <p>
+                                                ¿Confirmas que deseas
+                                                @(antecedente.Estatus
+                                                    ? "desactivar"
+                                                    : "reactivar")
+                                                este antecedente?
+                                            </p>
+
+                                            <div class="pf-contact-buttons">
+                                                <button type="button"
+                                                        class="pf-btn pf-btn-neutral"
+                                                        disabled="@Procesando"
+                                                        @onclick="CancelarConfirmacion">
+                                                    Cancelar
+                                                </button>
+
+                                                <button type="button"
+                                                        class="pf-btn pf-btn-main"
+                                                        disabled="@Procesando"
+                                                        @onclick="CambiarEstadoAsync">
+                                                    Confirmar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+
+                                @if (PuedeModificar)
+                                {
+                                    <div class="pf-contact-buttons">
+
+                                        @if (antecedente.Estatus)
+                                        {
+                                            <button type="button"
+                                                    class="pf-contact-action"
+                                                    disabled="@Procesando"
+                                                    @onclick="() => Editar(antecedente)">
+                                                Editar
+                                            </button>
+                                        }
+
+                                        <button type="button"
+                                                class="pf-contact-action"
+                                                disabled="@Procesando"
+                                                @onclick="() => ConfirmarCambio(antecedente)">
+                                            @(antecedente.Estatus
+                                                ? "Desactivar"
+                                                : "Reactivar")
+                                        </button>
+
+                                    </div>
+                                }
+
+                            </div>
+                        }
+                    }
+
+                    @if (!CargandoAntecedentes &&
+                         string.IsNullOrWhiteSpace(ErrorAntecedentes))
+                    {
+                        <div class="pf-pagination">
+
+                            <button type="button"
+                                    disabled="@(Pagina <= 1 || Procesando)"
+                                    @onclick="AnteriorAsync">
+                                Anterior
+                            </button>
+
+                            <span>Página @Pagina</span>
+
+                            <button type="button"
+                                    disabled="@(!PuedeAvanzar || Procesando)"
+                                    @onclick="SiguienteAsync">
+                                Siguiente
+                            </button>
+
+                        </div>
+                    }
+                }
+
+            </section>
+
+            <section class="pf-card pf-info-card">
+
+                @if (Historia is null)
+                {
+                    <h2>Abrir historia clínica</h2>
+
+                    <p class="pf-detail-muted">
+                        Para registrar antecedentes, primero
+                        debes abrir la historia clínica.
+                    </p>
+
+                    @if (PacienteActivo)
+                    {
+                        <button type="button"
+                                class="pf-btn pf-btn-main"
+                                disabled="@ProcesandoHistoria"
+                                @onclick="CrearHistoriaAsync">
+                            @(ProcesandoHistoria
+                                ? "Creando..."
+                                : "Abrir historia clínica")
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="pf-detail-error">
+                            El paciente está inactivo.
+                            No es posible abrir su historia.
+                        </div>
+                    }
+                }
+                else if (!PuedeModificar)
+                {
+                    <h2>Gestión de antecedentes</h2>
+
+                    <div class="pf-detail-empty">
+                        La historia está en modo de solo lectura.
+                        Comprueba el estado del paciente y
+                        de la historia clínica.
+                    </div>
+                }
+                else
+                {
+                    <h2>
+                        @(EditandoId.HasValue
+                            ? "Editar antecedente"
+                            : "Agregar antecedente")
+                    </h2>
+
+                    <p class="pf-detail-muted">
+                        @(EditandoId.HasValue
+                            ? "Modifica la información del antecedente seleccionado."
+                            : "Registra un antecedente relevante del paciente.")
+                    </p>
+
+                    <EditForm @key="Formulario"
+                              Model="@Formulario"
+                              OnValidSubmit="@GuardarAsync"
+                              FormName="form-antecedente">
+
+                        <DataAnnotationsValidator />
+
+                        <div class="pf-form-group">
+                            <label for="tipoAntecedente">
+                                Tipo de antecedente *
+                            </label>
+
+                            <InputText id="tipoAntecedente"
+                                       class="pf-field"
+                                       maxlength="80"
+                                       disabled="@Procesando"
+                                       @bind-Value="Formulario.Tipo" />
+
+                            <ValidationMessage For="@(() => Formulario.Tipo)" />
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="descripcionAntecedente">
+                                Descripción *
+                            </label>
+
+                            <InputTextArea id="descripcionAntecedente"
+                                           class="pf-field"
+                                           rows="5"
+                                           maxlength="2000"
+                                           disabled="@Procesando"
+                                           @bind-Value="Formulario.Descripcion" />
+
+                            <ValidationMessage For="@(() => Formulario.Descripcion)" />
+                        </div>
+
+                        <div class="pf-form-actions">
+
+                            @if (EditandoId.HasValue)
+                            {
+                                <button type="button"
+                                        class="pf-btn pf-btn-neutral"
+                                        disabled="@Procesando"
+                                        @onclick="CancelarEdicion">
+                                    Cancelar
+                                </button>
+                            }
+
+                            <button type="submit"
+                                    class="pf-btn pf-btn-main"
+                                    disabled="@Procesando">
+                                @(Procesando
+                                    ? "Guardando..."
+                                    : EditandoId.HasValue
+                                        ? "Guardar cambios"
+                                        : "Agregar antecedente")
+                            </button>
+
+                        </div>
+
+                    </EditForm>
+                }
+
+            </section>
+
+        </div>
+    }
+
+</div>
+
+
+@code {
+    [Parameter, EditorRequired]
+    public long PacienteId { get; set; }
+
+    [Parameter]
+    public bool PacienteActivo { get; set; }
+
+    private HistoriaPacienteDto? Historia;
+
+    private List<AntecedenteDto> Antecedentes = new();
+
+    private bool Cargando = true;
+    private bool CargandoAntecedentes;
+    private bool Procesando;
+    private bool ProcesandoHistoria;
+
+    private bool IncluirInactivos;
+    private bool PuedeAvanzar;
+
+    private int Pagina = 1;
+    private const int Tamano = 10;
+
+    private long? PacienteCargado;
+
+    private string? ErrorHistoria;
+    private string? ErrorAntecedentes;
+    private string? ErrorOperacion;
+    private string? Mensaje;
+
+    private AntecedenteGuardarDto Formulario = new();
+
+    private long? EditandoId;
+    private AntecedenteDto? Confirmacion;
+
+    private bool CargandoGeneral =>
+        Cargando || CargandoAntecedentes || ProcesandoHistoria;
+
+    private bool HistoriaActiva =>
+        string.Equals(
+            Historia?.Estado,
+            "ACTIVA",
+            StringComparison.OrdinalIgnoreCase);
+
+    private bool PuedeModificar =>
+        PacienteActivo &&
+        HistoriaActiva &&
+        Historia is not null &&
+        !Procesando &&
+        !ProcesandoHistoria;
+
+    private AntecedenteDto? UltimoAntecedente =>
+        Antecedentes
+            .OrderByDescending(x => x.FechaRegistro)
+            .ThenByDescending(x => x.Id)
+            .FirstOrDefault();
+
+    private List<AntecedenteDto> AntecedentesOrdenados =>
+        Antecedentes
+            .OrderByDescending(x => x.FechaRegistro)
+            .ThenByDescending(x => x.Id)
+            .ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (PacienteCargado != PacienteId)
+        {
+            PacienteCargado = PacienteId;
+            await CargarHistoriaAsync();
+        }
+    }
+
+    private async Task RecargarAsync()
+    {
+        await CargarHistoriaAsync();
+    }
+
+    private async Task CargarHistoriaAsync()
+    {
+        Cargando = true;
+
+        ErrorHistoria = null;
+        ErrorAntecedentes = null;
+        ErrorOperacion = null;
+        Mensaje = null;
+
+        Historia = null;
+        Antecedentes.Clear();
+
+        EditandoId = null;
+        Confirmacion = null;
+        Formulario = new();
+
+        Pagina = 1;
+        IncluirInactivos = false;
+        PuedeAvanzar = false;
+
+        try
+        {
+            Historia = await Api.ObtenerHistoriaPacienteAsync(PacienteId);
+
+            if (Historia is not null)
+            {
+                await CargarAntecedentesAsync();
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorHistoria = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Error consultando historia del paciente {PacienteId}",
+                PacienteId);
+
+            ErrorHistoria =
+                "No se pudo consultar la historia clínica.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private async Task CrearHistoriaAsync()
+    {
+        if (ProcesandoHistoria || !PacienteActivo || Historia is not null)
+            return;
+
+        ProcesandoHistoria = true;
+        ErrorHistoria = null;
+        ErrorOperacion = null;
+        Mensaje = null;
+
+        try
+        {
+            Historia = await Api.CrearHistoriaPacienteAsync(PacienteId);
+
+            Mensaje = "Historia clínica creada correctamente.";
+
+            Pagina = 1;
+            await CargarAntecedentesAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorHistoria = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Error creando historia clínica del paciente {PacienteId}",
+                PacienteId);
+
+            ErrorHistoria =
+                "No fue posible crear la historia clínica.";
+        }
+        finally
+        {
+            ProcesandoHistoria = false;
+        }
+    }
+
+    private async Task CargarAntecedentesAsync()
+    {
+        if (Historia is null || CargandoAntecedentes)
+            return;
+
+        CargandoAntecedentes = true;
+        ErrorAntecedentes = null;
+
+        try
+        {
+            Antecedentes = await Api.ListarAntecedentesAsync(
+                Historia.Id,
+                IncluirInactivos,
+                Pagina,
+                Tamano);
+
+            PuedeAvanzar = Antecedentes.Count == Tamano;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorAntecedentes = ex.Message;
+            Antecedentes.Clear();
+            PuedeAvanzar = false;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Error consultando antecedentes de historia {HistoriaId}",
+                Historia.Id);
+
+            ErrorAntecedentes =
+                "No se pudieron consultar los antecedentes.";
+
+            Antecedentes.Clear();
+            PuedeAvanzar = false;
+        }
+        finally
+        {
+            CargandoAntecedentes = false;
+        }
+    }
+
+    private async Task CambiarFiltroAsync()
+    {
+        Pagina = 1;
+        CancelarEdicion();
+        CancelarConfirmacion();
+
+        await CargarAntecedentesAsync();
+    }
+
+    private async Task AnteriorAsync()
+    {
+        if (CargandoAntecedentes || Pagina <= 1)
+            return;
+
+        Pagina--;
+        await CargarAntecedentesAsync();
+    }
+
+    private async Task SiguienteAsync()
+    {
+        if (CargandoAntecedentes || !PuedeAvanzar)
+            return;
+
+        int anterior = Pagina;
+
+        Pagina++;
+        await CargarAntecedentesAsync();
+
+        if (ErrorAntecedentes is null && Antecedentes.Count == 0)
+        {
+            Pagina = anterior;
+            await CargarAntecedentesAsync();
+            PuedeAvanzar = false;
+        }
+    }
+
+    private void Editar(AntecedenteDto antecedente)
+    {
+        if (!PuedeModificar || !antecedente.Estatus)
+            return;
+
+        EditandoId = antecedente.Id;
+        Formulario = AntecedenteGuardarDto.Desde(antecedente);
+
+        Confirmacion = null;
+        ErrorOperacion = null;
+        Mensaje = null;
+    }
+
+    private void CancelarEdicion()
+    {
+        EditandoId = null;
+        Formulario = new AntecedenteGuardarDto();
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (!PuedeModificar || Procesando || Historia is null)
+            return;
+
+        Procesando = true;
+        ErrorOperacion = null;
+        Mensaje = null;
+
+        try
+        {
+            bool editando = EditandoId.HasValue;
+
+            if (editando)
+            {
+                await Api.ActualizarAntecedenteAsync(
+                    EditandoId!.Value,
+                    Formulario);
+            }
+            else
+            {
+                await Api.CrearAntecedenteAsync(
+                    Historia.Id,
+                    Formulario);
+            }
+
+            CancelarEdicion();
+
+            Pagina = 1;
+            await CargarAntecedentesAsync();
+
+            if (ErrorAntecedentes is null)
+            {
+                Mensaje = editando
+                    ? "Antecedente actualizado correctamente."
+                    : "Antecedente registrado correctamente.";
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorOperacion = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Error guardando antecedente en historia {HistoriaId}",
+                Historia.Id);
+
+            ErrorOperacion =
+                "No se pudo guardar el antecedente. " +
+                "Comprueba el resultado antes de reintentar.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private void ConfirmarCambio(AntecedenteDto antecedente)
+    {
+        if (!PuedeModificar)
+            return;
+
+        Confirmacion = antecedente;
+        ErrorOperacion = null;
+        Mensaje = null;
+    }
+
+    private void CancelarConfirmacion()
+    {
+        Confirmacion = null;
+    }
+
+    private async Task CambiarEstadoAsync()
+    {
+        if (!PuedeModificar || Procesando || Confirmacion is null)
+            return;
+
+        Procesando = true;
+        ErrorOperacion = null;
+        Mensaje = null;
+
+        var seleccionado = Confirmacion;
+
+        try
+        {
+            if (seleccionado.Estatus)
+            {
+                await Api.DesactivarAntecedenteAsync(seleccionado.Id);
+            }
+            else
+            {
+                await Api.ReactivarAntecedenteAsync(seleccionado.Id);
+            }
+
+            Confirmacion = null;
+
+            await CargarAntecedentesAsync();
+
+            if (ErrorAntecedentes is null)
+            {
+                Mensaje = seleccionado.Estatus
+                    ? "Antecedente desactivado correctamente."
+                    : "Antecedente reactivado correctamente.";
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorOperacion = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Error cambiando estado del antecedente {AntecedenteId}",
+                seleccionado.Id);
+
+            ErrorOperacion =
+                "No se pudo cambiar el estado del antecedente.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}

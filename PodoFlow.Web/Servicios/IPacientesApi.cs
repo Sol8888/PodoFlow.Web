@@ -1,5 +1,6 @@
 ﻿
 using PodoFlow.Web.Modelos.Pacientes;
+using PodoFlow.Web.Modelos.Atenciones;
 
 namespace PodoFlow.Web.Servicios;
 
@@ -53,4 +54,42 @@ public interface IPacientesApi
 
     Task<List<PrestacionPacienteDto>> PrestacionesAsync(
         long pacienteId);
+
+    // ============================================
+    // HISTORIA CLÍNICA Y ANTECEDENTES
+    // ============================================
+
+    Task<HistoriaPacienteDto?> ObtenerHistoriaPacienteAsync(
+        long pacienteId);
+
+    Task<List<AntecedenteDto>> ListarAntecedentesAsync(
+        long historiaId,
+        bool incluirInactivos = false,
+        int pagina = 1,
+        int tamano = 10);
+
+    Task<AntecedenteDto> CrearAntecedenteAsync(
+        long historiaId,
+        AntecedenteGuardarDto dto);
+
+    Task ActualizarAntecedenteAsync(
+        long antecedenteId,
+        AntecedenteGuardarDto dto);
+
+    Task DesactivarAntecedenteAsync(long antecedenteId);
+
+    Task ReactivarAntecedenteAsync(long antecedenteId);
+
+    Task<HistoriaPacienteDto> CrearHistoriaPacienteAsync(long pacienteId);
+
+    Task<List<AtencionDto>> ListarAtencionesAsync(
+        long historiaId,
+        int pagina = 1,
+        int tamano = 10);
+
+
+    Task<AtencionDto> CrearAtencionAsync(
+        long historiaId,
+        AtencionCrearDto dto);
+
 }

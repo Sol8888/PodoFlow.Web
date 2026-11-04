@@ -1,0 +1,779 @@
+﻿@using PodoFlow.Web.Modelos.Atenciones
+@using PodoFlow.Web.Servicios
+
+@inject IPacientesApi Api
+@inject ILogger<AtencionesPanel> Logger
+
+<section class="pf-card pf-info-card pf-clinic-panel">
+
+    <!-- ENCABEZADO -->
+    <div class="pf-clinic-toolbar">
+
+        <div>
+            <h2>Atenciones clínicas</h2>
+            <p class="pf-detail-muted">
+                Consulta los tratamientos y registra las atenciones
+                realizadas al paciente.
+            </p>
+        </div>
+
+        <div class="pf-clinic-actions">
+
+            @if (PuedeCrear)
+            {
+                <button type="button"
+                        class="pf-btn pf-btn-main"
+                        disabled="@Guardando"
+                        @onclick="AlternarFormulario">
+                    @(MostrarFormulario
+                        ? "Cerrar formulario"
+                        : "+ Nueva atención")
+                </button>
+            }
+
+            <button type="button"
+                    class="pf-btn pf-btn-neutral"
+                    disabled="@(Cargando || Guardando)"
+                    @onclick="ActualizarAsync">
+                @(Cargando ? "Cargando..." : "Actualizar")
+            </button>
+
+        </div>
+
+    </div>
+
+    <!-- MENSAJES -->
+    @if (!string.IsNullOrWhiteSpace(Mensaje))
+    {
+        <div class="pf-contact-success" role="status">
+            @Mensaje
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(ErrorGuardado))
+    {
+        <div class="pf-detail-error" role="alert">
+            @ErrorGuardado
+        </div>
+    }
+
+    <!-- FORMULARIO DE NUEVA ATENCION -->
+    @if (MostrarFormulario && PuedeCrear)
+    {
+        <section class="pf-clinic-form-panel">
+
+            <div class="pf-clinic-section-heading">
+                <div>
+                    <h3>Registrar nueva atención</h3>
+                    <p class="pf-detail-muted">
+                        Completa los datos de la consulta podológica.
+                    </p>
+                </div>
+
+                <span class="pf-status warning">
+                    Nueva atención
+                </span>
+            </div>
+
+            <EditForm @key="Formulario"
+                      Model="@Formulario"
+                      OnValidSubmit="@GuardarAsync"
+                      FormName="crear-atencion">
+
+                <DataAnnotationsValidator />
+
+                <div class="pf-clinic-form-grid">
+
+                    <div class="pf-form-group">
+                        <label for="usuarioAtencion">
+                            ID del profesional responsable *
+                        </label>
+
+                        <InputNumber id="usuarioAtencion"
+                                     class="pf-field"
+                                     min="1"
+                                     disabled="@Guardando"
+                                     @bind-Value="Formulario.UsuarioId" />
+
+                        <ValidationMessage For="@(() => Formulario.UsuarioId)" />
+
+                        <small class="pf-detail-muted">
+                            Campo temporal para pruebas de desarrollo.
+                        </small>
+                    </div>
+
+                    <div class="pf-form-group pf-clinic-full">
+                        <label for="motivoAtencion">
+                            Motivo de consulta *
+                        </label>
+
+                        <InputTextArea id="motivoAtencion"
+                                       class="pf-field"
+                                       rows="2"
+                                       maxlength="1000"
+                                       disabled="@Guardando"
+                                       @bind-Value="Formulario.MotivoConsulta" />
+
+                        <ValidationMessage For="@(() => Formulario.MotivoConsulta)" />
+                    </div>
+
+                    <div class="pf-form-group">
+                        <label for="valoracionAtencion">
+                            Valoración clínica
+                        </label>
+
+                        <InputTextArea id="valoracionAtencion"
+                                       class="pf-field"
+                                       rows="3"
+                                       maxlength="3000"
+                                       disabled="@Guardando"
+                                       @bind-Value="Formulario.ValoracionClinica" />
+
+                        <ValidationMessage For="@(() => Formulario.ValoracionClinica)" />
+                    </div>
+
+                    <div class="pf-form-group">
+                        <label for="diagnosticoAtencion">
+                            Diagnóstico
+                        </label>
+
+                        <InputTextArea id="diagnosticoAtencion"
+                                       class="pf-field"
+                                       rows="3"
+                                       maxlength="2000"
+                                       disabled="@Guardando"
+                                       @bind-Value="Formulario.Diagnostico" />
+
+                        <ValidationMessage For="@(() => Formulario.Diagnostico)" />
+                    </div>
+
+                    <div class="pf-form-group pf-clinic-full">
+                        <label for="tratamientoAtencion">
+                            Tratamiento realizado
+                        </label>
+
+                        <InputTextArea id="tratamientoAtencion"
+                                       class="pf-field"
+                                       rows="3"
+                                       maxlength="3000"
+                                       disabled="@Guardando"
+                                       @bind-Value="Formulario.Tratamiento" />
+
+                        <ValidationMessage For="@(() => Formulario.Tratamiento)" />
+                    </div>
+
+                    <div class="pf-form-group pf-clinic-full">
+                        <label for="observacionesAtencion">
+                            Observaciones y recomendaciones
+                        </label>
+
+                        <InputTextArea id="observacionesAtencion"
+                                       class="pf-field"
+                                       rows="3"
+                                       maxlength="3000"
+                                       disabled="@Guardando"
+                                       @bind-Value="Formulario.Observaciones" />
+
+                        <ValidationMessage For="@(() => Formulario.Observaciones)" />
+                    </div>
+
+                </div>
+
+                <div class="pf-form-actions">
+
+                    <button type="button"
+                            class="pf-btn pf-btn-neutral"
+                            disabled="@Guardando"
+                            @onclick="CancelarFormulario">
+                        Cancelar
+                    </button>
+
+                    <button type="submit"
+                            class="pf-btn pf-btn-main"
+                            disabled="@Guardando">
+                        @(Guardando
+                            ? "Guardando..."
+                            : "Guardar atención")
+                    </button>
+
+                </div>
+
+            </EditForm>
+
+        </section>
+    }
+
+    <!-- ESTADOS DE CARGA -->
+    @if (Cargando)
+    {
+        <div class="pf-detail-empty" role="status">
+            Cargando atenciones clínicas...
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <div class="pf-detail-error" role="alert">
+            @Error
+
+            <div class="pf-clinic-retry">
+                <button type="button"
+                        class="pf-btn pf-btn-neutral"
+                        @onclick="ActualizarAsync">
+                    Reintentar
+                </button>
+            </div>
+        </div>
+    }
+    else if (!TieneHistoria)
+    {
+        <div class="pf-detail-empty">
+            <h3>Sin historia clínica</h3>
+            <p>
+                Este paciente todavía no tiene una historia clínica.
+                Puedes abrirla desde la sección Antecedentes.
+            </p>
+        </div>
+    }
+    else
+    {
+        @if (!HistoriaActiva)
+        {
+            <div class="pf-detail-error" role="status">
+                La historia clínica está en modo de solo lectura.
+                No se pueden registrar nuevas atenciones.
+            </div>
+        }
+
+        <!-- ULTIMA ATENCION -->
+        @if (Pagina == 1)
+        {
+            @if (UltimaAtencion is null)
+            {
+                <div class="pf-detail-empty">
+                    <h3>Sin atenciones registradas</h3>
+
+                    <p>
+                        Todavía no existen atenciones para este paciente.
+                    </p>
+
+                    @if (PuedeCrear)
+                    {
+                        <p>
+                            Usa el botón Nueva atención para registrar
+                            la primera consulta.
+                        </p>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="pf-clinic-section-heading">
+                    <div>
+                        <h3>Última atención</h3>
+                        <p class="pf-detail-muted">
+                            Información más reciente del paciente.
+                        </p>
+                    </div>
+                </div>
+
+                <article class="pf-clinic-record">
+
+                    <header class="pf-clinic-record-header">
+
+                        <div class="pf-clinic-record-title">
+                            <span class="pf-clinic-eyebrow">
+                                REGISTRO CLÍNICO
+                            </span>
+
+                            <h3>Atención #@UltimaAtencion.Id</h3>
+
+                            <p>
+                                @UltimaAtencion.Fecha.ToString("dd/MM/yyyy")
+                                ·
+                                @UltimaAtencion.Fecha.ToString("HH:mm")
+                            </p>
+                        </div>
+
+                        <span class="pf-status @ClaseEstado(UltimaAtencion.Estado)">
+                            @UltimaAtencion.Estado
+                        </span>
+
+                    </header>
+
+                    <div class="pf-clinic-record-body">
+
+                        <div class="pf-clinic-field">
+                            <span>Motivo de consulta</span>
+                            <p>
+                                @MostrarValor(UltimaAtencion.MotivoConsulta)
+                            </p>
+                        </div>
+
+                        <div class="pf-clinic-field">
+                            <span>Diagnóstico</span>
+                            <p>
+                                @MostrarValor(UltimaAtencion.Diagnostico)
+                            </p>
+                        </div>
+
+                        <div class="pf-clinic-field pf-clinic-full">
+                            <span>Valoración clínica</span>
+                            <p>
+                                @MostrarValor(UltimaAtencion.ValoracionClinica)
+                            </p>
+                        </div>
+
+                        <div class="pf-clinic-treatment pf-clinic-full">
+
+                            <span class="pf-clinic-treatment-title">
+                                Tratamiento realizado
+                            </span>
+
+                            <p>
+                                @MostrarValor(UltimaAtencion.Tratamiento)
+                            </p>
+
+                        </div>
+
+                        <div class="pf-clinic-field pf-clinic-full">
+                            <span>Observaciones y recomendaciones</span>
+                            <p>
+                                @MostrarValor(UltimaAtencion.Observaciones)
+                            </p>
+                        </div>
+
+                    </div>
+
+                </article>
+            }
+        }
+
+        <!-- HISTORIAL -->
+        @if (Atenciones.Count > 0 || Pagina > 1)
+        {
+            <section class="pf-clinic-history">
+
+                <div class="pf-clinic-section-heading">
+                    <div>
+                        <h3>Historial de atenciones</h3>
+                        <p class="pf-detail-muted">
+                            Consultas anteriores, ordenadas de la
+                            más reciente a la más antigua.
+                        </p>
+                    </div>
+                </div>
+
+                @if (AtencionesAnteriores.Count == 0)
+                {
+                    <div class="pf-clinic-history-empty">
+                        Aún no existen atenciones anteriores.
+                    </div>
+                }
+                else
+                {
+                    <div class="pf-clinic-history-list">
+
+                        @foreach (var atencion in AtencionesAnteriores)
+                        {
+                            <div class="pf-clinic-history-item"
+                                 @key="atencion.Id">
+
+                                <div class="pf-clinic-history-main">
+
+                                    <div class="pf-clinic-history-top">
+                                        <strong>
+                                            Atención #@atencion.Id
+                                        </strong>
+
+                                        <span class="pf-status @ClaseEstado(atencion.Estado)">
+                                            @atencion.Estado
+                                        </span>
+                                    </div>
+
+                                    <small>
+                                        @atencion.Fecha.ToString("dd/MM/yyyy HH:mm")
+                                    </small>
+
+                                    <p>
+                                        @MostrarValor(atencion.MotivoConsulta)
+                                    </p>
+
+                                </div>
+
+                                <button type="button"
+                                        class="pf-contact-action"
+                                        @onclick="() => SeleccionarAtencion(atencion)">
+                                    @(AtencionSeleccionada?.Id == atencion.Id
+                                        ? "Ocultar"
+                                        : "Ver detalle")
+                                </button>
+
+                            </div>
+
+                            @if (AtencionSeleccionada?.Id == atencion.Id)
+                            {
+                                <article class="pf-clinic-record pf-clinic-record-secondary">
+
+                                    <header class="pf-clinic-record-header">
+                                        <div class="pf-clinic-record-title">
+                                            <span class="pf-clinic-eyebrow">
+                                                DETALLE DE ATENCIÓN
+                                            </span>
+
+                                            <h3>
+                                                Atención #@atencion.Id
+                                            </h3>
+
+                                            <p>
+                                                @atencion.Fecha.ToString("dd/MM/yyyy HH:mm")
+                                            </p>
+                                        </div>
+                                    </header>
+
+                                    <div class="pf-clinic-record-body">
+
+                                        <div class="pf-clinic-field">
+                                            <span>Motivo de consulta</span>
+                                            <p>
+                                                @MostrarValor(atencion.MotivoConsulta)
+                                            </p>
+                                        </div>
+
+                                        <div class="pf-clinic-field">
+                                            <span>Diagnóstico</span>
+                                            <p>
+                                                @MostrarValor(atencion.Diagnostico)
+                                            </p>
+                                        </div>
+
+                                        <div class="pf-clinic-field pf-clinic-full">
+                                            <span>Valoración clínica</span>
+                                            <p>
+                                                @MostrarValor(atencion.ValoracionClinica)
+                                            </p>
+                                        </div>
+
+                                        <div class="pf-clinic-treatment pf-clinic-full">
+                                            <span class="pf-clinic-treatment-title">
+                                                Tratamiento realizado
+                                            </span>
+
+                                            <p>
+                                                @MostrarValor(atencion.Tratamiento)
+                                            </p>
+                                        </div>
+
+                                        <div class="pf-clinic-field pf-clinic-full">
+                                            <span>Observaciones</span>
+                                            <p>
+                                                @MostrarValor(atencion.Observaciones)
+                                            </p>
+                                        </div>
+
+                                    </div>
+
+                                </article>
+                            }
+                        }
+
+                    </div>
+                }
+
+                <div class="pf-pagination pf-clinic-pagination">
+
+                    <button type="button"
+                            disabled="@(Pagina <= 1 || Cargando)"
+                            @onclick="AnteriorAsync">
+                        Anterior
+                    </button>
+
+                    <span>Página @Pagina</span>
+
+                    <button type="button"
+                            disabled="@(!PuedeAvanzar || Cargando)"
+                            @onclick="SiguienteAsync">
+                        Siguiente
+                    </button>
+
+                </div>
+
+            </section>
+        }
+    }
+
+</section>
+
+@code {
+
+    [Parameter, EditorRequired]
+    public long PacienteId { get; set; }
+
+    private List<AtencionDto> Atenciones = new();
+
+    private AtencionDto? AtencionSeleccionada;
+
+    private AtencionCrearDto Formulario = new();
+
+    private bool Cargando = true;
+    private bool Guardando;
+    private bool MostrarFormulario;
+    private bool TieneHistoria;
+    private bool HistoriaActiva;
+    private bool PuedeAvanzar;
+
+    private long? HistoriaId;
+    private long? PacienteCargado;
+
+    private string? Error;
+    private string? ErrorGuardado;
+    private string? Mensaje;
+
+    private int Pagina = 1;
+    private const int Tamano = 10;
+
+    private bool PuedeCrear =>
+        TieneHistoria &&
+        HistoriaActiva &&
+        HistoriaId.HasValue &&
+        !Cargando &&
+        !Guardando;
+
+    private AtencionDto? UltimaAtencion =>
+        Pagina == 1
+            ? Atenciones
+                .OrderByDescending(x => x.Fecha)
+                .ThenByDescending(x => x.Id)
+                .FirstOrDefault()
+            : null;
+
+    private List<AtencionDto> AtencionesAnteriores =>
+        Atenciones
+            .Where(x =>
+                Pagina != 1 ||
+                x.Id != UltimaAtencion?.Id)
+            .OrderByDescending(x => x.Fecha)
+            .ThenByDescending(x => x.Id)
+            .ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (PacienteCargado != PacienteId)
+        {
+            PacienteCargado = PacienteId;
+
+            Pagina = 1;
+            MostrarFormulario = false;
+            Formulario = new();
+            AtencionSeleccionada = null;
+
+            await CargarAsync();
+        }
+    }
+
+    private async Task ActualizarAsync()
+    {
+        if (Cargando || Guardando)
+            return;
+
+        Pagina = 1;
+        AtencionSeleccionada = null;
+
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        Cargando = true;
+        Error = null;
+
+        try
+        {
+            var historia =
+                await Api.ObtenerHistoriaPacienteAsync(PacienteId);
+
+            HistoriaId = historia?.Id;
+            TieneHistoria = historia is not null;
+
+            HistoriaActiva = string.Equals(
+                historia?.Estado,
+                "ACTIVA",
+                StringComparison.OrdinalIgnoreCase);
+
+            if (historia is null)
+            {
+                Atenciones.Clear();
+                PuedeAvanzar = false;
+                MostrarFormulario = false;
+                return;
+            }
+
+            Atenciones = await Api.ListarAtencionesAsync(
+                historia.Id,
+                Pagina,
+                Tamano);
+
+            PuedeAvanzar = Atenciones.Count == Tamano;
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+            Atenciones.Clear();
+            PuedeAvanzar = false;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Error consultando atenciones del paciente {PacienteId}",
+                PacienteId);
+
+            Error = "No se pudieron consultar las atenciones clínicas.";
+
+            Atenciones.Clear();
+            PuedeAvanzar = false;
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private void AlternarFormulario()
+    {
+        if (!PuedeCrear)
+            return;
+
+        MostrarFormulario = !MostrarFormulario;
+        ErrorGuardado = null;
+        Mensaje = null;
+
+        if (MostrarFormulario)
+            Formulario = new();
+    }
+
+    private void CancelarFormulario()
+    {
+        if (Guardando)
+            return;
+
+        MostrarFormulario = false;
+        Formulario = new();
+        ErrorGuardado = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (!PuedeCrear || !HistoriaId.HasValue)
+            return;
+
+        ErrorGuardado = null;
+        Mensaje = null;
+
+        if (string.IsNullOrWhiteSpace(Formulario.MotivoConsulta))
+        {
+            ErrorGuardado = "Ingresa el motivo de consulta.";
+            return;
+        }
+
+        Guardando = true;
+
+        try
+        {
+            await Api.CrearAtencionAsync(
+                HistoriaId.Value,
+                Formulario);
+
+            MostrarFormulario = false;
+            Formulario = new();
+
+            Pagina = 1;
+            AtencionSeleccionada = null;
+
+            await CargarAsync();
+
+            if (Error is null)
+            {
+                Mensaje =
+                    "Atención clínica registrada correctamente.";
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorGuardado = ex.Message;
+        }
+        catch (ArgumentException ex)
+        {
+            ErrorGuardado = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Error creando atención del paciente {PacienteId}",
+                PacienteId);
+
+            ErrorGuardado =
+                "No se pudo confirmar el registro. " +
+                "Revisa el historial antes de reintentar.";
+        }
+        finally
+        {
+            Guardando = false;
+        }
+    }
+
+    private void SeleccionarAtencion(AtencionDto atencion)
+    {
+        AtencionSeleccionada =
+            AtencionSeleccionada?.Id == atencion.Id
+                ? null
+                : atencion;
+    }
+
+    private async Task AnteriorAsync()
+    {
+        if (Cargando || Pagina <= 1)
+            return;
+
+        Pagina--;
+        AtencionSeleccionada = null;
+
+        await CargarAsync();
+    }
+
+    private async Task SiguienteAsync()
+    {
+        if (Cargando || !PuedeAvanzar)
+            return;
+
+        int paginaAnterior = Pagina;
+
+        Pagina++;
+        AtencionSeleccionada = null;
+
+        await CargarAsync();
+
+        if (Error is null && Atenciones.Count == 0)
+        {
+            Pagina = paginaAnterior;
+
+            await CargarAsync();
+
+            PuedeAvanzar = false;
+        }
+    }
+
+    private static string MostrarValor(string? valor) =>
+        string.IsNullOrWhiteSpace(valor)
+            ? "No registrado"
+            : valor;
+
+    private static string ClaseEstado(string? estado) =>
+        estado?.Trim().ToUpperInvariant() switch
+        {
+            "ABIERTA" => "warning",
+            "CERRADA" => "success",
+            "BLOQUEADA" => "danger",
+            _ => "info"
+        };
+}
