@@ -1,0 +1,18 @@
+﻿<nav class="pf-profile-tabs" aria-label="Secciones de comunicaciones">
+    <a href="/comunicaciones/preferencias"
+       class="@(Activa == "preferencias" ? "active" : "")"
+       aria-current="@(Activa == "preferencias" ? "page" : null)">
+        Preferencias del paciente
+    </a>
+
+    <a href="/comunicaciones/plantillas"
+       class="@(Activa == "plantillas" ? "active" : "")"
+       aria-current="@(Activa == "plantillas" ? "page" : null)">
+        Plantillas
+    </a>
+</nav>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Activa { get; set; } = "";
+}

@@ -56,6 +56,14 @@ builder.Services.AddHttpClient<IAgendaApi, AgendaApi>(
     })
     .AddHttpMessageHandler<TokenDesarrolloHandler>();
 
+builder.Services.AddHttpClient<IComunicacionesApi, ComunicacionesApi>(
+    client =>
+    {
+        client.BaseAddress = new Uri(apiBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(30);
+    })
+    .AddHttpMessageHandler<TokenDesarrolloHandler>();
+
 
 // COMPONENTES BLAZOR
 

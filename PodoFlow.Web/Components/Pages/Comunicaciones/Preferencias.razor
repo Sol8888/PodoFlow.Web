@@ -1,0 +1,352 @@
+﻿@page "/comunicaciones"
+@page "/comunicaciones/preferencias"
+@rendermode InteractiveServer
+
+@using PodoFlow.Web.Components.Pages.Privacidad
+
+@inject IComunicacionesApi Api
+@inject IPrivacidadApi Privacidad
+@inject IPacientesApi ApiPacientes
+
+<PageTitle>Preferencias de comunicación | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">COMUNICACIONES</span>
+            <h1>Preferencias de comunicación</h1>
+            <p>Registra por qué canal acepta cada paciente recibir mensajes, según la finalidad.</p>
+        </div>
+    </div>
+
+    <ComunicacionesPestanas Activa="preferencias" />
+
+    @if (Mensaje != null)
+    {
+        <div class="pf-contact-success" role="status">@Mensaje</div>
+    }
+
+    @if (Error != null)
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+
+    @if (Cargando)
+    {
+        <section class="pf-card pf-directory">
+            <div class="pf-empty" role="status">Cargando información...</div>
+        </section>
+    }
+    else if (Paciente == null)
+    {
+        <SelectorPaciente Pacientes="Pacientes"
+                          Descripcion="Selecciona un paciente para ver sus preferencias de comunicación."
+                          TextoAccion="Ver preferencias →"
+                          OnSeleccionar="SeleccionarAsync" />
+    }
+    else
+    {
+        <div class="pf-module-toolbar">
+            <div class="pf-patient">
+                <div class="pf-patient-avatar">@SelectorPaciente.Iniciales(Paciente)</div>
+                <div>
+                    <strong>@Paciente.NombreCompleto</strong>
+                    <p class="pf-detail-muted sin-margen">@Paciente.TipoIdentificacion · @Paciente.Identificacion</p>
+                </div>
+            </div>
+
+            <div class="toolbar-acciones">
+                <a class="pf-btn pf-btn-neutral" href="@($"/privacidad/consentimientos?pacienteId={Paciente.Id}")">Ver consentimientos</a>
+                <a class="pf-btn pf-btn-neutral" href="@($"/pacientes/{Paciente.Id}")">Ver ficha</a>
+
+                <button type="button" class="pf-btn pf-btn-neutral" @onclick="CambiarPacienteAsync">
+                    Cambiar paciente
+                </button>
+            </div>
+        </div>
+
+        @foreach (var canal in CanalesSinContacto)
+        {
+            <div class="pf-detail-error">
+                @(canal == CanalesComunicacion.WhatsApp
+                    ? "El paciente no tiene un número de WhatsApp o celular registrado: los mensajes por WhatsApp no podrán enviarse."
+                    : "El paciente no tiene correo activo: los mensajes por correo no podrán enviarse.")
+                Regístralo en su ficha.
+            </div>
+        }
+
+        <section class="pf-card pf-directory">
+            <div class="pf-card-header">
+                <div>
+                    <h2>Preferencias por finalidad</h2>
+                    <p>Un mensaje solo sale si hay permiso y, cuando la finalidad lo exige, consentimiento aceptado.</p>
+                </div>
+            </div>
+
+            @if (!Filas.Any())
+            {
+                <div class="pf-empty">No hay finalidades activas.</div>
+            }
+            else
+            {
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th>Finalidad</th>
+                                <th>Consentimiento</th>
+                                @foreach (var canal in CanalesComunicacion.Todos)
+                                {
+                                    <th>@canal.Nombre</th>
+                                }
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var finalidad in Filas)
+                            {
+                                var consentimiento = EstadoConsentimiento(finalidad);
+
+                                <tr @key="finalidad.Id">
+                                    <td>
+                                        <strong>@finalidad.Nombre</strong>
+                                        @if (!finalidad.Estatus)
+                                        {
+                                            <span class="pf-mini-chip warning etiqueta">INACTIVA</span>
+                                        }
+                                    </td>
+
+                                    <td>
+                                        @if (consentimiento == null)
+                                        {
+                                            <span class="pf-detail-muted">No lo requiere</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="estado">
+                                                <EstadoPunto Estado="@consentimiento" />
+                                                @EstadoPunto.TextoDe(consentimiento)
+                                            </span>
+                                        }
+                                    </td>
+
+                                    @foreach (var canal in CanalesComunicacion.Todos)
+                                    {
+                                        var celda = CeldaDe(finalidad, canal.Codigo);
+
+                                        <td>
+                                            <div class="celda">
+                                                <span class="@(celda.Bloqueada ? "pf-mini-chip warning" : "pf-mini-chip")">@celda.Texto</span>
+
+                                                <div class="celda-acciones">
+                                                    @foreach (var permitir in celda.Acciones)
+                                                    {
+                                                        <button type="button" class="pf-contact-action"
+                                                                disabled="@Procesando"
+                                                                @onclick="() => CambiarAsync(finalidad, canal.Codigo, permitir)">
+                                                            @TextoAccion(celda, permitir)
+                                                        </button>
+                                                    }
+                                                </div>
+
+                                                @if (celda.Ayuda != null)
+                                                {
+                                                    <small class="pf-detail-muted">@celda.Ayuda</small>
+                                                }
+                                            </div>
+                                        </td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+
+</div>
+
+@code {
+    private const string Aceptado = "ACEPTADO";
+    private const string SinRegistrar = "SIN_REGISTRAR";
+
+    private sealed record Celda(string Texto, bool Bloqueada, bool[] Acciones, bool Definida, string? Ayuda);
+
+    [SupplyParameterFromQuery]
+    public long? PacienteId { get; set; }
+
+    private List<PacienteDto> Pacientes = new();
+    private List<FinalidadDto> Finalidades = new();
+    private List<ConsentimientoDto> Consentimientos = new();
+    private List<OpcionComunicacionDto> Opciones = new();
+    private List<ContactoPacienteDto> Contactos = new();
+
+    private PacienteDto? Paciente;
+    private bool Cargando = true;
+    private bool Procesando;
+    private string? Mensaje;
+    private string? Error;
+
+    private IEnumerable<FinalidadDto> Filas => Finalidades
+        .Where(f => f.Estatus || Opciones.Any(o => o.FinalidadId == f.Id))
+        .OrderBy(f => f.Nombre);
+
+    private IEnumerable<string> CanalesSinContacto => CanalesComunicacion.Todos
+        .Select(c => c.Codigo)
+        .Where(c => !Contactos.Any(x => x.Estatus && CanalesComunicacion.TiposContacto(c).Contains(x.Tipo)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await EjecutarAsync(async () =>
+        {
+            Finalidades = await Privacidad.ListarFinalidadesAsync();
+
+            if (PacienteId.HasValue)
+            {
+                var paciente = await Privacidad.ObtenerPacienteAsync(PacienteId.Value);
+
+                if (paciente is { Estatus: true })
+                {
+                    await CargarPacienteAsync(paciente);
+                    return;
+                }
+            }
+
+            Pacientes = await Privacidad.ListarPacientesActivosAsync();
+        });
+    }
+
+    private async Task EjecutarAsync(Func<Task> carga)
+    {
+        Cargando = true;
+        Error = null;
+
+        try
+        {
+            await carga();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La API tardó demasiado en responder. Recarga la página.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private async Task CargarPacienteAsync(PacienteDto paciente)
+    {
+        Consentimientos = await Privacidad.ConsentimientosAsync(paciente.Id);
+        Opciones = await Api.OpcionesAsync(paciente.Id);
+        Contactos = await ApiPacientes.ContactosAsync(paciente.Id);
+        Paciente = paciente;
+    }
+
+    private async Task SeleccionarAsync(PacienteDto paciente)
+    {
+        Mensaje = null;
+
+        await EjecutarAsync(() => CargarPacienteAsync(paciente));
+    }
+
+    private async Task CambiarPacienteAsync()
+    {
+        Paciente = null;
+        Opciones = new();
+        Consentimientos = new();
+        Contactos = new();
+        Mensaje = null;
+        Error = null;
+
+        if (Pacientes.Count == 0)
+            await EjecutarAsync(async () => Pacientes = await Privacidad.ListarPacientesActivosAsync());
+    }
+
+    private string? EstadoConsentimiento(FinalidadDto finalidad)
+    {
+        if (!finalidad.RequiereConsentimiento)
+            return null;
+
+        return Consentimientos.FirstOrDefault(c => c.FinalidadId == finalidad.Id)?.Estado ?? SinRegistrar;
+    }
+
+    private Celda CeldaDe(FinalidadDto finalidad, string canal)
+    {
+        var opcion = Opciones.FirstOrDefault(o => o.FinalidadId == finalidad.Id && o.Canal == canal);
+        var consentimiento = EstadoConsentimiento(finalidad);
+        var puedePermitir = finalidad.Estatus && (consentimiento == null || consentimiento == Aceptado);
+        var ayuda = puedePermitir ? null : finalidad.Estatus ? "Para permitir, primero debe aceptar el consentimiento." : null;
+
+        if (opcion is { Permitido: true })
+        {
+            return puedePermitir || !finalidad.Estatus
+                ? new Celda(finalidad.Estatus ? "Permitido" : "Permitido · finalidad inactiva", !finalidad.Estatus, [false], true, null)
+                : new Celda($"Bloqueado: consentimiento {EstadoPunto.TextoDe(consentimiento!).ToLowerInvariant()}", true, [false], true, null);
+        }
+
+        if (opcion != null)
+            return new Celda("No permitido", false, puedePermitir ? [true] : [], true, ayuda);
+
+        bool[] acciones = !finalidad.Estatus ? [] : puedePermitir ? [true, false] : [false];
+
+        return new Celda("Sin definir", false, acciones, false, ayuda);
+    }
+
+    private static string TextoAccion(Celda celda, bool permitir)
+    {
+        if (permitir)
+            return "Permitir";
+
+        return celda.Definida ? "Quitar permiso" : "No permitir";
+    }
+
+    private async Task CambiarAsync(FinalidadDto finalidad, string canal, bool permitir)
+    {
+        if (Procesando || Paciente == null)
+            return;
+
+        Procesando = true;
+        Mensaje = null;
+        Error = null;
+
+        try
+        {
+            var opcion = Opciones.FirstOrDefault(o => o.FinalidadId == finalidad.Id && o.Canal == canal);
+
+            if (opcion == null)
+                await Api.CrearOpcionAsync(Paciente.Id, finalidad.Id, canal, permitir);
+            else
+                await Api.CambiarPermisoAsync(opcion.Id, permitir);
+
+            Opciones = await Api.OpcionesAsync(Paciente.Id);
+            Mensaje = $"{finalidad.Nombre} por {CanalesComunicacion.NombreDe(canal)}: {(permitir ? "permitido" : "no permitido")}.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La operación tardó demasiado. Recarga la página para ver su estado.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}

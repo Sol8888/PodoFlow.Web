@@ -1,0 +1,404 @@
+﻿@page "/comunicaciones/plantillas"
+@rendermode InteractiveServer
+
+@inject IComunicacionesApi Api
+
+<PageTitle>Plantillas | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">COMUNICACIONES</span>
+            <h1>Plantillas</h1>
+            <p>Textos con los que se arman los mensajes por correo y WhatsApp.</p>
+        </div>
+    </div>
+
+    <ComunicacionesPestanas Activa="plantillas" />
+
+    @if (Mensaje != null)
+    {
+        <div class="pf-contact-success" role="status">@Mensaje</div>
+    }
+
+    @if (Error != null)
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+
+    <div class="pf-module-toolbar">
+        <select class="pf-field filtro" aria-label="Filtrar por canal" @bind="FiltroCanal">
+            <option value="">Todos los canales</option>
+            @foreach (var canal in CanalesComunicacion.Todos)
+            {
+                <option value="@canal.Codigo">@canal.Nombre</option>
+            }
+        </select>
+
+        <label class="pf-checkbox">
+            <input type="checkbox" @bind="MostrarInactivas" @bind:after="CargarAsync" />
+            Mostrar inactivas
+        </label>
+
+        <button type="button" class="pf-btn pf-btn-main boton-derecha" disabled="@Procesando" @onclick="Nueva">
+            Nueva plantilla
+        </button>
+    </div>
+
+    @if (Formulario != null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>@TituloFormulario</h2>
+
+            @if (EditandoId == null && TituloFormulario != TituloNueva)
+            {
+                <p class="pf-detail-muted">Se creará una plantilla nueva. La versión anterior no cambia; si ya no se va a usar, desactívala.</p>
+            }
+
+            <div class="pf-patient-form-grid">
+                <div class="pf-form-group">
+                    <label>Nombre *</label>
+                    <input class="pf-field" maxlength="150" @bind="Formulario.Nombre" @bind:event="oninput" />
+                </div>
+
+                <div class="pf-form-group">
+                    <label>Canal *</label>
+                    <select class="pf-field" @bind="Formulario.Canal">
+                        @foreach (var canal in CanalesComunicacion.Todos)
+                        {
+                            <option value="@canal.Codigo">@canal.Nombre</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="pf-form-group">
+                    <label>Tipo *</label>
+                    <input class="pf-field" maxlength="50" list="tipos-plantilla" placeholder="RECORDATORIO_CITA" @bind="Formulario.Tipo" />
+                    <datalist id="tipos-plantilla">
+                        @foreach (var tipo in Tipos)
+                        {
+                            <option value="@tipo"></option>
+                        }
+                    </datalist>
+                </div>
+
+                <div class="pf-form-group">
+                    <label>Versión</label>
+                    <input class="pf-field" maxlength="20" placeholder="1.0" @bind="Formulario.Version" />
+                </div>
+
+                @if (EsCorreo)
+                {
+                    <div class="pf-form-group pf-form-full">
+                        <label>Asunto *</label>
+                        <input class="pf-field" maxlength="250" @bind="Formulario.Asunto" @bind:event="oninput" />
+                    </div>
+                }
+
+                <div class="pf-form-group pf-form-full">
+                    <label>Contenido *</label>
+                    <textarea class="pf-field" rows="6" maxlength="@(EsCorreo ? (int?)null : VariablesPlantilla.MaximoWhatsApp)"
+                              @bind="Formulario.Contenido" @bind:event="oninput"></textarea>
+                    <small class="pf-detail-muted">
+                        Variables: {{1}} o {{paciente}} para el nombre; {{2}} o {{fecha}} y {{3}} o {{hora}} solo se llenan si el mensaje está ligado a una cita.
+                        @if (!EsCorreo)
+                        {
+                            <span> · @Formulario.Contenido.Trim().Length / @VariablesPlantilla.MaximoWhatsApp caracteres</span>
+                        }
+                    </small>
+                </div>
+
+                @if (!EsCorreo)
+                {
+                    <div class="pf-form-group pf-form-full">
+                        <div class="aviso-meta">
+                            En WhatsApp no se envía este texto: se envía la plantilla aprobada en Meta llamada
+                            <strong>@(string.IsNullOrWhiteSpace(Formulario.Nombre) ? "(escribe un nombre)" : VariablesPlantilla.NombreMeta(Formulario.Nombre))</strong>,
+                            con @VariablesPlantilla.CantidadNumeradas(Formulario.Contenido) variable(s). Usa variables numeradas, como {{1}}, y el mismo orden que en Meta.
+                        </div>
+                    </div>
+                }
+
+                <div class="pf-form-group pf-form-full">
+                    <label>Vista previa con datos de ejemplo</label>
+                    <div class="vista-previa">
+                        @if (EsCorreo)
+                        {
+                            <strong>@VariablesPlantilla.Vista(Formulario.Asunto)</strong>
+                        }
+                        <p>@VariablesPlantilla.Vista(Formulario.Contenido)</p>
+                    </div>
+                    @if (EsCorreo)
+                    {
+                        <small class="pf-detail-muted">El correo se envía como HTML; aquí se muestra solo el texto.</small>
+                    }
+                </div>
+            </div>
+
+            @if (ErrorFormulario != null)
+            {
+                <div class="pf-detail-error" role="alert">@ErrorFormulario</div>
+            }
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" @onclick="CerrarFormulario">Cancelar</button>
+
+                <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="GuardarAsync">
+                    @(Procesando ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </section>
+    }
+
+    <section class="pf-card pf-directory">
+        <div class="pf-card-header">
+            <div>
+                <h2>Plantillas</h2>
+                <p>Una plantilla que ya se usó no se edita: crea una versión nueva.</p>
+            </div>
+
+            <span class="pf-soft-chip">@(Visibles.Count() == 1 ? "1 visible" : $"{Visibles.Count()} visibles")</span>
+        </div>
+
+        @if (Cargando)
+        {
+            <div class="pf-empty" role="status">Cargando plantillas...</div>
+        }
+        else if (!Visibles.Any())
+        {
+            <div class="pf-empty">No hay plantillas@(FiltroCanal == "" ? "" : $" de {CanalesComunicacion.NombreDe(FiltroCanal)}").</div>
+        }
+        else
+        {
+            <div class="pf-table-wrap">
+                <table class="pf-table">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Canal</th>
+                            <th>Tipo</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var plantilla in Visibles)
+                        {
+                            <tr @key="plantilla.Id">
+                                <td>
+                                    <strong>@plantilla.Nombre</strong>
+                                    <small class="pf-detail-muted detalle">v@(plantilla.Version) · @PrivacidadApi.HoraEcuador(plantilla.FechaCreacion).ToString("dd/MM/yyyy")</small>
+                                </td>
+                                <td>@CanalesComunicacion.NombreDe(plantilla.Canal)</td>
+                                <td>@plantilla.Tipo</td>
+                                <td>
+                                    <span class="@(plantilla.Estatus ? "pf-mini-chip" : "pf-mini-chip warning")">
+                                        @(plantilla.Estatus ? "Activa" : "Inactiva")
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="acciones">
+                                        @if (plantilla.Estatus)
+                                        {
+                                            <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => Editar(plantilla)">Editar</button>
+                                        }
+
+                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => NuevaVersion(plantilla)">Nueva versión</button>
+
+                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => CambiarEstadoAsync(plantilla)">
+                                            @(plantilla.Estatus ? "Desactivar" : "Reactivar")
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+</div>
+
+@code {
+    private const string TituloNueva = "Nueva plantilla";
+
+    private List<PlantillaDto> ListaPlantillas = new();
+    private PlantillaGuardarDto? Formulario;
+    private int? EditandoId;
+    private string TituloFormulario = TituloNueva;
+    private string FiltroCanal = "";
+    private bool MostrarInactivas;
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private string? Mensaje;
+    private string? Error;
+    private string? ErrorFormulario;
+
+    private bool EsCorreo => Formulario?.Canal == CanalesComunicacion.Correo;
+
+    private IEnumerable<PlantillaDto> Visibles => ListaPlantillas
+        .Where(p => FiltroCanal == "" || p.Canal == FiltroCanal)
+        .OrderBy(p => p.Nombre)
+        .ThenBy(p => p.Canal)
+        .ThenByDescending(p => p.FechaCreacion);
+
+    private IEnumerable<string> Tipos => ListaPlantillas
+        .Select(p => p.Tipo)
+        .Concat(VariablesPlantilla.TiposSugeridos)
+        .Distinct()
+        .OrderBy(t => t);
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        Cargando = true;
+        Error = null;
+
+        try
+        {
+            ListaPlantillas = await Api.PlantillasAsync(MostrarInactivas);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La API tardó demasiado en responder. Recarga la página.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private void Nueva()
+    {
+        AbrirFormulario(new PlantillaGuardarDto(), null, TituloNueva);
+    }
+
+    private void Editar(PlantillaDto plantilla)
+    {
+        AbrirFormulario(PlantillaGuardarDto.Desde(plantilla), plantilla.Id, $"Editar: {plantilla.Nombre}");
+    }
+
+    private void NuevaVersion(PlantillaDto plantilla)
+    {
+        var formulario = PlantillaGuardarDto.Desde(plantilla);
+        formulario.Version = VariablesPlantilla.SiguienteVersion(plantilla.Version);
+
+        AbrirFormulario(formulario, null, $"Nueva versión de {plantilla.Nombre}");
+    }
+
+    private void AbrirFormulario(PlantillaGuardarDto formulario, int? id, string titulo)
+    {
+        Formulario = formulario;
+        EditandoId = id;
+        TituloFormulario = titulo;
+        ErrorFormulario = null;
+        Mensaje = null;
+        Error = null;
+    }
+
+    private void CerrarFormulario()
+    {
+        Formulario = null;
+        EditandoId = null;
+        ErrorFormulario = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando || Formulario == null)
+            return;
+
+        ErrorFormulario = Formulario.Validar();
+
+        if (ErrorFormulario != null)
+            return;
+
+        Procesando = true;
+
+        try
+        {
+            if (EditandoId.HasValue)
+                await Api.ActualizarPlantillaAsync(EditandoId.Value, Formulario);
+            else
+                await Api.CrearPlantillaAsync(Formulario);
+
+            var nombre = Formulario.Nombre.Trim();
+            var editada = EditandoId.HasValue;
+
+            CerrarFormulario();
+            await CargarAsync();
+            Mensaje = editada ? $"Plantilla «{nombre}» actualizada." : $"Plantilla «{nombre}» creada.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorFormulario = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorFormulario = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorFormulario = "La operación tardó demasiado. Recarga la página para ver si se guardó.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private async Task CambiarEstadoAsync(PlantillaDto plantilla)
+    {
+        if (Procesando)
+            return;
+
+        Procesando = true;
+        Mensaje = null;
+        Error = null;
+
+        try
+        {
+            if (plantilla.Estatus)
+                await Api.DesactivarPlantillaAsync(plantilla.Id);
+            else
+                await Api.ReactivarPlantillaAsync(plantilla.Id);
+
+            if (EditandoId == plantilla.Id)
+                CerrarFormulario();
+
+            await CargarAsync();
+            Mensaje = plantilla.Estatus
+                ? $"Plantilla «{plantilla.Nombre}» desactivada.{(MostrarInactivas ? "" : " Marca «Mostrar inactivas» para verla.")}"
+                : $"Plantilla «{plantilla.Nombre}» reactivada.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La operación tardó demasiado. Recarga la página para ver su estado.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}
