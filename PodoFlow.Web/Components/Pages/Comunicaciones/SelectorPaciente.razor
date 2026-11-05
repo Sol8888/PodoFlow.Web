@@ -1,0 +1,95 @@
+﻿<div class="pf-module-toolbar">
+    <input class="pf-field pf-search-field"
+           placeholder="Buscar paciente por nombre o identificación..."
+           aria-label="Buscar paciente"
+           autocomplete="off"
+           @bind="Busqueda"
+           @bind:event="oninput" />
+</div>
+
+<section class="pf-card pf-directory">
+    <div class="pf-card-header">
+        <div>
+            <h2>Pacientes</h2>
+            <p>@Descripcion</p>
+        </div>
+
+        <span class="pf-soft-chip">@(Coincidencias.Count == 1 ? "1 visible" : $"{Coincidencias.Count} visibles")</span>
+    </div>
+
+    @if (Coincidencias.Count == 0)
+    {
+        <div class="pf-empty">
+            @(string.IsNullOrWhiteSpace(Busqueda)
+                ? "No hay pacientes activos registrados."
+                : $"No hay pacientes activos que coincidan con «{Busqueda.Trim()}».")
+        </div>
+    }
+    else
+    {
+        <div class="pf-table-wrap">
+            <table class="pf-table">
+                <thead>
+                    <tr>
+                        <th>Paciente</th>
+                        <th>Identificación</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var paciente in Coincidencias)
+                    {
+                        <tr @key="paciente.Id">
+                            <td>
+                                <div class="pf-patient">
+                                    <div class="pf-patient-avatar">@Iniciales(paciente)</div>
+                                    <strong>@paciente.NombreCompleto</strong>
+                                </div>
+                            </td>
+
+                            <td>@paciente.TipoIdentificacion · @paciente.Identificacion</td>
+
+                            <td>
+                                <button type="button" class="pf-action-link boton-tabla"
+                                        @onclick="() => OnSeleccionar.InvokeAsync(paciente)">
+                                    @TextoAccion
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    private const int MaximoVisibles = 8;
+
+    [Parameter, EditorRequired]
+    public List<PacienteDto> Pacientes { get; set; } = new();
+
+    [Parameter, EditorRequired]
+    public string Descripcion { get; set; } = "";
+
+    [Parameter, EditorRequired]
+    public string TextoAccion { get; set; } = "";
+
+    [Parameter]
+    public EventCallback<PacienteDto> OnSeleccionar { get; set; }
+
+    private string Busqueda = "";
+
+    private List<PacienteDto> Coincidencias => Pacientes
+        .Where(p => string.IsNullOrWhiteSpace(Busqueda)
+            || p.NombreCompleto.Contains(Busqueda, StringComparison.OrdinalIgnoreCase)
+            || p.Identificacion.Contains(Busqueda, StringComparison.OrdinalIgnoreCase))
+        .Take(MaximoVisibles)
+        .ToList();
+
+    public static string Iniciales(PacienteDto paciente)
+    {
+        return $"{paciente.Nombres.FirstOrDefault()}{paciente.Apellidos.FirstOrDefault()}".ToUpperInvariant();
+    }
+}
