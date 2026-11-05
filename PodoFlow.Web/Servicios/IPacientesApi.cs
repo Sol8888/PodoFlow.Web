@@ -1,6 +1,7 @@
 ﻿
 using PodoFlow.Web.Modelos.Pacientes;
 using PodoFlow.Web.Modelos.Atenciones;
+using PodoFlow.Web.Modelos.Evoluciones;
 
 namespace PodoFlow.Web.Servicios;
 
@@ -91,5 +92,27 @@ public interface IPacientesApi
     Task<AtencionDto> CrearAtencionAsync(
         long historiaId,
         AtencionCrearDto dto);
+
+
+
+    Task<List<EvolucionDto>> ListarEvolucionesAsync(
+        long atencionId,
+        int pagina = 1,
+        int tamano = 10,
+        bool incluirInactivos = false);
+
+
+    Task<EvolucionDto> CrearEvolucionAsync(
+        long atencionId,
+        EvolucionCrearDto dto);
+
+
+    Task ActualizarEvolucionAsync(
+        long evolucionId,
+        string descripcion);
+
+    Task DesactivarEvolucionAsync(long evolucionId);
+
+    Task ReactivarEvolucionAsync(long evolucionId);
 
 }

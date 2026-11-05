@@ -497,6 +497,17 @@
                                         </p>
 
                                     </div>
+
+                                    <EvolucionesPanel @key="atencion.Id"
+                                                      AtencionId="@atencion.Id"
+                                                      UsuarioId="@atencion.UsuarioId"
+                                                      PuedeEditar="@(
+                                                      HistoriaActiva &&
+                                                      string.Equals(
+                                                          atencion.Estado,
+                                                          "ABIERTA",
+                                                          StringComparison.OrdinalIgnoreCase))" />
+
                                 }
 
                             </li>

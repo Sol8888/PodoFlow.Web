@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using PodoFlow.Web.Modelos.Pacientes;
 using PodoFlow.Web.Modelos.Atenciones;
+using PodoFlow.Web.Modelos.Evoluciones;
 
 namespace PodoFlow.Web.Servicios;
 
@@ -811,6 +812,116 @@ public class PacientesApi : IPacientesApi
                 "El servidor no devolvió la atención creada.");
     }
 
+    // ============================================
+    // EVOLUCIONES CLÍNICAS
+    // ============================================
+
+
+    public async Task<List<EvolucionDto>> ListarEvolucionesAsync(
+        long atencionId,
+        int pagina = 1,
+        int tamano = 10,
+        bool incluirInactivos = false)
+    {
+        ValidarId(atencionId);
+        ValidarPaginacion(pagina, tamano);
+
+        var url = $"api/evoluciones?atencionId={atencionId}" +
+                  $"&incluirInactivos={incluirInactivos.ToString().ToLowerInvariant()}" +
+                  $"&pagina={pagina}&tamano={tamano}";
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.GetAsync(url));
+
+        await ValidarRespuestaAsync(respuesta);
+
+        return await respuesta.Content
+            .ReadFromJsonAsync<List<EvolucionDto>>()
+            ?? new List<EvolucionDto>();
+    }
+
+
+    public async Task<EvolucionDto> CrearEvolucionAsync(
+        long atencionId,
+        EvolucionCrearDto dto)
+    {
+        ValidarId(atencionId);
+        ArgumentNullException.ThrowIfNull(dto);
+
+        if (dto.UsuarioId <= 0)
+            throw new ArgumentException(
+                "El profesional responsable no es válido.");
+
+        if (string.IsNullOrWhiteSpace(dto.Descripcion) ||
+            dto.Descripcion.Trim().Length > 3000)
+        {
+            throw new ArgumentException(
+                "La descripción es obligatoria y admite máximo 3000 caracteres.");
+        }
+
+        var datos = new
+        {
+            AtencionId = atencionId,
+            dto.UsuarioId,
+            Descripcion = dto.Descripcion.Trim()
+        };
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.PostAsJsonAsync(
+                "api/evoluciones", datos));
+
+        await ValidarRespuestaAsync(respuesta);
+
+        return await respuesta.Content
+            .ReadFromJsonAsync<EvolucionDto>()
+            ?? throw new InvalidOperationException(
+                "El servidor no devolvió la evolución creada.");
+    }
+
+
+    public async Task ActualizarEvolucionAsync(
+        long evolucionId,
+        string descripcion)
+    {
+        ValidarId(evolucionId);
+
+        if (string.IsNullOrWhiteSpace(descripcion) ||
+            descripcion.Trim().Length > 3000)
+        {
+            throw new ArgumentException(
+                "La descripción debe tener entre 1 y 3000 caracteres.");
+        }
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.PutAsJsonAsync(
+                $"api/evoluciones/{evolucionId}",
+                new { Descripcion = descripcion.Trim() }));
+
+        await ValidarRespuestaAsync(respuesta);
+    }
+
+    public async Task DesactivarEvolucionAsync(long evolucionId)
+    {
+        ValidarId(evolucionId);
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.DeleteAsync(
+                $"api/evoluciones/{evolucionId}"));
+
+        await ValidarRespuestaAsync(respuesta);
+    }
+
+    public async Task ReactivarEvolucionAsync(long evolucionId)
+    {
+        ValidarId(evolucionId);
+
+        using var respuesta = await EjecutarAsync(
+            () => _http.PatchAsync(
+                $"api/evoluciones/{evolucionId}/reactivar",
+                content: null));
+
+        await ValidarRespuestaAsync(respuesta);
+    }
 
 }
 
