@@ -1,0 +1,18 @@
+<nav class="pf-profile-tabs" aria-label="Secciones de privacidad">
+    <a href="/privacidad/solicitudes"
+       class="@(Activa == "solicitudes" ? "active" : "")"
+       aria-current="@(Activa == "solicitudes" ? "page" : null)">
+        Solicitudes de derechos
+    </a>
+
+    <a href="/privacidad/consentimientos"
+       class="@(Activa == "consentimientos" ? "active" : "")"
+       aria-current="@(Activa == "consentimientos" ? "page" : null)">
+        Consentimientos
+    </a>
+</nav>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Activa { get; set; } = "";
+}

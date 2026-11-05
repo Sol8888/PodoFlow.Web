@@ -75,6 +75,11 @@
 
             <div class="pf-profile-actions">
 
+                <a class="pf-profile-button"
+                   href="@($"/privacidad/consentimientos?pacienteId={Id}")">
+                    Gestionar consentimientos
+                </a>
+
                 @if (Paciente.Estatus)
                 {
                     <a class="pf-profile-button"

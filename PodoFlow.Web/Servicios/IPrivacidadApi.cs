@@ -40,5 +40,17 @@ namespace PodoFlow.Web.Servicios
         Task<ExportacionDto> CambiarEstadoExportacionAsync(long id, string estado, string? observacion);
 
         Task<ArchivoExportacionDto> DescargarExportacionAsync(long id);
+
+        Task<List<FinalidadDto>> ListarFinalidadesAsync();
+
+        Task<List<AvisoDto>> ListarAvisosAsync();
+
+        Task<List<ConsentimientoDto>> ConsentimientosAsync(long pacienteId);
+
+        Task<List<EventoConsentimientoDto>> EventosConsentimientoAsync(long consentimientoId);
+
+        Task CrearConsentimientoAsync(ConsentimientoCrearDto dto);
+
+        Task CambiarEstadoConsentimientoAsync(long id, ConsentimientoCambiarEstadoDto dto);
     }
 }

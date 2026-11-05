@@ -1,0 +1,176 @@
+<fieldset class="grupo">
+    <legend>¿Quién toma la decisión?</legend>
+
+    <div class="opciones-autoriza">
+        <label class="opcion @(Modelo.EsRepresentante ? "" : "activa") @(EsMenor ? "bloqueada" : "")">
+            <input type="radio" name="autoriza"
+                   checked="@(!Modelo.EsRepresentante)"
+                   disabled="@EsMenor"
+                   @onchange="() => ElegirAsync(false)" />
+            <span class="opcion-icono" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4.5 20c1.2-3.8 4-5.5 7.5-5.5s6.3 1.7 7.5 5.5" /></svg>
+            </span>
+            <span class="opcion-texto">
+                <strong>Titular</strong>
+                <small>El propio paciente decide</small>
+            </span>
+            <span class="opcion-marca" aria-hidden="true"></span>
+        </label>
+
+        <label class="opcion @(Modelo.EsRepresentante ? "activa" : "")">
+            <input type="radio" name="autoriza"
+                   checked="@Modelo.EsRepresentante"
+                   @onchange="() => ElegirAsync(true)" />
+            <span class="opcion-icono" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.9-3.6 3.3-5.2 6.5-5.2s5.6 1.6 6.5 5.2" /><path d="M16 4.8a3.5 3.5 0 0 1 0 6.4" /><path d="M18.4 14.8c1.6.7 2.6 2.4 3.1 5.2" /></svg>
+            </span>
+            <span class="opcion-texto">
+                <strong>Representante</strong>
+                <small>Decide otra persona en su nombre</small>
+            </span>
+            <span class="opcion-marca" aria-hidden="true"></span>
+        </label>
+    </div>
+
+    @if (EsMenor)
+    {
+        <p class="nota nota-aviso">
+            <strong>Paciente menor de edad.</strong> Su representante debe autorizar.
+        </p>
+    }
+
+    @if (Modelo.EsRepresentante)
+    {
+        <div class="datos-representante">
+            <div class="campo">
+                <label for="representante-nombre">Nombre completo <span aria-hidden="true">*</span></label>
+                <input id="representante-nombre"
+                       class="pf-field @(ErrorNombre != null ? "invalido" : "")"
+                       maxlength="150"
+                       autocomplete="off"
+                       placeholder="Nombre del representante"
+                       aria-required="true"
+                       aria-invalid="@(ErrorNombre != null ? "true" : "false")"
+                       aria-describedby="representante-nombre-error"
+                       @ref="CampoNombre"
+                       @bind="Modelo.NombreRepresentante"
+                       @bind:event="oninput"
+                       @bind:after="LimpiarNombreAsync" />
+                <span id="representante-nombre-error" class="error-campo">@ErrorNombre</span>
+            </div>
+
+            <div class="campo">
+                <label for="representante-relacion">Relación con el paciente <span aria-hidden="true">*</span></label>
+                <select id="representante-relacion"
+                        class="pf-field @(ErrorRelacion != null ? "invalido" : "")"
+                        aria-required="true"
+                        aria-invalid="@(ErrorRelacion != null ? "true" : "false")"
+                        aria-describedby="representante-relacion-error"
+                        @ref="CampoRelacion"
+                        @bind="Modelo.RelacionRepresentante"
+                        @bind:after="LimpiarRelacionAsync">
+                    <option value="">Selecciona una opción</option>
+                    @foreach (var relacion in OpcionesConsentimiento.Relaciones)
+                    {
+                        <option value="@relacion">@relacion</option>
+                    }
+                </select>
+                <span id="representante-relacion-error" class="error-campo">@ErrorRelacion</span>
+            </div>
+        </div>
+    }
+</fieldset>
+
+<fieldset class="grupo">
+    <legend>¿Cómo se obtuvo la decisión?</legend>
+
+    <div class="opciones-medio">
+        @foreach (var medio in OpcionesConsentimiento.Medios)
+        {
+            <label class="medio @(Modelo.Medio == medio.Codigo ? "activo" : "")">
+                <input type="radio" name="medio"
+                       checked="@(Modelo.Medio == medio.Codigo)"
+                       @onchange="() => ElegirMedioAsync(medio.Codigo)" />
+                @medio.Nombre
+            </label>
+        }
+    </div>
+</fieldset>
+
+@code {
+    [Parameter, EditorRequired]
+    public AutorizacionModelo Modelo { get; set; } = new();
+
+    [Parameter]
+    public DateTime? FechaNacimiento { get; set; }
+
+    [Parameter]
+    public EventCallback Cambio { get; set; }
+
+    private ElementReference CampoNombre;
+    private ElementReference CampoRelacion;
+    private string? ErrorNombre;
+    private string? ErrorRelacion;
+
+    private bool EsMenor => OpcionesConsentimiento.EsMenorDeEdad(FechaNacimiento);
+
+    protected override void OnParametersSet()
+    {
+        if (EsMenor)
+            Modelo.EsRepresentante = true;
+    }
+
+    public async Task<bool> ValidarAsync()
+    {
+        ErrorNombre = null;
+        ErrorRelacion = null;
+
+        if (!Modelo.EsRepresentante)
+            return true;
+
+        if (string.IsNullOrWhiteSpace(Modelo.NombreRepresentante))
+            ErrorNombre = "Ingresa el nombre del representante.";
+
+        if (string.IsNullOrWhiteSpace(Modelo.RelacionRepresentante))
+            ErrorRelacion = "Selecciona la relación con el paciente.";
+
+        if (ErrorNombre == null && ErrorRelacion == null)
+            return true;
+
+        StateHasChanged();
+
+        await (ErrorNombre != null ? CampoNombre : CampoRelacion).FocusAsync();
+
+        return false;
+    }
+
+    private async Task ElegirAsync(bool esRepresentante)
+    {
+        Modelo.EsRepresentante = esRepresentante;
+        ErrorNombre = null;
+        ErrorRelacion = null;
+
+        await Cambio.InvokeAsync();
+    }
+
+    private async Task ElegirMedioAsync(string medio)
+    {
+        Modelo.Medio = medio;
+
+        await Cambio.InvokeAsync();
+    }
+
+    private Task LimpiarNombreAsync()
+    {
+        ErrorNombre = null;
+
+        return Cambio.InvokeAsync();
+    }
+
+    private Task LimpiarRelacionAsync()
+    {
+        ErrorRelacion = null;
+
+        return Cambio.InvokeAsync();
+    }
+}

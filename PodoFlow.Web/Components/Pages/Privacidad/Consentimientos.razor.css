@@ -1,0 +1,192 @@
+.zona-mensajes {
+    display: contents;
+}
+
+.filtro-estado {
+    max-width: 220px;
+}
+
+.toolbar-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.etiqueta-titulo {
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.leyenda {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 0 24px 16px;
+    font-size: 12px;
+}
+
+    .leyenda span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+/* Los botones de la tabla se ven igual que los enlaces de Solicitudes. */
+.boton-tabla {
+    border: 0;
+    cursor: pointer;
+}
+
+.boton-enlace {
+    padding: 6px 4px;
+    font-family: inherit;
+    white-space: nowrap;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+    .boton-enlace:hover:not(:disabled) {
+        text-decoration: underline;
+    }
+
+.boton-tabla:disabled,
+.boton-enlace:disabled {
+    cursor: not-allowed;
+    opacity: .6;
+}
+
+.boton-tabla:focus-visible,
+.boton-enlace:focus-visible {
+    outline: 3px solid rgba(20, 93, 160, .25);
+    outline-offset: 2px;
+}
+
+.celda-finalidad strong {
+    color: var(--pf-navy);
+    font-size: 13px;
+}
+
+.celda-finalidad small {
+    display: block;
+    max-width: 420px;
+    margin-top: 2px;
+    color: var(--pf-text-soft);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.celda-estado {
+    text-align: center;
+}
+
+.acciones {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.actualizada {
+    animation: resaltar 1.8s ease-out;
+}
+
+.fila-detalle td {
+    padding: 0 24px 16px;
+    background: var(--pf-surface-soft);
+}
+
+.panel {
+    padding: 20px;
+    background: white;
+    border: 1px solid var(--pf-border);
+    border-radius: 8px;
+    animation: aparecer .2s ease-out;
+}
+
+    .panel h3 {
+        margin: 0 0 4px;
+        font-size: 14px;
+        font-weight: 700;
+    }
+
+.panel-explicacion {
+    margin: 0 0 16px;
+    color: var(--pf-text-soft);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.panel-campos {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.linea-tiempo {
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+    .linea-tiempo li {
+        display: flex;
+        gap: 10px;
+        padding: 10px 0;
+        color: var(--pf-text-soft);
+        font-size: 12px;
+        border-top: 1px solid var(--pf-border-soft);
+    }
+
+        .linea-tiempo li > div {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .linea-tiempo li p {
+            margin: 4px 0 0;
+            color: #475569;
+            line-height: 1.5;
+        }
+
+.evento-cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 2px 12px;
+}
+
+    .evento-cabecera strong {
+        color: var(--pf-navy);
+        font-size: 12px;
+    }
+
+@keyframes aparecer {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes resaltar {
+    from {
+        background: var(--pf-green-soft);
+    }
+
+    to {
+        background: transparent;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .actualizada,
+    .panel {
+        animation: none;
+    }
+}

@@ -300,5 +300,54 @@ namespace PodoFlow.Web.Servicios
 
             return TimeZoneInfo.CreateCustomTimeZone("Ecuador", TimeSpan.FromHours(-5), "Ecuador", "Ecuador");
         }
+
+        public async Task<List<FinalidadDto>> ListarFinalidadesAsync()
+        {
+            using var respuesta = await _http.GetAsync("api/Finalidad?incluirInactivos=true&pagina=1&tamano=100");
+            await ValidarAsync(respuesta);
+
+            return await respuesta.Content.ReadFromJsonAsync<List<FinalidadDto>>() ?? [];
+        }
+
+        public async Task<List<AvisoDto>> ListarAvisosAsync()
+        {
+            using var respuesta = await _http.GetAsync("api/Aviso?incluirInactivos=true&pagina=1&tamano=100");
+            await ValidarAsync(respuesta);
+
+            return await respuesta.Content.ReadFromJsonAsync<List<AvisoDto>>() ?? [];
+        }
+
+        public async Task CrearConsentimientoAsync(ConsentimientoCrearDto dto)
+        {
+            dto.UsuarioId = _usuarioId;
+
+            using var respuesta = await _http.PostAsJsonAsync("api/Consentimiento", dto);
+            await ValidarAsync(respuesta);
+        }
+
+        public async Task<List<ConsentimientoDto>> ConsentimientosAsync(long pacienteId)
+        {
+            using var respuesta = await _http.GetAsync($"api/Consentimiento/paciente/{pacienteId}");
+            await ValidarAsync(respuesta);
+
+            return await respuesta.Content.ReadFromJsonAsync<List<ConsentimientoDto>>() ?? [];
+        }
+
+        public async Task<List<EventoConsentimientoDto>> EventosConsentimientoAsync(long consentimientoId)
+        {
+            using var respuesta = await _http.GetAsync($"api/Consentimiento/{consentimientoId}/eventos");
+            await ValidarAsync(respuesta);
+
+            return await respuesta.Content.ReadFromJsonAsync<List<EventoConsentimientoDto>>() ?? [];
+        }
+
+        public async Task CambiarEstadoConsentimientoAsync(long id, ConsentimientoCambiarEstadoDto dto)
+        {
+            dto.UsuarioId = _usuarioId;
+
+            using var respuesta = await _http.PatchAsync(
+                $"api/Consentimiento/{id}/estado", JsonContent.Create(dto));
+            await ValidarAsync(respuesta);
+        }
     }
 }

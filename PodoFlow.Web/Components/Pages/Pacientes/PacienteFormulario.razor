@@ -5,6 +5,7 @@
 @using System.ComponentModel.DataAnnotations
 @using PodoFlow.Web.Modelos.Pacientes
 @using PodoFlow.Web.Servicios
+@using PodoFlow.Web.Components.Pages.Privacidad
 
 @inject IPacientesApi Api
 @inject NavigationManager Nav
@@ -234,6 +235,12 @@
 
                 </div>
 
+                @if (!EsEdicion)
+                {
+                    <ConsentimientosIniciales @ref="Consentimientos"
+                                              FechaNacimiento="Modelo.FechaNacimiento" />
+                }
+
                 <div class="pf-form-actions">
 
                     <a href="@RutaVolver"
@@ -279,6 +286,8 @@
     // ============================================
 
     private PacienteGuardarDto Modelo = new();
+
+    private ConsentimientosIniciales? Consentimientos;
 
     private bool Cargando;
 
@@ -424,14 +433,21 @@
 
     private async Task CrearPacienteAsync()
     {
+        if (Consentimientos != null && !await Consentimientos.ValidarAsync())
+            return;
+
         var pacienteCreado = await Api.CrearAsync(Modelo);
 
         Logger.LogInformation(
             "Paciente registrado correctamente. Id: {PacienteId}",
             pacienteCreado.Id);
 
-        Nav.NavigateTo(
-            $"/pacientes/{pacienteCreado.Id}");
+        var completos = Consentimientos == null
+            || await Consentimientos.RegistrarAsync(pacienteCreado.Id);
+
+        Nav.NavigateTo(completos
+            ? $"/pacientes/{pacienteCreado.Id}"
+            : $"/privacidad/consentimientos?pacienteId={pacienteCreado.Id}&pendiente=true");
     }
 
     // ============================================
