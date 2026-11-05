@@ -1,0 +1,8 @@
+@using PodoFlow.Web.Modelos.Citas
+
+<span class="estado @AgendaReglas.ClaseEstado(Estado)">@AgendaReglas.TextoEstado(Estado)</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Estado { get; set; } = "";
+}

@@ -1,0 +1,20 @@
+.filtro {
+    max-width: 220px;
+}
+
+.leyenda {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    padding: 0 24px 16px;
+}
+
+.boton-tabla {
+    border: 0;
+    cursor: pointer;
+}
+
+    .boton-tabla:focus-visible {
+        outline: 3px solid rgba(20, 93, 160, .25);
+        outline-offset: 2px;
+    }

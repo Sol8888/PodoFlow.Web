@@ -1,0 +1,286 @@
+.navegacion {
+    display: flex;
+    gap: 4px;
+}
+
+.flecha {
+    width: 38px;
+    padding: 0;
+    font-size: 18px;
+}
+
+.titulo-semana {
+    color: var(--pf-navy);
+    font-size: 14px;
+}
+
+    .titulo-semana::first-letter {
+        text-transform: uppercase;
+    }
+
+.filtro {
+    max-width: 240px;
+    margin-left: auto;
+}
+
+.leyenda {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    padding: 0 24px 16px;
+    font-size: 12px;
+}
+
+.leyenda-bloqueo {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #475569;
+    font-weight: 600;
+}
+
+    .leyenda-bloqueo::before {
+        content: "";
+        width: 14px;
+        height: 10px;
+        background: repeating-linear-gradient(135deg, #cbd5e1 0 3px, #f1f5f9 3px 6px);
+        border-radius: 2px;
+    }
+
+.calendario-marco {
+    overflow-x: auto;
+    border-top: 1px solid var(--pf-border);
+}
+
+.calendario {
+    display: grid;
+    grid-template-columns: 56px repeat(7, minmax(112px, 1fr));
+    min-width: 840px;
+    transition: opacity .15s;
+}
+
+    .calendario.cargando {
+        opacity: .55;
+    }
+
+.esquina,
+.dia-cabecera {
+    border-bottom: 1px solid var(--pf-border);
+}
+
+.dia-cabecera {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 8px 4px;
+    border-left: 1px solid var(--pf-border-soft);
+}
+
+    .dia-cabecera span {
+        color: var(--pf-text-soft);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: capitalize;
+    }
+
+    .dia-cabecera strong {
+        color: var(--pf-navy);
+        font-size: 15px;
+    }
+
+    .dia-cabecera.hoy span,
+    .dia-cabecera.hoy strong {
+        color: var(--pf-orange-dark);
+    }
+
+.horas {
+    position: relative;
+}
+
+    .horas span {
+        position: absolute;
+        right: 8px;
+        color: var(--pf-text-soft);
+        font-size: 11px;
+        transform: translateY(2px);
+    }
+
+.dia-columna {
+    position: relative;
+    overflow: hidden;
+    background: #f1f5f9;
+    border-left: 1px solid var(--pf-border);
+}
+
+.franja {
+    position: absolute;
+    right: 0;
+    left: 0;
+    background: white;
+}
+
+.linea {
+    position: absolute;
+    right: 0;
+    left: 0;
+    border-top: 1px solid var(--pf-border-soft);
+    pointer-events: none;
+}
+
+.dia-columna:not(.hoy) .linea {
+    border-top-color: rgba(148, 163, 184, .25);
+}
+
+.hueco {
+    position: absolute;
+    right: 0;
+    left: 0;
+    padding: 0 6px;
+    color: var(--pf-blue);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+}
+
+    .hueco span {
+        opacity: 0;
+    }
+
+    .hueco:hover {
+        background: var(--pf-blue-soft);
+    }
+
+        .hueco:hover span {
+            opacity: 1;
+        }
+
+.bloqueo {
+    position: absolute;
+    right: 0;
+    left: 0;
+    z-index: 1;
+    padding: 4px 6px;
+    overflow: hidden;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 600;
+    background: repeating-linear-gradient(135deg, #e2e8f0 0 6px, #f1f5f9 6px 12px);
+}
+
+.cita {
+    position: absolute;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 3px 6px;
+    overflow: hidden;
+    font: inherit;
+    text-align: left;
+    background: var(--fondo);
+    border: 1px solid white;
+    border-left: 3px solid var(--color);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: box-shadow .15s;
+}
+
+    .cita:hover {
+        z-index: 3;
+        box-shadow: var(--pf-shadow-md);
+    }
+
+    .cita:focus-visible {
+        z-index: 3;
+        outline: 3px solid rgba(20, 93, 160, .35);
+    }
+
+    .cita strong,
+    .cita span {
+        display: block;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    .cita strong {
+        color: var(--pf-navy);
+        font-size: 11.5px;
+    }
+
+    .cita span {
+        color: #475569;
+        font-size: 11px;
+    }
+
+    .cita.solicitada {
+        --color: var(--pf-blue);
+        --fondo: var(--pf-blue-soft);
+    }
+
+    .cita.confirmada {
+        --color: var(--pf-green);
+        --fondo: var(--pf-green-soft);
+    }
+
+    .cita.reprogramada {
+        --color: var(--pf-orange);
+        --fondo: var(--pf-orange-soft);
+    }
+
+    .cita.atendida {
+        --color: var(--pf-navy);
+        --fondo: #e2e8f0;
+    }
+
+    .cita.cancelada,
+    .cita.no-asiste {
+        --color: var(--pf-text-muted);
+        --fondo: #f8fafc;
+        opacity: .75;
+    }
+
+        .cita.cancelada strong,
+        .cita.no-asiste strong {
+            text-decoration: line-through;
+        }
+
+.ahora {
+    position: absolute;
+    right: 0;
+    left: 0;
+    z-index: 4;
+    border-top: 2px solid var(--pf-red);
+    pointer-events: none;
+}
+
+    .ahora::before {
+        content: "";
+        position: absolute;
+        top: -5px;
+        left: -4px;
+        width: 8px;
+        height: 8px;
+        background: var(--pf-red);
+        border-radius: 50%;
+    }
+
+@media (max-width: 650px) {
+    .filtro {
+        max-width: none;
+        margin-left: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .calendario,
+    .cita {
+        transition: none;
+    }
+}

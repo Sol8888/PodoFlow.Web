@@ -1,0 +1,487 @@
+@using System.Globalization
+@using PodoFlow.Web.Modelos.Citas
+
+@inject IAgendaApi Api
+
+<header class="cabecera">
+    <div>
+        <span class="pf-module-eyebrow">@(Cita == null ? "NUEVA CITA" : "EDITAR CITA")</span>
+        <h2>@(Cita == null ? "Agendar una cita" : Catalogos.NombrePaciente(Cita.PacienteId))</h2>
+    </div>
+
+    <button type="button" class="cerrar" aria-label="Volver" @onclick="() => Cancelar.InvokeAsync()">×</button>
+</header>
+
+<form class="contenido" novalidate @onsubmit="GuardarAsync">
+
+    <fieldset class="campos" disabled="@Guardando">
+
+        <div class="campo">
+            <label for="cita-paciente">Paciente *</label>
+
+            @if (PacienteElegido != null)
+            {
+                <div class="paciente-elegido">
+                    <div>
+                        <strong>@PacienteElegido.NombreCompleto</strong>
+                        <small>@PacienteElegido.TipoIdentificacion · @PacienteElegido.Identificacion</small>
+                    </div>
+
+                    @if (Cita == null)
+                    {
+                        <button type="button" class="pf-link boton-enlace" @onclick="QuitarPaciente">Cambiar</button>
+                    }
+                </div>
+            }
+            else
+            {
+                <input id="cita-paciente"
+                       class="pf-field @(ErrorPaciente != null ? "invalido" : "")"
+                       placeholder="Buscar por nombre o identificación..."
+                       autocomplete="off"
+                       aria-invalid="@(ErrorPaciente != null ? "true" : "false")"
+                       @bind="BusquedaPaciente"
+                       @bind:event="oninput" />
+
+                @if (!string.IsNullOrWhiteSpace(BusquedaPaciente))
+                {
+                    @if (Coincidencias.Count == 0)
+                    {
+                        <p class="ayuda">No hay pacientes activos que coincidan.</p>
+                    }
+                    else
+                    {
+                        <ul class="resultados">
+                            @foreach (var paciente in Coincidencias)
+                            {
+                                <li @key="paciente.Id">
+                                    <button type="button" @onclick="() => ElegirPaciente(paciente)">
+                                        <strong>@paciente.NombreCompleto</strong>
+                                        <small>@paciente.Identificacion</small>
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                }
+
+                <span class="error-campo">@ErrorPaciente</span>
+            }
+        </div>
+
+        <div class="dos-columnas">
+            <div class="campo">
+                <label for="cita-servicio">Servicio *</label>
+                <select id="cita-servicio"
+                        class="pf-field @(ErrorServicio != null ? "invalido" : "")"
+                        aria-invalid="@(ErrorServicio != null ? "true" : "false")"
+                        @bind="ServicioTexto"
+                        @bind:after="ServicioCambiadoAsync">
+                    <option value="">Selecciona un servicio</option>
+                    @foreach (var servicio in ServiciosDisponibles)
+                    {
+                        <option value="@servicio.Id">@servicio.Nombre (@servicio.DuracionMinutos min)</option>
+                    }
+                </select>
+                <span class="error-campo">@ErrorServicio</span>
+            </div>
+
+            <div class="campo">
+                <label for="cita-profesional">Profesional</label>
+                <select id="cita-profesional" class="pf-field" @bind="UsuarioTexto" @bind:after="CargarDisponibilidadAsync">
+                    <option value="">Sin asignar</option>
+                    @foreach (var usuario in Catalogos.Usuarios.Where(x => x.Estatus || x.Id == Cita?.UsuarioId))
+                    {
+                        <option value="@usuario.Id">@usuario.Nombre</option>
+                    }
+                </select>
+            </div>
+
+            <div class="campo">
+                <label for="cita-fecha">Fecha *</label>
+                <input id="cita-fecha"
+                       type="date"
+                       class="pf-field @(ErrorFecha != null ? "invalido" : "")"
+                       min="@AgendaFechas.Ahora.ToString("yyyy-MM-dd")"
+                       aria-invalid="@(ErrorFecha != null ? "true" : "false")"
+                       @bind="Fecha"
+                       @bind:after="CargarDisponibilidadAsync" />
+                <span class="error-campo">@ErrorFecha</span>
+            </div>
+
+            <div class="campo">
+                <label for="cita-duracion">Duración (minutos) *</label>
+                <input id="cita-duracion"
+                       type="number"
+                       class="pf-field"
+                       min="5"
+                       step="5"
+                       @bind="Duracion"
+                       @bind:after="CargarDisponibilidadAsync" />
+            </div>
+        </div>
+
+        <div class="campo">
+            <label for="cita-hora">Hora *</label>
+
+            <div class="hora-fila">
+                <input id="cita-hora"
+                       type="time"
+                       class="pf-field hora @(ErrorHora != null ? "invalido" : "")"
+                       aria-invalid="@(ErrorHora != null ? "true" : "false")"
+                       value="@HoraTexto"
+                       @oninput="e => HoraTexto = e.Value?.ToString() ?? string.Empty" />
+
+                @if (HoraFin != null)
+                {
+                    <span class="ayuda">Termina a las @HoraFin</span>
+                }
+            </div>
+
+            <span class="error-campo">@ErrorHora</span>
+
+            @if (Fecha.HasValue)
+            {
+                @if (CargandoHuecos)
+                {
+                    <p class="ayuda" role="status">Buscando horarios libres...</p>
+                }
+                else if (ErrorHuecos != null)
+                {
+                    <p class="ayuda">@ErrorHuecos</p>
+                }
+                else if (Huecos.Count == 0)
+                {
+                    <p class="ayuda aviso">@MotivoSinHuecos</p>
+                }
+                else
+                {
+                    <div class="huecos" role="group" aria-label="Horarios libres">
+                        @foreach (var hueco in Huecos)
+                        {
+                            var texto = hueco.ToString(@"hh\:mm");
+
+                            <button @key="hueco"
+                                    type="button"
+                                    class="hueco @(HoraTexto == texto ? "activo" : "")"
+                                    aria-pressed="@(HoraTexto == texto ? "true" : "false")"
+                                    @onclick="() => HoraTexto = texto">
+                                @texto
+                            </button>
+                        }
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="campo">
+            <label for="cita-canal">Canal</label>
+            <select id="cita-canal" class="pf-field" @bind="Canal">
+                @foreach (var canal in AgendaReglas.Canales)
+                {
+                    <option value="@canal.Codigo">@canal.Nombre</option>
+                }
+                @if (Cita != null && AgendaReglas.Canales.All(x => x.Codigo != Cita.Canal))
+                {
+                    <option value="@Cita.Canal">@Cita.Canal</option>
+                }
+            </select>
+        </div>
+
+        <div class="campo">
+            <label for="cita-observaciones">Observaciones</label>
+            <textarea id="cita-observaciones" class="pf-field" rows="2" maxlength="1000" @bind="Observaciones"></textarea>
+        </div>
+
+        @if (CambiaHorario)
+        {
+            <div class="campo motivo">
+                <label for="cita-motivo">Motivo de la reprogramación *</label>
+                <textarea id="cita-motivo"
+                          class="pf-field @(ErrorMotivo != null ? "invalido" : "")"
+                          rows="2"
+                          maxlength="500"
+                          aria-invalid="@(ErrorMotivo != null ? "true" : "false")"
+                          @bind="MotivoCambio"
+                          @bind:event="oninput"></textarea>
+                <span class="error-campo">@ErrorMotivo</span>
+                <p class="ayuda">Al cambiar la fecha, la hora o el profesional, la cita pasa a “Reprogramada”.</p>
+            </div>
+        }
+    </fieldset>
+
+    @if (Error != null)
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+
+    <div class="pf-form-actions">
+        <button type="button" class="pf-btn pf-btn-neutral" disabled="@Guardando" @onclick="() => Cancelar.InvokeAsync()">
+            Cancelar
+        </button>
+        <button type="submit" class="pf-btn pf-btn-main" disabled="@Guardando">
+            @(Guardando ? "Guardando..." : Cita == null ? "Agendar cita" : "Guardar cambios")
+        </button>
+    </div>
+</form>
+
+@code {
+    [Parameter, EditorRequired]
+    public CatalogosAgenda Catalogos { get; set; } = new();
+
+    [Parameter]
+    public CitaDto? Cita { get; set; }
+
+    [Parameter]
+    public SugerenciaCita? Sugerencia { get; set; }
+
+    [Parameter]
+    public EventCallback Cancelar { get; set; }
+
+    [Parameter]
+    public EventCallback<CitaDto> Guardado { get; set; }
+
+    private Modelos.Pacientes.PacienteDto? PacienteElegido;
+    private List<TimeSpan> Huecos = new();
+
+    private string BusquedaPaciente = "";
+    private string ServicioTexto = "";
+    private string UsuarioTexto = "";
+    private DateTime? Fecha;
+    private int Duracion = 30;
+    private string HoraTexto = "";
+    private string Canal = "PRESENCIAL";
+    private string? Observaciones;
+    private string? MotivoCambio;
+
+    private string? ErrorPaciente;
+    private string? ErrorServicio;
+    private string? ErrorFecha;
+    private string? ErrorHora;
+    private string? ErrorMotivo;
+    private string? ErrorHuecos;
+    private string? Error;
+    private bool CargandoHuecos;
+    private bool Guardando;
+    private int Consulta;
+
+    private IEnumerable<ServicioDto> ServiciosDisponibles =>
+        Catalogos.Servicios.Where(x => x.Estatus || x.Id == Cita?.ServicioId);
+
+    private List<Modelos.Pacientes.PacienteDto> Coincidencias => Catalogos.Pacientes
+        .Where(x => x.Estatus && (
+            x.NombreCompleto.Contains(BusquedaPaciente, StringComparison.OrdinalIgnoreCase) ||
+            x.Identificacion.Contains(BusquedaPaciente, StringComparison.OrdinalIgnoreCase)))
+        .Take(6)
+        .ToList();
+
+    private long? UsuarioId => long.TryParse(UsuarioTexto, out var id) ? id : null;
+
+    private TimeSpan? Hora => TimeSpan.TryParse(HoraTexto, CultureInfo.InvariantCulture, out var hora) ? hora : null;
+
+    private string? HoraFin => Hora.HasValue && Duracion > 0
+        ? (Hora.Value + TimeSpan.FromMinutes(Duracion)).ToString(@"hh\:mm")
+        : null;
+
+    private DateTime? InicioElegido => Fecha.HasValue && Hora.HasValue ? Fecha.Value.Date + Hora.Value : null;
+
+    private bool CambiaHorario =>
+        Cita != null && InicioElegido.HasValue && (
+            InicioElegido != Cita.InicioLocal ||
+            InicioElegido.Value.AddMinutes(Duracion) != Cita.FinLocal ||
+            UsuarioId != Cita.UsuarioId);
+
+    private string MotivoSinHuecos
+    {
+        get
+        {
+            var hayHorario = Fecha.HasValue && AgendaReglas
+                .HorariosDelDia(Catalogos.Horarios, Fecha.Value, x => x.UsuarioId == UsuarioId || x.UsuarioId == null)
+                .Any();
+
+            if (hayHorario)
+                return "No quedan horarios libres para esa duración este día.";
+
+            return UsuarioId == null
+                ? "No hay horario general de atención este día. Prueba eligiendo un profesional."
+                : "Este profesional no tiene horario de atención este día.";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Cita != null)
+        {
+            PacienteElegido = Catalogos.Pacientes.FirstOrDefault(x => x.Id == Cita.PacienteId);
+            ServicioTexto = Cita.ServicioId.ToString();
+            UsuarioTexto = Cita.UsuarioId?.ToString() ?? "";
+            Fecha = Cita.InicioLocal.Date;
+            HoraTexto = Cita.InicioLocal.ToString("HH:mm");
+            Duracion = (int)(Cita.FinLocal - Cita.InicioLocal).TotalMinutes;
+            Canal = Cita.Canal;
+            Observaciones = Cita.Observaciones;
+        }
+        else
+        {
+            var activos = Catalogos.Usuarios.Where(x => x.Estatus).ToList();
+
+            if (Sugerencia != null)
+            {
+                Fecha = Sugerencia.Fecha;
+                HoraTexto = Sugerencia.Hora.ToString(@"hh\:mm");
+                UsuarioTexto = Sugerencia.UsuarioId?.ToString() ?? "";
+            }
+            else
+            {
+                Fecha = AgendaFechas.Ahora.Date;
+            }
+
+            if (UsuarioTexto == "" && activos.Count == 1)
+                UsuarioTexto = activos[0].Id.ToString();
+
+            var servicios = ServiciosDisponibles.ToList();
+
+            if (servicios.Count == 1)
+            {
+                ServicioTexto = servicios[0].Id.ToString();
+                Duracion = servicios[0].DuracionMinutos;
+            }
+        }
+
+        await CargarDisponibilidadAsync();
+    }
+
+    private void ElegirPaciente(Modelos.Pacientes.PacienteDto paciente)
+    {
+        PacienteElegido = paciente;
+        BusquedaPaciente = "";
+        ErrorPaciente = null;
+    }
+
+    private void QuitarPaciente()
+    {
+        PacienteElegido = null;
+    }
+
+    private Task ServicioCambiadoAsync()
+    {
+        ErrorServicio = null;
+
+        if (int.TryParse(ServicioTexto, out var id) &&
+            Catalogos.Servicios.FirstOrDefault(x => x.Id == id) is { DuracionMinutos: > 0 } servicio)
+        {
+            Duracion = servicio.DuracionMinutos;
+        }
+
+        return CargarDisponibilidadAsync();
+    }
+
+    private async Task CargarDisponibilidadAsync()
+    {
+        ErrorFecha = null;
+        ErrorHuecos = null;
+
+        if (!Fecha.HasValue)
+        {
+            Huecos = new();
+            return;
+        }
+
+        var consulta = ++Consulta;
+        var dia = Fecha.Value.Date;
+
+        CargandoHuecos = true;
+
+        try
+        {
+            var citas = await Api.CitasEntreAsync(dia, dia.AddDays(1));
+
+            if (consulta == Consulta)
+                Huecos = AgendaReglas.HuecosLibres(dia, Duracion, UsuarioId, Catalogos, citas, Cita?.Id);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            if (consulta == Consulta)
+            {
+                Huecos = new();
+                ErrorHuecos = "No se pudieron calcular los horarios libres. Aun así puedes escribir la hora.";
+            }
+        }
+        finally
+        {
+            if (consulta == Consulta)
+                CargandoHuecos = false;
+        }
+    }
+
+    private bool Validar()
+    {
+        ErrorPaciente = PacienteElegido == null && Cita == null ? "Selecciona un paciente." : null;
+        ErrorServicio = int.TryParse(ServicioTexto, out _) ? null : "Selecciona un servicio.";
+        ErrorFecha = Fecha.HasValue ? null : "Selecciona una fecha.";
+        ErrorHora = Hora.HasValue ? null : "Selecciona una hora.";
+        ErrorMotivo = CambiaHorario && string.IsNullOrWhiteSpace(MotivoCambio) ? "Indica el motivo." : null;
+        Error = null;
+
+        if (Duracion <= 0)
+            Error = "La duración debe ser mayor a cero.";
+        else if (InicioElegido.HasValue && InicioElegido.Value.Date != InicioElegido.Value.AddMinutes(Duracion).Date)
+            Error = "La cita debe terminar el mismo día.";
+
+        return ErrorPaciente == null && ErrorServicio == null && ErrorFecha == null &&
+               ErrorHora == null && ErrorMotivo == null && Error == null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Guardando || !Validar())
+            return;
+
+        var inicio = InicioElegido!.Value;
+
+        var dto = new CitaGuardarDto
+        {
+            PacienteId = Cita?.PacienteId ?? PacienteElegido!.Id,
+            ServicioId = int.Parse(ServicioTexto),
+            UsuarioId = UsuarioId,
+            FechaInicio = AgendaFechas.AUtc(inicio),
+            FechaFin = AgendaFechas.AUtc(inicio.AddMinutes(Duracion)),
+            Canal = Canal,
+            Observaciones = string.IsNullOrWhiteSpace(Observaciones) ? null : Observaciones.Trim(),
+            Version = Cita?.Version,
+            MotivoCambio = CambiaHorario ? MotivoCambio?.Trim() : null
+        };
+
+        Guardando = true;
+
+        try
+        {
+            if (Cita == null)
+            {
+                await Guardado.InvokeAsync(await Api.CrearCitaAsync(dto));
+            }
+            else
+            {
+                await Api.ActualizarCitaAsync(Cita.Id, dto);
+                await Guardado.InvokeAsync(Cita);
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+            await CargarDisponibilidadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La operación tardó demasiado. Revisa la agenda antes de intentarlo de nuevo.";
+        }
+        finally
+        {
+            Guardando = false;
+        }
+    }
+}

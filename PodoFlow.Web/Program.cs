@@ -45,6 +45,18 @@ builder.Services.AddHttpClient<IPrivacidadApi, PrivacidadApi>(
     .AddHttpMessageHandler<TokenDesarrolloHandler>();
 
 
+// SERVICIO DE AGENDA Y CITAS
+
+
+builder.Services.AddHttpClient<IAgendaApi, AgendaApi>(
+    client =>
+    {
+        client.BaseAddress = new Uri(apiBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(30);
+    })
+    .AddHttpMessageHandler<TokenDesarrolloHandler>();
+
+
 // COMPONENTES BLAZOR
 
 
