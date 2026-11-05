@@ -2459,3 +2459,240 @@ html, body {
         padding: 16px;
     }
 }
+
+/* ==========================================
+   PODOFLOW - EVOLUCIONES CLINICAS
+   ========================================== */
+
+.pf-evo {
+    margin: 0 16px 18px;
+    padding: 16px 18px;
+    border-top: 1px solid var(--pf-border);
+    background: #fbfcff;
+    border-radius: 0 0 12px 12px;
+}
+
+.pf-evo-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+
+    .pf-evo-header h5 {
+        margin: 0 0 4px;
+        font-size: 14px;
+        font-weight: 750;
+        color: var(--pf-text);
+    }
+
+    .pf-evo-header p {
+        margin: 0;
+        font-size: 12px;
+        color: var(--pf-text-soft);
+    }
+
+.pf-evo-editor {
+    margin: 14px 0;
+    padding: 16px;
+    border: 1px solid #dce6f4;
+    background: white;
+    border-radius: 12px;
+}
+
+    .pf-evo-editor textarea.pf-field {
+        height: auto;
+        min-height: 100px;
+        resize: vertical;
+    }
+
+.pf-evo-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.pf-evo-empty {
+    padding: 18px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--pf-text-soft);
+    background: white;
+    border: 1px dashed #dce6f4;
+    border-radius: 10px;
+}
+
+.pf-evo-list {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.pf-evo-item {
+    padding: 13px 15px;
+    border: 1px solid var(--pf-border);
+    border-left: 3px solid var(--pf-blue);
+    border-radius: 10px;
+    background: white;
+}
+
+.pf-evo-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+    .pf-evo-item-header strong {
+        color: var(--pf-text);
+        font-size: 12px;
+    }
+
+    .pf-evo-item-header time {
+        color: var(--pf-text-soft);
+        font-size: 11px;
+    }
+
+.pf-evo-item p {
+    margin: 0 0 7px;
+    color: var(--pf-text);
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.pf-evo-item small {
+    color: var(--pf-text-soft);
+    font-size: 11px;
+}
+
+.pf-evo-pagination {
+    margin-top: 14px;
+}
+
+@media (max-width: 650px) {
+    .pf-evo {
+        margin: 0 10px 12px;
+        padding: 14px;
+    }
+
+    .pf-evo-editor {
+        padding: 13px;
+    }
+
+    .pf-evo-actions {
+        justify-content: stretch;
+    }
+
+        .pf-evo-actions button {
+            flex: 1;
+        }
+}
+
+/* ==========================================
+   EVOLUCIONES - EDICION Y CAMBIO DE ESTADO
+   ========================================== */
+
+.pf-evo-filter {
+    margin: 0 0 14px;
+}
+
+.pf-evo-item-title {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+    .pf-evo-item-title .pf-status {
+        padding: 5px 9px;
+        font-size: 10px;
+    }
+
+.pf-evo-item-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.pf-evo-item-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+    .pf-evo-item-actions .pf-contact-action {
+        padding: 7px 11px;
+        font-size: 11px;
+    }
+
+.pf-evo-danger-action {
+    background: #fff4f0;
+    border-color: #f9d6cb;
+    color: #c25e42;
+}
+
+    .pf-evo-danger-action:hover {
+        background: #ffe9e0;
+    }
+
+.pf-evo-item.is-inactive {
+    border-left-color: #b5bfce;
+    background: #fafbfc;
+}
+
+    .pf-evo-item.is-inactive > p {
+        color: var(--pf-text-soft);
+    }
+
+.pf-evo-confirm {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 12px 14px;
+    margin-top: 12px;
+    background: #fff8eb;
+    border: 1px solid #f7dfb8;
+    border-radius: 10px;
+}
+
+    .pf-evo-confirm > span {
+        font-size: 12px;
+        font-weight: 600;
+        color: #865b24;
+    }
+
+    .pf-evo-confirm .pf-evo-actions {
+        margin: 0;
+    }
+
+.pf-evo-item textarea.pf-field {
+    height: auto;
+    min-height: 90px;
+    resize: vertical;
+}
+
+@media (max-width: 650px) {
+    .pf-evo-item-footer {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .pf-evo-confirm {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
