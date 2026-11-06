@@ -1,0 +1,30 @@
+﻿.boton-derecha {
+    margin-left: auto;
+}
+
+.detalle {
+    display: block;
+    margin-top: 2px;
+}
+
+.vigente {
+    margin: 0 0 12px;
+}
+
+.ruta {
+    overflow-wrap: anywhere;
+}
+
+.huella {
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+    .acciones button {
+        white-space: nowrap;
+    }

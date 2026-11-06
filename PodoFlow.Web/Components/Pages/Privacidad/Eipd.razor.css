@@ -1,0 +1,63 @@
+﻿.boton-derecha {
+    margin-left: auto;
+}
+
+.filtro {
+    width: auto;
+    min-width: 200px;
+}
+
+.detalle {
+    display: block;
+    margin-top: 2px;
+}
+
+.recorte {
+    display: -webkit-box;
+    max-width: 48ch;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+    .acciones button {
+        white-space: nowrap;
+    }
+
+.seleccionado {
+    background: var(--pf-blue-soft);
+}
+
+.bloque {
+    margin-top: 18px;
+}
+
+.herramientas {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    margin-top: 18px;
+}
+
+.subtitulo {
+    margin: 0 0 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--pf-text-strong);
+}
+
+.copiables {
+    display: grid;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.ayuda {
+    display: block;
+    margin-top: 8px;
+}

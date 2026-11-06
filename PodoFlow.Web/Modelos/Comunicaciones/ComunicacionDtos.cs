@@ -100,6 +100,9 @@ namespace PodoFlow.Web.Modelos.Comunicaciones
 
             if (Canal == CanalesComunicacion.WhatsApp)
             {
+                if (!VariablesPlantilla.TiposWhatsApp.Contains(Tipo.Trim().ToUpperInvariant()))
+                    return $"Por WhatsApp solo se envían mensajes operativos: {string.Join(", ", VariablesPlantilla.TiposWhatsApp)}.";
+
                 if (Contenido.Trim().Length > VariablesPlantilla.MaximoWhatsApp)
                     return $"El contenido para WhatsApp no puede pasar de {VariablesPlantilla.MaximoWhatsApp} caracteres.";
 
@@ -115,7 +118,9 @@ namespace PodoFlow.Web.Modelos.Comunicaciones
     {
         public const int MaximoWhatsApp = 4096;
 
-        public static readonly string[] TiposSugeridos = ["RECORDATORIO_CITA", "CONFIRMACION_CITA", "FIDELIZACION"];
+        public static readonly string[] TiposSugeridos = ["RECORDATORIO_CITA", "CONFIRMACION_CITA", "AVISO_ADMINISTRATIVO", "FIDELIZACION"];
+
+        public static readonly string[] TiposWhatsApp = ["RECORDATORIO_CITA", "CONFIRMACION_CITA", "AVISO_ADMINISTRATIVO"];
 
         public static readonly (string Nombre, string Ejemplo)[] Valores =
         [
@@ -157,5 +162,114 @@ namespace PodoFlow.Web.Modelos.Comunicaciones
 
             return int.TryParse(mayor, out var numero) ? $"{numero + 1}.0" : "";
         }
+    }
+
+    public static class EstadosNotificacion
+    {
+        public const string Pendiente = "PENDIENTE";
+        public const string Procesando = "PROCESANDO";
+        public const string Enviada = "ENVIADA";
+        public const string Error = "ERROR";
+        public const string Cancelada = "CANCELADA";
+
+        public static readonly (string Codigo, string Nombre, string Clase)[] Todos =
+        [
+            (Pendiente, "Pendiente", "pf-status info"),
+            (Procesando, "Enviando", "pf-status warning"),
+            (Enviada, "Enviada", "pf-status success"),
+            (Error, "Error", "pf-status danger"),
+            (Cancelada, "Cancelada", "pf-status")
+        ];
+
+        public static string NombreDe(string estado) =>
+            Todos.FirstOrDefault(e => e.Codigo == estado).Nombre ?? estado;
+
+        public static string ClaseDe(string estado) =>
+            Todos.FirstOrDefault(e => e.Codigo == estado).Clase ?? "pf-status";
+    }
+
+    public class NotificacionDto
+    {
+        public long Id { get; set; }
+
+        public long PacienteId { get; set; }
+
+        public long? CitaId { get; set; }
+
+        public int PlantillaId { get; set; }
+
+        public long? OpcionId { get; set; }
+
+        public long? UsuarioId { get; set; }
+
+        public string Tipo { get; set; } = "";
+
+        public string Canal { get; set; } = "";
+
+        public DateTime FechaProgramada { get; set; }
+
+        public string Estado { get; set; } = "";
+
+        public DateTime FechaCreacion { get; set; }
+
+        public string Version { get; set; } = "";
+
+        public bool SePuedeCancelar => Estado is EstadosNotificacion.Pendiente or EstadosNotificacion.Error;
+
+        public bool SePuedeReintentar => Estado == EstadosNotificacion.Error;
+    }
+
+    public class EnvioDto
+    {
+        public long Id { get; set; }
+
+        public long NotificacionId { get; set; }
+
+        public int NumeroIntento { get; set; }
+
+        public DateTime FechaHora { get; set; }
+
+        public string Resultado { get; set; } = "";
+
+        public string? IdProveedor { get; set; }
+
+        public string? CodigoError { get; set; }
+
+        public string? DetalleError { get; set; }
+    }
+
+    public class NotificacionGuardarDto
+    {
+        public long OpcionId { get; set; }
+
+        public int PlantillaId { get; set; }
+
+        public long? CitaId { get; set; }
+
+        public DateTime FechaLocal { get; set; }
+
+        public string? Validar(DateTime ahoraLocal, DateTime? inicioCitaLocal)
+        {
+            if (OpcionId <= 0)
+                return "Elige el canal por el que el paciente autorizó recibir mensajes.";
+
+            if (PlantillaId <= 0)
+                return "Elige la plantilla del mensaje.";
+
+            if (FechaLocal < ahoraLocal.AddMinutes(-1))
+                return "La fecha de envío no puede estar en el pasado.";
+
+            if (inicioCitaLocal.HasValue && FechaLocal >= inicioCitaLocal.Value)
+                return "El mensaje tiene que salir antes de la cita.";
+
+            return null;
+        }
+    }
+
+    public class ResultadoRecordatoriosDto
+    {
+        public int Programadas { get; set; }
+
+        public int Omitidas { get; set; }
     }
 }

@@ -32,7 +32,6 @@
         gap: 6px;
     }
 
-/* Los botones de la tabla se ven igual que los enlaces de Solicitudes. */
 .boton-tabla {
     border: 0;
     cursor: pointer;

@@ -1,0 +1,22 @@
+<nav class="pf-profile-tabs" aria-label="Secciones de seguridad">
+    @foreach (var (codigo, ruta, texto) in Secciones)
+    {
+        <a href="@ruta"
+           class="@(Activa == codigo ? "active" : "")"
+           aria-current="@(Activa == codigo ? "page" : null)">
+            @texto
+        </a>
+    }
+</nav>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Activa { get; set; } = "";
+
+    private static readonly (string Codigo, string Ruta, string Texto)[] Secciones =
+    [
+        ("usuarios", "/seguridad/usuarios", "Usuarios"),
+        ("roles", "/seguridad/roles", "Roles y permisos"),
+        ("permisos", "/seguridad/permisos", "Catálogo de permisos")
+    ];
+}

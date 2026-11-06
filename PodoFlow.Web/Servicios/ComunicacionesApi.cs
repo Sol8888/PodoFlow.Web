@@ -11,10 +11,14 @@ namespace PodoFlow.Web.Servicios
         private const int MaximoLotes = 20;
 
         private readonly HttpClient _http;
+        private readonly long? _usuarioId;
 
-        public ComunicacionesApi(HttpClient http)
+        public ComunicacionesApi(HttpClient http, IConfiguration configuration)
         {
             _http = http;
+            _usuarioId = long.TryParse(configuration["AutenticacionDesarrollo:UsuarioId"], out var id) && id > 0
+                ? id
+                : null;
         }
 
         public async Task<List<OpcionComunicacionDto>> OpcionesAsync(long pacienteId)
@@ -76,6 +80,51 @@ namespace PodoFlow.Web.Servicios
         public Task ReactivarPlantillaAsync(int id)
         {
             return EnviarAsync(HttpMethod.Patch, $"api/Plantilla/{id}/reactivar", null);
+        }
+
+        public async Task<List<NotificacionDto>> NotificacionesAsync(long? pacienteId, string? estado, int pagina, int tamano)
+        {
+            var ruta = $"api/Notificacion?pagina={pagina}&tamano={tamano}";
+
+            if (pacienteId.HasValue)
+                ruta += $"&pacienteId={pacienteId.Value}";
+
+            if (!string.IsNullOrWhiteSpace(estado))
+                ruta += $"&estado={Uri.EscapeDataString(estado)}";
+
+            return await LeerAsync<List<NotificacionDto>>(ruta) ?? [];
+        }
+
+        public async Task<List<EnvioDto>> EnviosAsync(long notificacionId)
+        {
+            return await LeerAsync<List<EnvioDto>>($"api/Notificacion/{notificacionId}/envios") ?? [];
+        }
+
+        public Task CrearNotificacionAsync(NotificacionGuardarDto dto)
+        {
+            var datos = new
+            {
+                dto.OpcionId,
+                dto.PlantillaId,
+                dto.CitaId,
+                UsuarioId = _usuarioId,
+                FechaProgramada = PrivacidadApi.UtcDesdeEcuador(dto.FechaLocal)
+            };
+
+            return EnviarAsync(HttpMethod.Post, "api/Notificacion", datos);
+        }
+
+        public Task CambiarEstadoNotificacionAsync(long id, string estado, string version)
+        {
+            return EnviarAsync(HttpMethod.Patch, $"api/Notificacion/{id}/estado", new { Estado = estado, Version = version });
+        }
+
+        public async Task<ResultadoRecordatoriosDto> ProgramarRecordatoriosAsync(int horasAntes)
+        {
+            using var respuesta = await _http.PostAsync($"api/Notificacion/recordatorios?horasAntes={horasAntes}", null);
+            await ValidarAsync(respuesta);
+
+            return await respuesta.Content.ReadFromJsonAsync<ResultadoRecordatoriosDto>() ?? new ResultadoRecordatoriosDto();
         }
 
         private static object DatosPlantilla(PlantillaGuardarDto dto)

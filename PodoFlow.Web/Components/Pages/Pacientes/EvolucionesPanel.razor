@@ -1,0 +1,870 @@
+﻿@using System.ComponentModel.DataAnnotations
+@using PodoFlow.Web.Modelos.Evoluciones
+@using PodoFlow.Web.Servicios
+
+@inject IPacientesApi Api
+@inject ILogger<EvolucionesPanel> Logger
+
+<section class="pf-evo">
+
+    <!-- ENCABEZADO -->
+    <div class="pf-evo-header">
+
+        <div>
+            <h5>Evoluciones clínicas</h5>
+            <p>Notas de seguimiento de esta atención.</p>
+        </div>
+
+        <div class="pf-clinic-actions">
+
+            @if (PuedeEditar && !MostrarFormulario && !EditandoId.HasValue)
+            {
+                <button type="button"
+                        class="pf-btn pf-btn-main"
+                        disabled="@Ocupado"
+                        @onclick="AbrirFormulario">
+                    + Nueva evolución
+                </button>
+            }
+
+        </div>
+
+    </div>
+
+    <!-- MENSAJES -->
+    @if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <div class="pf-detail-error" role="alert">
+            @Error
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Mensaje))
+    {
+        <div class="pf-contact-success" role="status">
+            @Mensaje
+        </div>
+    }
+
+    <!-- FORMULARIO NUEVA EVOLUCIÓN -->
+    @if (MostrarFormulario && PuedeEditar)
+    {
+        <div class="pf-evo-editor">
+
+            <EditForm @key="Formulario"
+                      Model="@Formulario"
+                      OnValidSubmit="GuardarAsync"
+                      FormName="crear-evolucion">
+
+                <DataAnnotationsValidator />
+
+                <div class="pf-form-group">
+
+                    <label for="descripcionNuevaEvolucion">
+                        Nueva nota de evolución *
+                    </label>
+
+                    <InputTextArea id="descripcionNuevaEvolucion"
+                                   class="pf-field"
+                                   rows="3"
+                                   maxlength="3000"
+                                   placeholder="Describe los cambios observados en el paciente..."
+                                   disabled="@Ocupado"
+                                   @bind-Value="Formulario.Descripcion" />
+
+                    <ValidationMessage For="@(() => Formulario.Descripcion)" />
+
+                </div>
+
+                <p class="pf-detail-muted">
+                    Profesional responsable: #@UsuarioId
+                </p>
+
+                <div class="pf-evo-actions">
+
+                    <button type="button"
+                            class="pf-btn pf-btn-neutral"
+                            disabled="@Ocupado"
+                            @onclick="CancelarFormulario">
+                        Cancelar
+                    </button>
+
+                    <button type="submit"
+                            class="pf-btn pf-btn-main"
+                            disabled="@Ocupado">
+                        @(Guardando
+                            ? "Guardando..."
+                            : "Guardar evolución")
+                    </button>
+
+                </div>
+
+            </EditForm>
+
+        </div>
+    }
+
+    <!-- FILTRO DE EVOLUCIONES -->
+    <div class="pf-evo-filter">
+
+        <label class="pf-checkbox">
+
+            <input type="checkbox"
+                   disabled="@Ocupado"
+                   @bind="IncluirInactivos"
+                   @bind:after="CambiarFiltroAsync" />
+
+            Mostrar evoluciones inactivas
+
+        </label>
+
+    </div>
+
+    <!-- LISTADO -->
+    @if (Cargando)
+    {
+        <div class="pf-evo-empty" role="status">
+            Cargando evoluciones...
+        </div>
+    }
+    else if (Evoluciones.Count == 0)
+    {
+        <div class="pf-evo-empty">
+
+            @if (Error is null)
+            {
+                <span>
+                    @(IncluirInactivos
+                        ? "No existen evoluciones registradas para esta atención."
+                        : "Todavía no hay evoluciones activas registradas.")
+                </span>
+            }
+            else
+            {
+                <span>No se pudo mostrar el listado.</span>
+            }
+
+        </div>
+    }
+    else
+    {
+        <div class="pf-evo-list">
+
+            @foreach (var evolucion in Evoluciones)
+            {
+                <article class="pf-evo-item @(evolucion.Estatus ? "" : "is-inactive")"
+                         @key="evolucion.Id">
+
+                    <!-- DATOS DE LA EVOLUCIÓN -->
+                    <div class="pf-evo-item-header">
+
+                        <div class="pf-evo-item-title">
+
+                            <strong>
+                                Evolución #@evolucion.Id
+                            </strong>
+
+                            @if (!evolucion.Estatus)
+                            {
+                                <span class="pf-status danger">
+                                    Inactiva
+                                </span>
+                            }
+
+                        </div>
+
+                        <time datetime="@evolucion.Fecha.ToString("yyyy-MM-ddTHH:mm:ss")">
+                            @evolucion.Fecha.ToString("dd/MM/yyyy HH:mm")
+                        </time>
+
+                    </div>
+
+                    <!-- FORMULARIO DE EDICIÓN -->
+                    @if (EditandoId == evolucion.Id)
+                    {
+                        <EditForm @key="Edicion"
+                                  Model="@Edicion"
+                                  OnValidSubmit="GuardarEdicionAsync"
+                                  FormName="editar-evolucion">
+
+                            <DataAnnotationsValidator />
+
+                            <div class="pf-form-group">
+
+                                <label for="editarDescripcionEvolucion">
+                                    Editar descripción
+                                </label>
+
+                                <InputTextArea id="editarDescripcionEvolucion"
+                                               class="pf-field"
+                                               rows="3"
+                                               maxlength="3000"
+                                               disabled="@Ocupado"
+                                               @bind-Value="Edicion.Descripcion" />
+
+                                <ValidationMessage For="@(() => Edicion.Descripcion)" />
+
+                            </div>
+
+                            <div class="pf-evo-actions">
+
+                                <button type="button"
+                                        class="pf-btn pf-btn-neutral"
+                                        disabled="@Ocupado"
+                                        @onclick="CancelarEdicion">
+                                    Cancelar
+                                </button>
+
+                                <button type="submit"
+                                        class="pf-btn pf-btn-main"
+                                        disabled="@Ocupado">
+                                    @(Guardando
+                                        ? "Guardando..."
+                                        : "Guardar cambios")
+                                </button>
+
+                            </div>
+
+                        </EditForm>
+                    }
+                    else
+                    {
+                        <!-- DESCRIPCIÓN -->
+                        <p>@evolucion.Descripcion</p>
+
+                        <!-- PIE DE LA EVOLUCIÓN -->
+                        <div class="pf-evo-item-footer">
+
+                            <small>
+                                Profesional #@evolucion.UsuarioId
+                            </small>
+
+                            @if (PuedeEditar)
+                            {
+                                <div class="pf-evo-item-actions">
+
+                                    @if (evolucion.Estatus)
+                                    {
+                                        <button type="button"
+                                                class="pf-contact-action"
+                                                disabled="@Ocupado"
+                                                @onclick="() => Editar(evolucion)">
+                                            Editar
+                                        </button>
+                                    }
+
+                                    <button type="button"
+                                            class="pf-contact-action @(evolucion.Estatus ? "pf-evo-danger-action" : "")"
+                                            disabled="@Ocupado"
+                                            @onclick="() => SolicitarCambioEstado(evolucion)">
+                                        @(evolucion.Estatus
+                                            ? "Desactivar"
+                                            : "Reactivar")
+                                    </button>
+
+                                </div>
+                            }
+
+                        </div>
+                    }
+
+                    <!-- CONFIRMACIÓN DE CAMBIO DE ESTADO -->
+                    @if (ConfirmacionId == evolucion.Id)
+                    {
+                        <div class="pf-evo-confirm">
+
+                            <span>
+                                ¿Confirmas que deseas
+                                @(evolucion.Estatus
+                                    ? "desactivar"
+                                    : "reactivar")
+                                esta evolución?
+                            </span>
+
+                            <div class="pf-evo-actions">
+
+                                <button type="button"
+                                        class="pf-btn pf-btn-neutral"
+                                        disabled="@Ocupado"
+                                        @onclick="CancelarConfirmacion">
+                                    Cancelar
+                                </button>
+
+                                <button type="button"
+                                        class="pf-btn pf-btn-main"
+                                        disabled="@Ocupado"
+                                        @onclick="ConfirmarCambioEstadoAsync">
+                                    @(Guardando
+                                        ? "Procesando..."
+                                        : "Confirmar")
+                                </button>
+
+                            </div>
+
+                        </div>
+                    }
+
+                </article>
+            }
+
+        </div>
+    }
+
+    <!-- PAGINACIÓN -->
+    @if (Pagina > 1 || HaySiguiente)
+    {
+        <div class="pf-pagination pf-evo-pagination">
+
+            <button type="button"
+                    disabled="@(Pagina <= 1 || Ocupado)"
+                    @onclick="AnteriorAsync">
+                Anterior
+            </button>
+
+            <span>Página @Pagina</span>
+
+            <button type="button"
+                    disabled="@(!HaySiguiente || Ocupado)"
+                    @onclick="SiguienteAsync">
+                Siguiente
+            </button>
+
+        </div>
+    }
+
+</section>
+
+@code {
+
+    // ========================================
+    // PARÁMETROS
+    // ========================================
+
+    [Parameter, EditorRequired]
+    public long AtencionId { get; set; }
+
+    [Parameter, EditorRequired]
+    public long UsuarioId { get; set; }
+
+    [Parameter]
+    public bool PuedeEditar { get; set; }
+
+
+    // ========================================
+    // MODELO DE EDICIÓN
+    // ========================================
+
+    private sealed class EvolucionEditarDto
+    {
+        [Required(
+            ErrorMessage = "Escribe la evolución clínica.")]
+        [StringLength(
+            3000,
+            ErrorMessage = "Máximo 3000 caracteres.")]
+        public string Descripcion { get; set; } = "";
+    }
+
+
+    // ========================================
+    // VARIABLES
+    // ========================================
+
+    private const int Tamano = 10;
+
+    private long? AtencionCargada;
+
+    private List<EvolucionDto> Evoluciones = new();
+
+    private EvolucionCrearDto Formulario = new();
+
+    private EvolucionEditarDto Edicion = new();
+
+    private bool Cargando = true;
+    private bool Guardando;
+    private bool MostrarFormulario;
+    private bool HaySiguiente;
+    private bool IncluirInactivos;
+
+    private long? EditandoId;
+    private long? ConfirmacionId;
+
+    private bool? EstadoOriginalConfirmacion;
+
+    private int Pagina = 1;
+
+    private string? Error;
+    private string? Mensaje;
+
+    private bool Ocupado => Cargando || Guardando;
+
+
+    // ========================================
+    // INICIALIZACIÓN
+    // ========================================
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AtencionCargada == AtencionId)
+            return;
+
+        AtencionCargada = AtencionId;
+
+        Pagina = 1;
+        IncluirInactivos = false;
+
+        MostrarFormulario = false;
+        EditandoId = null;
+
+        ConfirmacionId = null;
+        EstadoOriginalConfirmacion = null;
+
+        Formulario = new();
+        Edicion = new();
+
+        Evoluciones.Clear();
+
+        Error = null;
+        Mensaje = null;
+
+        await CargarAsync();
+    }
+
+
+    // ========================================
+    // CONSULTAR EVOLUCIONES
+    // ========================================
+
+    private async Task CargarAsync()
+    {
+        if (AtencionId <= 0)
+            return;
+
+        Cargando = true;
+        Error = null;
+
+        try
+        {
+            Evoluciones = await Api.ListarEvolucionesAsync(
+                AtencionId,
+                Pagina,
+                Tamano,
+                IncluirInactivos);
+
+            HaySiguiente = Evoluciones.Count == Tamano;
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+
+            Evoluciones.Clear();
+            HaySiguiente = false;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Error consultando evoluciones de la atención {AtencionId}",
+                AtencionId);
+
+            Error = "No se pudieron cargar las evoluciones.";
+
+            Evoluciones.Clear();
+            HaySiguiente = false;
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+
+    // ========================================
+    // ACTUALIZAR LISTADO
+    // ========================================
+
+    private async Task ActualizarAsync()
+    {
+        if (Ocupado)
+            return;
+
+        Mensaje = null;
+
+        await CargarAsync();
+    }
+
+
+    // ========================================
+    // NUEVA EVOLUCIÓN
+    // ========================================
+
+    private void AbrirFormulario()
+    {
+        if (!PuedeEditar || Ocupado)
+            return;
+
+        EditandoId = null;
+        Edicion = new();
+
+        ConfirmacionId = null;
+        EstadoOriginalConfirmacion = null;
+
+        Formulario = new EvolucionCrearDto
+        {
+            UsuarioId = UsuarioId
+        };
+
+        MostrarFormulario = true;
+
+        Error = null;
+        Mensaje = null;
+    }
+
+    private void CancelarFormulario()
+    {
+        if (Ocupado)
+            return;
+
+        MostrarFormulario = false;
+        Formulario = new();
+
+        Error = null;
+    }
+
+
+    // ========================================
+    // GUARDAR NUEVA EVOLUCIÓN
+    // ========================================
+
+    private async Task GuardarAsync()
+    {
+        if (!PuedeEditar || Ocupado || !MostrarFormulario)
+            return;
+
+        if (string.IsNullOrWhiteSpace(Formulario.Descripcion))
+        {
+            Error = "Escribe la evolución clínica.";
+            return;
+        }
+
+        Guardando = true;
+
+        Error = null;
+        Mensaje = null;
+
+        try
+        {
+            await Api.CrearEvolucionAsync(
+                AtencionId,
+                Formulario);
+
+            MostrarFormulario = false;
+            Formulario = new();
+
+            Pagina = 1;
+
+            await CargarAsync();
+
+            if (Error is null)
+            {
+                Mensaje =
+                    "Evolución registrada correctamente.";
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (ArgumentException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Error guardando evolución en atención {AtencionId}",
+                AtencionId);
+
+            Error =
+                "No se pudo confirmar el guardado. " +
+                "Revisa el historial antes de reintentar.";
+        }
+        finally
+        {
+            Guardando = false;
+        }
+    }
+
+
+    // ========================================
+    // EDITAR EVOLUCIÓN
+    // ========================================
+
+    private void Editar(EvolucionDto evolucion)
+    {
+        if (!PuedeEditar ||
+            Ocupado ||
+            !evolucion.Estatus)
+        {
+            return;
+        }
+
+        MostrarFormulario = false;
+        Formulario = new();
+
+        ConfirmacionId = null;
+        EstadoOriginalConfirmacion = null;
+
+        EditandoId = evolucion.Id;
+
+        Edicion = new EvolucionEditarDto
+        {
+            Descripcion = evolucion.Descripcion
+        };
+
+        Error = null;
+        Mensaje = null;
+    }
+
+    private void CancelarEdicion()
+    {
+        if (Ocupado)
+            return;
+
+        EditandoId = null;
+        Edicion = new();
+
+        Error = null;
+    }
+
+
+    // ========================================
+    // GUARDAR EDICIÓN
+    // ========================================
+
+    private async Task GuardarEdicionAsync()
+    {
+        if (!PuedeEditar ||
+            Ocupado ||
+            !EditandoId.HasValue)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Edicion.Descripcion))
+        {
+            Error = "La descripción no puede estar vacía.";
+            return;
+        }
+
+        long id = EditandoId.Value;
+
+        Guardando = true;
+
+        Error = null;
+        Mensaje = null;
+
+        try
+        {
+            await Api.ActualizarEvolucionAsync(
+                id,
+                Edicion.Descripcion);
+
+            EditandoId = null;
+            Edicion = new();
+
+            await CargarAsync();
+
+            if (Error is null)
+            {
+                Mensaje =
+                    "Evolución actualizada correctamente.";
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (ArgumentException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Error actualizando evolución {EvolucionId}",
+                id);
+
+            Error =
+                "No se pudo confirmar la actualización. " +
+                "Actualiza el historial antes de reintentar.";
+        }
+        finally
+        {
+            Guardando = false;
+        }
+    }
+
+
+    // ========================================
+    // SOLICITAR CAMBIO DE ESTADO
+    // ========================================
+
+    private void SolicitarCambioEstado(
+        EvolucionDto evolucion)
+    {
+        if (!PuedeEditar || Ocupado)
+            return;
+
+        MostrarFormulario = false;
+        Formulario = new();
+
+        EditandoId = null;
+        Edicion = new();
+
+        ConfirmacionId = evolucion.Id;
+
+        EstadoOriginalConfirmacion = evolucion.Estatus;
+
+        Error = null;
+        Mensaje = null;
+    }
+
+    private void CancelarConfirmacion()
+    {
+        if (Ocupado)
+            return;
+
+        ConfirmacionId = null;
+
+        EstadoOriginalConfirmacion = null;
+    }
+
+
+    // ========================================
+    // CONFIRMAR DESACTIVACIÓN / REACTIVACIÓN
+    // ========================================
+
+    private async Task ConfirmarCambioEstadoAsync()
+    {
+        if (!PuedeEditar ||
+            Ocupado ||
+            !ConfirmacionId.HasValue ||
+            !EstadoOriginalConfirmacion.HasValue)
+        {
+            return;
+        }
+
+        long id = ConfirmacionId.Value;
+
+        bool estabaActiva =
+            EstadoOriginalConfirmacion.Value;
+
+        Guardando = true;
+
+        Error = null;
+        Mensaje = null;
+
+        try
+        {
+            if (estabaActiva)
+            {
+                await Api.DesactivarEvolucionAsync(id);
+            }
+            else
+            {
+                await Api.ReactivarEvolucionAsync(id);
+            }
+
+            ConfirmacionId = null;
+
+            EstadoOriginalConfirmacion = null;
+
+            await CargarAsync();
+
+            if (Error is null)
+            {
+                Mensaje = estabaActiva
+                    ? "Evolución desactivada correctamente."
+                    : "Evolución reactivada correctamente.";
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Error cambiando estado de evolución {EvolucionId}",
+                id);
+
+            Error =
+                "No se pudo cambiar el estado. " +
+                "Actualiza el historial antes de reintentar.";
+        }
+        finally
+        {
+            Guardando = false;
+        }
+    }
+
+
+    // ========================================
+    // FILTRO DE INACTIVAS
+    // ========================================
+
+    private async Task CambiarFiltroAsync()
+    {
+        if (Ocupado)
+            return;
+
+        EditandoId = null;
+        Edicion = new();
+
+        ConfirmacionId = null;
+        EstadoOriginalConfirmacion = null;
+
+        Pagina = 1;
+
+        Mensaje = null;
+
+        await CargarAsync();
+    }
+
+
+    // ========================================
+    // PAGINACIÓN
+    // ========================================
+
+    private async Task AnteriorAsync()
+    {
+        if (Ocupado || Pagina <= 1)
+            return;
+
+        Pagina--;
+
+        await CargarAsync();
+    }
+
+    private async Task SiguienteAsync()
+    {
+        if (Ocupado || !HaySiguiente)
+            return;
+
+        Pagina++;
+
+        await CargarAsync();
+
+        if (Error is null && Evoluciones.Count == 0)
+        {
+            Pagina--;
+
+            await CargarAsync();
+
+            HaySiguiente = false;
+        }
+    }
+}

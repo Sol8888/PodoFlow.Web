@@ -1,0 +1,27 @@
+﻿.secciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 16px;
+}
+
+    .secciones a {
+        padding: 6px 12px;
+        border: 1px solid var(--pf-border);
+        border-radius: 999px;
+        background: var(--pf-surface, #fff);
+        color: var(--pf-text-soft);
+        font-size: 12px;
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+        .secciones a:hover {
+            color: var(--pf-navy);
+        }
+
+        .secciones a.active {
+            border-color: var(--pf-blue-line);
+            background: var(--pf-blue-soft);
+            color: var(--pf-blue);
+        }

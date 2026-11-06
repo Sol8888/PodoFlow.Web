@@ -19,5 +19,15 @@ namespace PodoFlow.Web.Servicios
         Task DesactivarPlantillaAsync(int id);
 
         Task ReactivarPlantillaAsync(int id);
+
+        Task<List<NotificacionDto>> NotificacionesAsync(long? pacienteId, string? estado, int pagina, int tamano);
+
+        Task<List<EnvioDto>> EnviosAsync(long notificacionId);
+
+        Task CrearNotificacionAsync(NotificacionGuardarDto dto);
+
+        Task CambiarEstadoNotificacionAsync(long id, string estado, string version);
+
+        Task<ResultadoRecordatoriosDto> ProgramarRecordatoriosAsync(int horasAntes);
     }
 }

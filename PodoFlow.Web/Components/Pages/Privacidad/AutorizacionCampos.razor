@@ -128,8 +128,7 @@
         if (!Modelo.EsRepresentante)
             return true;
 
-        if (string.IsNullOrWhiteSpace(Modelo.NombreRepresentante))
-            ErrorNombre = "Ingresa el nombre del representante.";
+        ErrorNombre = Modelo.ErrorNombre();
 
         if (string.IsNullOrWhiteSpace(Modelo.RelacionRepresentante))
             ErrorRelacion = "Selecciona la relación con el paciente.";

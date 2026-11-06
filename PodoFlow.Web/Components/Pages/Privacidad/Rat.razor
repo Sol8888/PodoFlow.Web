@@ -1,0 +1,702 @@
+﻿@page "/privacidad/rat"
+@rendermode InteractiveServer
+
+@inject IPrivacidadApi Api
+
+<PageTitle>Registro de tratamientos | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">PRIVACIDAD Y LOPDP</span>
+            <h1>Registro de actividades de tratamiento</h1>
+            <p>Qué datos trata el centro, para qué, con qué base legal, cuánto tiempo se guardan y quién más los trata.</p>
+        </div>
+    </div>
+
+    <PrivacidadPestanas Activa="rat" />
+    <RatPestanas Activa="tratamientos" />
+
+    @if (Mensaje != null)
+    {
+        <div class="pf-contact-success" role="status">@Mensaje</div>
+    }
+
+    @if (Error != null)
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+
+    <div class="pf-module-toolbar">
+        <label class="pf-checkbox">
+            <input type="checkbox" @bind="MostrarInactivos" />
+            Mostrar inactivos
+        </label>
+
+        <button type="button" class="pf-btn pf-btn-main boton-derecha" disabled="@(Procesando || Cargando)" @onclick="Nuevo">
+            Nuevo tratamiento
+        </button>
+    </div>
+
+    @if (Formulario != null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>@(EditandoId == null ? "Nuevo tratamiento" : $"Editar: {Formulario.Codigo}")</h2>
+
+            @if (EditandoId == null)
+            {
+                <p class="pf-detail-muted">Si el código pertenece a un tratamiento dado de baja, ese tratamiento se reactiva con estos datos.</p>
+            }
+
+            <div class="pf-patient-form-grid">
+                <div class="pf-form-group">
+                    <label for="tratamiento-codigo">Código *</label>
+                    <input id="tratamiento-codigo" class="pf-field" maxlength="50" placeholder="HISTORIA_CLINICA"
+                           disabled="@(EditandoId != null)"
+                           @bind="Formulario.Codigo" />
+                    <small class="pf-detail-muted">
+                        @(EditandoId == null ? "Identifica el tratamiento. Después no se puede cambiar." : "El código no se cambia.")
+                    </small>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="tratamiento-nombre">Nombre *</label>
+                    <input id="tratamiento-nombre" class="pf-field" maxlength="200" @bind="Formulario.Nombre" />
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="tratamiento-finalidad">Finalidad *</label>
+                    <select id="tratamiento-finalidad" class="pf-field" @bind="Formulario.FinalidadId">
+                        <option value="0">Selecciona una finalidad</option>
+                        @foreach (var finalidad in FinalidadesElegibles)
+                        {
+                            <option value="@finalidad.Id">@finalidad.Nombre@(finalidad.Estatus ? "" : " (inactiva)")</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="tratamiento-modulo">Módulo del sistema *</label>
+                    <input id="tratamiento-modulo" class="pf-field" maxlength="80" list="tratamiento-modulos" placeholder="CLINICA" @bind="Formulario.Modulo" />
+                    <datalist id="tratamiento-modulos">
+                        @foreach (var modulo in Modulos)
+                        {
+                            <option value="@modulo"></option>
+                        }
+                    </datalist>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="tratamiento-titulares">Titulares de los datos</label>
+                    <input id="tratamiento-titulares" class="pf-field" maxlength="500" placeholder="Pacientes, representantes" @bind="Formulario.CategoriasTitulares" />
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="tratamiento-revision">Próxima revisión</label>
+                    <input id="tratamiento-revision" type="date" class="pf-field" @bind="Formulario.FechaRevision" />
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="tratamiento-base">Base de legitimación</label>
+                    <textarea id="tratamiento-base" class="pf-field" rows="2" maxlength="1000" placeholder="Consentimiento, ejecución del servicio de salud, obligación legal..." @bind="Formulario.BaseLegitimacion"></textarea>
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="tratamiento-plazo">Plazo de conservación</label>
+                    <input id="tratamiento-plazo" class="pf-field" maxlength="500" placeholder="15 años desde la última atención" @bind="Formulario.PlazoConservacion" />
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="tratamiento-medidas">Medidas de seguridad</label>
+                    <textarea id="tratamiento-medidas" class="pf-field" rows="2" maxlength="2000" @bind="Formulario.MedidasSeguridad"></textarea>
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="tratamiento-descripcion">Descripción</label>
+                    <textarea id="tratamiento-descripcion" class="pf-field" rows="2" maxlength="2000" @bind="Formulario.Descripcion"></textarea>
+                </div>
+            </div>
+
+            @if (ErrorFormulario != null)
+            {
+                <div class="pf-detail-error" role="alert">@ErrorFormulario</div>
+            }
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" @onclick="CerrarFormulario">Cancelar</button>
+
+                <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="GuardarAsync">
+                    @(Procesando ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </section>
+    }
+
+    <section class="pf-card pf-directory">
+        <div class="pf-card-header">
+            <div>
+                <h2>Tratamientos registrados</h2>
+                <p>Selecciona uno para ver su ficha y asignarle categorías de datos y encargados.</p>
+            </div>
+
+            <span class="pf-soft-chip">@(Visibles.Count() == 1 ? "1 visible" : $"{Visibles.Count()} visibles")</span>
+        </div>
+
+        @if (Cargando)
+        {
+            <div class="pf-empty" role="status">Cargando tratamientos...</div>
+        }
+        else if (!Visibles.Any())
+        {
+            <div class="pf-empty">No hay tratamientos@(MostrarInactivos ? "" : " activos").</div>
+        }
+        else
+        {
+            <div class="pf-table-wrap">
+                <table class="pf-table">
+                    <thead>
+                        <tr>
+                            <th>Tratamiento</th>
+                            <th>Finalidad</th>
+                            <th>Módulo</th>
+                            <th>Revisión</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var tratamiento in Visibles)
+                        {
+                            <tr @key="tratamiento.Id" class="@(Seleccionado?.Id == tratamiento.Id ? "seleccionado" : "")">
+                                <td>
+                                    <strong>@tratamiento.Nombre</strong>
+                                    <small class="pf-detail-muted detalle"><code>@tratamiento.Codigo</code></small>
+                                </td>
+                                <td>@NombreFinalidad(tratamiento.FinalidadId)</td>
+                                <td>@tratamiento.Modulo</td>
+                                <td>
+                                    @if (!tratamiento.FechaRevision.HasValue)
+                                    {
+                                        <span class="pf-detail-muted">Sin fecha</span>
+                                    }
+                                    else if (tratamiento.Estatus && tratamiento.FechaRevision.Value < Hoy)
+                                    {
+                                        <span class="pf-status warning">Vencida @tratamiento.FechaRevision.Value.ToString("dd/MM/yyyy")</span>
+                                    }
+                                    else
+                                    {
+                                        @tratamiento.FechaRevision.Value.ToString("dd/MM/yyyy")
+                                    }
+                                </td>
+                                <td>
+                                    <span class="@(tratamiento.Estatus ? "pf-mini-chip" : "pf-mini-chip warning")">
+                                        @(tratamiento.Estatus ? "Activo" : "Inactivo")
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="acciones">
+                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => SeleccionarAsync(tratamiento)">
+                                            @(Seleccionado?.Id == tratamiento.Id ? "Ocultar" : "Ver ficha")
+                                        </button>
+
+                                        @if (tratamiento.Estatus)
+                                        {
+                                            <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => Editar(tratamiento)">Editar</button>
+                                        }
+
+                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => CambiarEstatusAsync(tratamiento)">
+                                            @(tratamiento.Estatus ? "Dar de baja" : "Reactivar")
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    @if (Seleccionado != null)
+    {
+        <div class="pf-detail-grid ficha">
+            <section class="pf-card pf-info-card">
+                <h2>@Seleccionado.Nombre</h2>
+
+                <div class="pf-data-row">
+                    <span>Finalidad</span>
+                    <strong>@NombreFinalidad(Seleccionado.FinalidadId)</strong>
+                </div>
+
+                <div class="pf-data-row">
+                    <span>Titulares</span>
+                    <strong>@(Seleccionado.CategoriasTitulares ?? "Sin registrar")</strong>
+                </div>
+
+                <div class="pf-data-row">
+                    <span>Base de legitimación</span>
+                    <strong>@(Seleccionado.BaseLegitimacion ?? "Sin registrar")</strong>
+                </div>
+
+                <div class="pf-data-row">
+                    <span>Plazo de conservación</span>
+                    <strong>@(Seleccionado.PlazoConservacion ?? "Sin registrar")</strong>
+                </div>
+
+                <div class="pf-data-row">
+                    <span>Medidas de seguridad</span>
+                    <strong>@(Seleccionado.MedidasSeguridad ?? "Sin registrar")</strong>
+                </div>
+
+                <div class="pf-data-row">
+                    <span>Descripción</span>
+                    <strong>@(Seleccionado.Descripcion ?? "Sin descripción")</strong>
+                </div>
+            </section>
+
+            <section class="pf-card pf-info-card">
+                <h2>Categorías y encargados</h2>
+
+                @if (!Seleccionado.Estatus)
+                {
+                    <p class="pf-detail-muted">El tratamiento está dado de baja: reactívalo para cambiar sus asignaciones.</p>
+                }
+
+                @if (ErrorAsignacion != null)
+                {
+                    <div class="pf-detail-error" role="alert">@ErrorAsignacion</div>
+                }
+
+                @if (CargandoAsignaciones)
+                {
+                    <div class="pf-empty" role="status">Cargando asignaciones...</div>
+                }
+                else
+                {
+                    <h3 class="subtitulo">Categorías de datos</h3>
+
+                    @if (!CategoriasAsignadas.Any())
+                    {
+                        <p class="pf-detail-muted">Todavía no tiene categorías de datos.</p>
+                    }
+                    else
+                    {
+                        <ul class="asignaciones">
+                            @foreach (var asignacion in CategoriasAsignadas)
+                            {
+                                var categoria = Categorias.FirstOrDefault(c => c.Id == asignacion.CategoriaId);
+
+                                <li @key="asignacion.CategoriaId">
+                                    <span>
+                                        <strong>@(categoria?.Nombre ?? $"Categoría {asignacion.CategoriaId}")</strong>
+                                        @if (categoria?.EsSensible == true)
+                                        {
+                                            <span class="pf-status danger">Sensible</span>
+                                        }
+                                        @if (categoria?.Estatus == false)
+                                        {
+                                            <span class="pf-mini-chip warning">Inactiva</span>
+                                        }
+                                    </span>
+
+                                    @if (Seleccionado.Estatus)
+                                    {
+                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => QuitarCategoriaAsync(asignacion.CategoriaId)">Quitar</button>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+
+                    @if (Seleccionado.Estatus)
+                    {
+                        <div class="agregar">
+                            <select class="pf-field" aria-label="Categoría a asignar" @bind="CategoriaNueva">
+                                <option value="0">Agregar categoría...</option>
+                                @foreach (var categoria in CategoriasDisponibles)
+                                {
+                                    <option value="@categoria.Id">@categoria.Nombre@(categoria.EsSensible ? " (sensible)" : "")</option>
+                                }
+                            </select>
+
+                            <button type="button" class="pf-btn pf-btn-main" disabled="@(Procesando || CategoriaNueva == 0)" @onclick="AsignarCategoriaAsync">Asignar</button>
+                        </div>
+                    }
+
+                    <h3 class="subtitulo">Encargados</h3>
+
+                    @if (!EncargadosAsignados.Any())
+                    {
+                        <p class="pf-detail-muted">Ningún tercero trata estos datos.</p>
+                    }
+                    else
+                    {
+                        <ul class="asignaciones">
+                            @foreach (var asignacion in EncargadosAsignados)
+                            {
+                                var encargado = Encargados.FirstOrDefault(e => e.Id == asignacion.EncargadoId);
+
+                                <li @key="asignacion.EncargadoId">
+                                    <span>
+                                        <strong>@(encargado?.Nombre ?? $"Encargado {asignacion.EncargadoId}")</strong>
+                                        @if (encargado != null)
+                                        {
+                                            <small class="pf-detail-muted"> · @encargado.Servicio</small>
+                                        }
+                                        @if (encargado?.Estatus == false)
+                                        {
+                                            <span class="pf-mini-chip warning">Inactivo</span>
+                                        }
+                                    </span>
+
+                                    @if (Seleccionado.Estatus)
+                                    {
+                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => QuitarEncargadoAsync(asignacion.EncargadoId)">Quitar</button>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+
+                    @if (Seleccionado.Estatus)
+                    {
+                        <div class="agregar">
+                            <select class="pf-field" aria-label="Encargado a asignar" @bind="EncargadoNuevo">
+                                <option value="0">Agregar encargado...</option>
+                                @foreach (var encargado in EncargadosDisponibles)
+                                {
+                                    <option value="@encargado.Id">@encargado.Nombre · @encargado.Servicio</option>
+                                }
+                            </select>
+
+                            <button type="button" class="pf-btn pf-btn-main" disabled="@(Procesando || EncargadoNuevo == 0)" @onclick="AsignarEncargadoAsync">Asignar</button>
+                        </div>
+                    }
+                }
+            </section>
+        </div>
+    }
+
+</div>
+
+@code {
+    private static readonly string[] Modulos =
+        ["CLINICA", "AGENDA", "PACIENTES", "PAGOS", "COMUNICACIONES", "PRIVACIDAD", "INVENTARIO", "GENERAL"];
+
+    private List<TratamientoDto> Lista = new();
+    private List<FinalidadDto> Finalidades = new();
+    private List<CategoriaDatoDto> Categorias = new();
+    private List<EncargadoDto> Encargados = new();
+
+    private TratamientoGuardarDto? Formulario;
+    private int? EditandoId;
+    private bool MostrarInactivos;
+
+    private TratamientoDto? Seleccionado;
+    private List<TratamientoCategoriaDto> CategoriasAsignadas = new();
+    private List<TratamientoEncargadoDto> EncargadosAsignados = new();
+    private int CategoriaNueva;
+    private int EncargadoNuevo;
+    private bool CargandoAsignaciones;
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private string? Mensaje;
+    private string? Error;
+    private string? ErrorFormulario;
+    private string? ErrorAsignacion;
+
+    private static DateOnly Hoy => PrivacidadApi.HoyEcuador();
+
+    private IEnumerable<TratamientoDto> Visibles => Lista
+        .Where(t => MostrarInactivos || t.Estatus)
+        .OrderByDescending(t => t.Estatus)
+        .ThenBy(t => t.Nombre);
+
+    private IEnumerable<FinalidadDto> FinalidadesElegibles => Finalidades
+        .Where(f => f.Estatus || f.Id == Formulario?.FinalidadId)
+        .OrderBy(f => f.Nombre);
+
+    private IEnumerable<CategoriaDatoDto> CategoriasDisponibles => Categorias
+        .Where(c => c.Estatus && CategoriasAsignadas.All(a => a.CategoriaId != c.Id))
+        .OrderBy(c => c.Nombre);
+
+    private IEnumerable<EncargadoDto> EncargadosDisponibles => Encargados
+        .Where(e => e.Estatus && EncargadosAsignados.All(a => a.EncargadoId != e.Id))
+        .OrderBy(e => e.Nombre)
+        .ThenBy(e => e.Servicio);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var finalidades = Api.ListarFinalidadesAsync();
+            var categorias = Api.ListarCategoriasDatoAsync();
+            var encargados = Api.ListarEncargadosAsync();
+
+            Finalidades = await finalidades;
+            Categorias = await categorias;
+            Encargados = await encargados;
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La API tardó demasiado en responder. Recarga la página.";
+        }
+
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        Cargando = true;
+
+        try
+        {
+            Lista = await Api.ListarTratamientosAsync();
+
+            if (Seleccionado != null)
+                Seleccionado = Lista.FirstOrDefault(t => t.Id == Seleccionado.Id);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La API tardó demasiado en responder. Recarga la página.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private string NombreFinalidad(int id)
+    {
+        var finalidad = Finalidades.FirstOrDefault(f => f.Id == id);
+
+        if (finalidad == null)
+            return $"Finalidad {id}";
+
+        return finalidad.Estatus ? finalidad.Nombre : $"{finalidad.Nombre} (inactiva)";
+    }
+
+    private void Nuevo()
+    {
+        AbrirFormulario(new TratamientoGuardarDto(), null);
+    }
+
+    private void Editar(TratamientoDto tratamiento)
+    {
+        AbrirFormulario(TratamientoGuardarDto.Desde(tratamiento), tratamiento.Id);
+    }
+
+    private void AbrirFormulario(TratamientoGuardarDto formulario, int? id)
+    {
+        Formulario = formulario;
+        EditandoId = id;
+        ErrorFormulario = null;
+        Mensaje = null;
+        Error = null;
+    }
+
+    private void CerrarFormulario()
+    {
+        Formulario = null;
+        EditandoId = null;
+        ErrorFormulario = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando || Formulario == null)
+            return;
+
+        ErrorFormulario = Formulario.Validar(EditandoId == null);
+
+        if (ErrorFormulario == null && Finalidades.Any(f => f.Id == Formulario.FinalidadId && !f.Estatus))
+            ErrorFormulario = "La finalidad elegida está dada de baja. Elige una finalidad activa.";
+
+        if (ErrorFormulario != null)
+            return;
+
+        Procesando = true;
+
+        try
+        {
+            var nombre = Formulario.Nombre.Trim();
+            var editado = EditandoId.HasValue;
+
+            if (EditandoId.HasValue)
+                await Api.ActualizarTratamientoAsync(EditandoId.Value, Formulario);
+            else
+                await Api.CrearTratamientoAsync(Formulario);
+
+            CerrarFormulario();
+            Error = null;
+            await CargarAsync();
+            Mensaje = editado ? $"Tratamiento «{nombre}» actualizado." : $"Tratamiento «{nombre}» registrado.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorFormulario = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorFormulario = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorFormulario = "La operación tardó demasiado. Recarga la página para ver si se guardó.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private async Task CambiarEstatusAsync(TratamientoDto tratamiento)
+    {
+        if (Procesando)
+            return;
+
+        Procesando = true;
+        Mensaje = null;
+        Error = null;
+
+        try
+        {
+            await Api.CambiarEstatusTratamientoAsync(tratamiento.Id, !tratamiento.Estatus);
+
+            if (EditandoId == tratamiento.Id)
+                CerrarFormulario();
+
+            await CargarAsync();
+            Mensaje = tratamiento.Estatus
+                ? $"Tratamiento «{tratamiento.Nombre}» dado de baja.{(MostrarInactivos ? "" : " Marca «Mostrar inactivos» para verlo.")}"
+                : $"Tratamiento «{tratamiento.Nombre}» reactivado.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La operación tardó demasiado. Recarga la página para ver su estado.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private async Task SeleccionarAsync(TratamientoDto tratamiento)
+    {
+        if (Seleccionado?.Id == tratamiento.Id)
+        {
+            Seleccionado = null;
+            return;
+        }
+
+        Seleccionado = tratamiento;
+        ErrorAsignacion = null;
+        await CargarAsignacionesAsync();
+    }
+
+    private async Task CargarAsignacionesAsync()
+    {
+        if (Seleccionado == null)
+            return;
+
+        CargandoAsignaciones = true;
+        CategoriaNueva = 0;
+        EncargadoNuevo = 0;
+
+        try
+        {
+            var categorias = Api.CategoriasDeTratamientoAsync(Seleccionado.Id);
+            var encargados = Api.EncargadosDeTratamientoAsync(Seleccionado.Id);
+
+            CategoriasAsignadas = await categorias;
+            EncargadosAsignados = await encargados;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorAsignacion = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorAsignacion = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorAsignacion = "La API tardó demasiado en responder. Vuelve a abrir la ficha.";
+        }
+        finally
+        {
+            CargandoAsignaciones = false;
+        }
+    }
+
+    private Task AsignarCategoriaAsync() =>
+        CambiarAsignacionAsync(t => Api.AsignarCategoriaAsync(t, CategoriaNueva));
+
+    private Task QuitarCategoriaAsync(int categoriaId) =>
+        CambiarAsignacionAsync(t => Api.QuitarCategoriaAsync(t, categoriaId));
+
+    private Task AsignarEncargadoAsync() =>
+        CambiarAsignacionAsync(t => Api.AsignarEncargadoAsync(t, EncargadoNuevo));
+
+    private Task QuitarEncargadoAsync(int encargadoId) =>
+        CambiarAsignacionAsync(t => Api.QuitarEncargadoAsync(t, encargadoId));
+
+    private async Task CambiarAsignacionAsync(Func<int, Task> operacion)
+    {
+        if (Procesando || Seleccionado == null)
+            return;
+
+        Procesando = true;
+        ErrorAsignacion = null;
+        Mensaje = null;
+
+        try
+        {
+            await operacion(Seleccionado.Id);
+            await CargarAsignacionesAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorAsignacion = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorAsignacion = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorAsignacion = "La operación tardó demasiado. Vuelve a abrir la ficha para ver si se guardó.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}

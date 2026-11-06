@@ -108,7 +108,7 @@
         {
             var finalidades = await Api.ListarFinalidadesAsync();
             var avisos = await Api.ListarAvisosAsync();
-            var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
+            var hoy = PrivacidadApi.HoyEcuador();
 
             Finalidades = finalidades
                 .Where(f => f.Estatus && f.RequiereConsentimiento)
@@ -145,13 +145,10 @@
         return Campos == null || await Campos.ValidarAsync();
     }
 
-    // Devuelve false si algún consentimiento quedó pendiente.
     public async Task<bool> RegistrarAsync(long pacienteId)
     {
         if (ErrorCarga != null || AvisoVigente == null || Cargando)
             return false;
-
-        var observacion = Autorizacion.ComponerObservacion();
 
         try
         {
@@ -164,7 +161,8 @@
                     AvisoId = AvisoVigente.Id,
                     Estado = Aceptadas.Contains(finalidad.Id) ? "ACEPTADO" : "RECHAZADO",
                     Medio = Autorizacion.Medio,
-                    Observacion = observacion
+                    RepresentanteNombre = Autorizacion.NombreParaEnviar,
+                    RepresentanteRelacion = Autorizacion.RelacionParaEnviar
                 });
             }
 

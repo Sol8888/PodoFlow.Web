@@ -1,0 +1,322 @@
+﻿@page "/privacidad/finalidades"
+@rendermode InteractiveServer
+
+@inject IPrivacidadApi Api
+
+<PageTitle>Finalidades | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">PRIVACIDAD Y LOPDP</span>
+            <h1>Finalidades</h1>
+            <p>Para qué se usan los datos de los pacientes y cuáles de esos usos necesitan su consentimiento.</p>
+        </div>
+    </div>
+
+    <PrivacidadPestanas Activa="finalidades" />
+
+    @if (Mensaje != null)
+    {
+        <div class="pf-contact-success" role="status">@Mensaje</div>
+    }
+
+    @if (Error != null)
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+
+    <div class="pf-module-toolbar">
+        <label class="pf-checkbox">
+            <input type="checkbox" @bind="MostrarInactivas" />
+            Mostrar inactivas
+        </label>
+
+        <button type="button" class="pf-btn pf-btn-main boton-derecha" disabled="@Procesando" @onclick="Nueva">
+            Nueva finalidad
+        </button>
+    </div>
+
+    @if (Formulario != null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>@(EditandoId == null ? "Nueva finalidad" : $"Editar: {Formulario.Nombre}")</h2>
+
+            <div class="pf-patient-form-grid">
+                <div class="pf-form-group">
+                    <label for="finalidad-codigo">Código *</label>
+                    <input id="finalidad-codigo" class="pf-field" maxlength="50" placeholder="RECORDATORIOS"
+                           disabled="@(EditandoId != null)"
+                           @bind="Formulario.Codigo" />
+                    <small class="pf-detail-muted">
+                        @(EditandoId == null
+                            ? "Identifica la finalidad en el sistema. Después no se puede cambiar."
+                            : "El código no se cambia: otros módulos lo usan para reconocer la finalidad.")
+                    </small>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="finalidad-nombre">Nombre *</label>
+                    <input id="finalidad-nombre" class="pf-field" maxlength="150" @bind="Formulario.Nombre" />
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="finalidad-descripcion">Descripción</label>
+                    <textarea id="finalidad-descripcion" class="pf-field" rows="3" maxlength="1000" @bind="Formulario.Descripcion"></textarea>
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label class="pf-checkbox">
+                        <input type="checkbox" @bind="Formulario.RequiereConsentimiento" />
+                        Requiere consentimiento del paciente
+                    </label>
+                    <small class="pf-detail-muted">
+                        Márcalo cuando el uso no es necesario para atender al paciente, como recordatorios, fidelización o analítica.
+                        Solo las finalidades marcadas aparecen al registrar consentimientos.
+                    </small>
+                </div>
+            </div>
+
+            @if (ErrorFormulario != null)
+            {
+                <div class="pf-detail-error" role="alert">@ErrorFormulario</div>
+            }
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" @onclick="CerrarFormulario">Cancelar</button>
+
+                <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="GuardarAsync">
+                    @(Procesando ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </section>
+    }
+
+    <section class="pf-card pf-directory">
+        <div class="pf-card-header">
+            <div>
+                <h2>Finalidades registradas</h2>
+                <p>Una finalidad dada de baja deja de ofrecerse, pero sus consentimientos se conservan.</p>
+            </div>
+
+            <span class="pf-soft-chip">@(Visibles.Count() == 1 ? "1 visible" : $"{Visibles.Count()} visibles")</span>
+        </div>
+
+        @if (Cargando)
+        {
+            <div class="pf-empty" role="status">Cargando finalidades...</div>
+        }
+        else if (!Visibles.Any())
+        {
+            <div class="pf-empty">No hay finalidades@(MostrarInactivas ? "" : " activas").</div>
+        }
+        else
+        {
+            <div class="pf-table-wrap">
+                <table class="pf-table">
+                    <thead>
+                        <tr>
+                            <th>Finalidad</th>
+                            <th>Código</th>
+                            <th>Consentimiento</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var finalidad in Visibles)
+                        {
+                            <tr @key="finalidad.Id">
+                                <td>
+                                    <strong>@finalidad.Nombre</strong>
+                                    @if (!string.IsNullOrWhiteSpace(finalidad.Descripcion))
+                                    {
+                                        <small class="pf-detail-muted detalle">@finalidad.Descripcion</small>
+                                    }
+                                </td>
+                                <td><code>@finalidad.Codigo</code></td>
+                                <td>@(finalidad.RequiereConsentimiento ? "Requerido" : "No requerido")</td>
+                                <td>
+                                    <span class="@(finalidad.Estatus ? "pf-mini-chip" : "pf-mini-chip warning")">
+                                        @(finalidad.Estatus ? "Activa" : "Inactiva")
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="acciones">
+                                        @if (finalidad.Estatus)
+                                        {
+                                            <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => Editar(finalidad)">Editar</button>
+                                        }
+
+                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => CambiarEstatusAsync(finalidad)">
+                                            @(finalidad.Estatus ? "Dar de baja" : "Reactivar")
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+</div>
+
+@code {
+    private List<FinalidadDto> Lista = new();
+    private FinalidadGuardarDto? Formulario;
+    private int? EditandoId;
+    private bool MostrarInactivas;
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private string? Mensaje;
+    private string? Error;
+    private string? ErrorFormulario;
+
+    private IEnumerable<FinalidadDto> Visibles => Lista
+        .Where(f => MostrarInactivas || f.Estatus)
+        .OrderByDescending(f => f.Estatus)
+        .ThenBy(f => f.Nombre);
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        Cargando = true;
+
+        try
+        {
+            Lista = await Api.ListarFinalidadesAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La API tardó demasiado en responder. Recarga la página.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private void Nueva()
+    {
+        AbrirFormulario(new FinalidadGuardarDto(), null);
+    }
+
+    private void Editar(FinalidadDto finalidad)
+    {
+        AbrirFormulario(FinalidadGuardarDto.Desde(finalidad), finalidad.Id);
+    }
+
+    private void AbrirFormulario(FinalidadGuardarDto formulario, int? id)
+    {
+        Formulario = formulario;
+        EditandoId = id;
+        ErrorFormulario = null;
+        Mensaje = null;
+        Error = null;
+    }
+
+    private void CerrarFormulario()
+    {
+        Formulario = null;
+        EditandoId = null;
+        ErrorFormulario = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando || Formulario == null)
+            return;
+
+        ErrorFormulario = Formulario.Validar(EditandoId == null);
+
+        if (ErrorFormulario != null)
+            return;
+
+        Procesando = true;
+
+        try
+        {
+            var nombre = Formulario.Nombre.Trim();
+            var editada = EditandoId.HasValue;
+
+            if (EditandoId.HasValue)
+                await Api.ActualizarFinalidadAsync(EditandoId.Value, Formulario);
+            else
+                await Api.CrearFinalidadAsync(Formulario);
+
+            CerrarFormulario();
+            Error = null;
+            await CargarAsync();
+            Mensaje = editada ? $"Finalidad «{nombre}» actualizada." : $"Finalidad «{nombre}» registrada.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorFormulario = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorFormulario = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorFormulario = "La operación tardó demasiado. Recarga la página para ver si se guardó.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private async Task CambiarEstatusAsync(FinalidadDto finalidad)
+    {
+        if (Procesando)
+            return;
+
+        Procesando = true;
+        Mensaje = null;
+        Error = null;
+
+        try
+        {
+            await Api.CambiarEstatusFinalidadAsync(finalidad.Id, !finalidad.Estatus);
+
+            if (EditandoId == finalidad.Id)
+                CerrarFormulario();
+
+            await CargarAsync();
+            Mensaje = finalidad.Estatus
+                ? $"Finalidad «{finalidad.Nombre}» dada de baja.{(MostrarInactivas ? "" : " Marca «Mostrar inactivas» para verla.")}"
+                : $"Finalidad «{finalidad.Nombre}» reactivada.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La operación tardó demasiado. Recarga la página para ver su estado.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}

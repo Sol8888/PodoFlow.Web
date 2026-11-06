@@ -399,7 +399,7 @@
     {
         get
         {
-            var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
+            var hoy = PrivacidadApi.HoyEcuador();
 
             return Avisos
                 .Where(a => a.EsVigente(hoy))
@@ -531,7 +531,6 @@
 
     private (string Estado, string Texto)[] AccionesDe(Fila fila)
     {
-        // Revocar siempre se permite; aceptar exige paciente y finalidad activos y un aviso vigente.
         var puedeAceptar = Paciente is { Estatus: true } && fila.Finalidad.Estatus && AvisoVigente != null;
 
         return fila.Registro?.Estado switch
@@ -607,7 +606,9 @@
                     AvisoId = AvisoVigente!.Id,
                     Estado = estado,
                     Medio = Autorizacion.Medio,
-                    Observacion = Autorizacion.ComponerObservacion(Nota)
+                    Observacion = Nota,
+                    RepresentanteNombre = Autorizacion.NombreParaEnviar,
+                    RepresentanteRelacion = Autorizacion.RelacionParaEnviar
                 });
             }
             else
@@ -619,7 +620,9 @@
                         Estado = estado,
                         Medio = Autorizacion.Medio,
                         AvisoId = estado == "ACEPTADO" ? AvisoVigente!.Id : null,
-                        Observacion = Autorizacion.ComponerObservacion(Nota),
+                        Observacion = Nota,
+                        RepresentanteNombre = Autorizacion.NombreParaEnviar,
+                        RepresentanteRelacion = Autorizacion.RelacionParaEnviar,
                         Version = FilaAccion.Registro.Version
                     });
             }

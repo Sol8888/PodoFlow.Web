@@ -1,0 +1,553 @@
+﻿@page "/privacidad/riesgos"
+@rendermode InteractiveServer
+
+@inject IPrivacidadApi Api
+
+<PageTitle>Riesgos | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">PRIVACIDAD Y LOPDP</span>
+            <h1>Matriz de riesgos</h1>
+            <p>Riesgos de cada tratamiento. El nivel es probabilidad × impacto (1 a 25); el residual es lo que queda después de las medidas.</p>
+        </div>
+    </div>
+
+    <PrivacidadPestanas Activa="riesgos" />
+
+    @if (Mensaje != null)
+    {
+        <div class="pf-contact-success" role="status">@Mensaje</div>
+    }
+
+    @if (Error != null)
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+
+    <div class="pf-module-toolbar">
+        <select class="pf-field filtro" aria-label="Filtrar por tratamiento" @bind="FiltroTratamiento">
+            <option value="0">Todos los tratamientos</option>
+            @foreach (var tratamiento in Tratamientos.OrderBy(t => t.Nombre))
+            {
+                <option value="@tratamiento.Id">@tratamiento.Nombre</option>
+            }
+        </select>
+
+        <select class="pf-field filtro" aria-label="Filtrar por estado" @bind="FiltroEstado">
+            <option value="">Todos los estados</option>
+            @foreach (var estado in RiesgoDto.Transiciones.Keys)
+            {
+                <option value="@estado">@NombreEstado(estado)</option>
+            }
+        </select>
+
+        <button type="button" class="pf-btn pf-btn-main boton-derecha" disabled="@(Procesando || Cargando)" @onclick="Nuevo">
+            Nuevo riesgo
+        </button>
+    </div>
+
+    @if (Formulario != null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>@(EditandoId == null ? "Nuevo riesgo" : $"Editar riesgo #{EditandoId}")</h2>
+
+            <div class="pf-patient-form-grid">
+                <div class="pf-form-group pf-form-full">
+                    <label for="riesgo-tratamiento">Tratamiento *</label>
+                    <select id="riesgo-tratamiento" class="pf-field" disabled="@(EditandoId != null)" @bind="Formulario.TratamientoId">
+                        <option value="0">Selecciona un tratamiento</option>
+                        @foreach (var tratamiento in Tratamientos.Where(t => t.Estatus || t.Id == Formulario.TratamientoId).OrderBy(t => t.Nombre))
+                        {
+                            <option value="@tratamiento.Id">@tratamiento.Nombre (@tratamiento.Codigo)</option>
+                        }
+                    </select>
+                    @if (EditandoId != null)
+                    {
+                        <small class="pf-detail-muted">El tratamiento de un riesgo no se cambia; registra otro riesgo si aplica a otro tratamiento.</small>
+                    }
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="riesgo-descripcion">Descripción del riesgo *</label>
+                    <textarea id="riesgo-descripcion" class="pf-field" rows="2" maxlength="2000" placeholder="Acceso no autorizado a la historia clínica" @bind="Formulario.Descripcion"></textarea>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="riesgo-probabilidad">Probabilidad *</label>
+                    <select id="riesgo-probabilidad" class="pf-field" @bind="Formulario.Probabilidad">
+                        @foreach (var (valor, texto) in EscalaProbabilidad)
+                        {
+                            <option value="@valor">@valor · @texto</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="riesgo-impacto">Impacto *</label>
+                    <select id="riesgo-impacto" class="pf-field" @bind="Formulario.Impacto">
+                        @foreach (var (valor, texto) in EscalaImpacto)
+                        {
+                            <option value="@valor">@valor · @texto</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="pf-form-group">
+                    <span class="etiqueta">Nivel resultante</span>
+                    <span class="nivel-calculado">
+                        <span class="@RiesgoDto.ClaseNivel(Formulario.Nivel)">@Formulario.Nivel · @RiesgoDto.Clasificacion(Formulario.Nivel)</span>
+                    </span>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="riesgo-residual">Riesgo residual</label>
+                    <input id="riesgo-residual" type="number" min="1" max="@Formulario.Nivel" class="pf-field" @bind="Formulario.RiesgoResidual" />
+                    <small class="pf-detail-muted">De 1 a @Formulario.Nivel. Déjalo vacío si aún no hay medidas.</small>
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="riesgo-medidas">Medidas de mitigación</label>
+                    <textarea id="riesgo-medidas" class="pf-field" rows="2" maxlength="2000" @bind="Formulario.MedidasMitigacion"></textarea>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="riesgo-revision">Próxima revisión</label>
+                    <input id="riesgo-revision" type="date" class="pf-field" @bind="Formulario.FechaRevision" />
+                </div>
+            </div>
+
+            @if (ErrorFormulario != null)
+            {
+                <div class="pf-detail-error" role="alert">@ErrorFormulario</div>
+            }
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" @onclick="CerrarFormulario">Cancelar</button>
+
+                <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="GuardarAsync">
+                    @(Procesando ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </section>
+    }
+
+    @if (Cambio != null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>@TituloCambio(Cambio.Estado) · riesgo #@Cambio.Riesgo.Id</h2>
+            <p class="pf-detail-muted">@AyudaCambio(Cambio.Estado)</p>
+
+            @if (Cambio.Estado is "MITIGADO" or "ACEPTADO")
+            {
+                <div class="pf-patient-form-grid">
+                    <div class="pf-form-group pf-form-full">
+                        <label for="cambio-medidas">Medidas de mitigación@(Cambio.Estado == "MITIGADO" ? " *" : "")</label>
+                        <textarea id="cambio-medidas" class="pf-field" rows="2" maxlength="2000" @bind="Cambio.MedidasMitigacion"></textarea>
+                    </div>
+
+                    <div class="pf-form-group">
+                        <label for="cambio-residual">Riesgo residual@(Cambio.Estado == "MITIGADO" ? " *" : "")</label>
+                        <input id="cambio-residual" type="number" min="1" max="@Cambio.Riesgo.Nivel" class="pf-field" @bind="Cambio.RiesgoResidual" />
+                        <small class="pf-detail-muted">De 1 a @Cambio.Riesgo.Nivel.</small>
+                    </div>
+                </div>
+            }
+
+            @if (ErrorCambio != null)
+            {
+                <div class="pf-detail-error" role="alert">@ErrorCambio</div>
+            }
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" @onclick="() => Cambio = null">Cancelar</button>
+
+                <button type="button"
+                        class="@(Cambio.Estado == "CERRADO" ? "pf-btn pf-btn-danger-confirm" : "pf-btn pf-btn-main")"
+                        disabled="@Procesando"
+                        @onclick="ConfirmarCambioAsync">
+                    @(Procesando ? "Guardando..." : "Confirmar")
+                </button>
+            </div>
+        </section>
+    }
+
+    <section class="pf-card pf-directory">
+        <div class="pf-card-header">
+            <div>
+                <h2>Riesgos identificados</h2>
+                <p>Ordenados del nivel más alto al más bajo. Un riesgo cerrado ya no se modifica.</p>
+            </div>
+
+            <span class="pf-soft-chip">@(Visibles.Count() == 1 ? "1 visible" : $"{Visibles.Count()} visibles")</span>
+        </div>
+
+        @if (Cargando)
+        {
+            <div class="pf-empty" role="status">Cargando riesgos...</div>
+        }
+        else if (!Visibles.Any())
+        {
+            <div class="pf-empty">No hay riesgos con estos filtros.</div>
+        }
+        else
+        {
+            <div class="pf-table-wrap">
+                <table class="pf-table">
+                    <thead>
+                        <tr>
+                            <th>Riesgo</th>
+                            <th class="sin-corte">P × I</th>
+                            <th>Nivel</th>
+                            <th>Residual</th>
+                            <th>Estado</th>
+                            <th>Revisión</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var riesgo in Visibles)
+                        {
+                            <tr @key="riesgo.Id">
+                                <td class="col-riesgo">
+                                    <strong>@riesgo.Descripcion</strong>
+                                    <small class="pf-detail-muted detalle">#@riesgo.Id · @NombreTratamiento(riesgo.TratamientoId)</small>
+                                    @if (!string.IsNullOrWhiteSpace(riesgo.MedidasMitigacion))
+                                    {
+                                        <small class="pf-detail-muted detalle">Medidas: @riesgo.MedidasMitigacion</small>
+                                    }
+                                </td>
+                                <td class="sin-corte">@riesgo.Probabilidad × @riesgo.Impacto</td>
+                                <td><span class="@RiesgoDto.ClaseNivel(riesgo.Nivel)">@riesgo.Nivel · @RiesgoDto.Clasificacion(riesgo.Nivel)</span></td>
+                                <td>
+                                    @if (riesgo.RiesgoResidual.HasValue)
+                                    {
+                                        <span class="@RiesgoDto.ClaseNivel(riesgo.RiesgoResidual.Value)">@riesgo.RiesgoResidual</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="pf-detail-muted">—</span>
+                                    }
+                                </td>
+                                <td><span class="@ClaseEstado(riesgo.Estado)">@NombreEstado(riesgo.Estado)</span></td>
+                                <td>
+                                    @if (riesgo.FechaRevision.HasValue)
+                                    {
+                                        <span class="@(riesgo.EsEditable && riesgo.FechaRevision.Value < Hoy ? "pf-status warning" : "")">@riesgo.FechaRevision.Value.ToString("dd/MM/yyyy")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="pf-detail-muted">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="acciones">
+                                        @if (riesgo.EsEditable)
+                                        {
+                                            <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => Editar(riesgo)">Editar</button>
+                                        }
+
+                                        @foreach (var estado in riesgo.EstadosSiguientes)
+                                        {
+                                            <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => PrepararCambio(riesgo, estado)">
+                                                @TextoBoton(estado)
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+</div>
+
+@code {
+    private static readonly (byte, string)[] EscalaProbabilidad =
+        [(1, "Muy baja"), (2, "Baja"), (3, "Media"), (4, "Alta"), (5, "Muy alta")];
+
+    private static readonly (byte, string)[] EscalaImpacto =
+        [(1, "Mínimo"), (2, "Menor"), (3, "Moderado"), (4, "Grave"), (5, "Crítico")];
+
+    private List<RiesgoDto> Lista = new();
+    private List<TratamientoDto> Tratamientos = new();
+
+    private RiesgoGuardarDto? Formulario;
+    private long? EditandoId;
+    private CambioEstado? Cambio;
+
+    private int FiltroTratamiento;
+    private string FiltroEstado = "";
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private string? Mensaje;
+    private string? Error;
+    private string? ErrorFormulario;
+    private string? ErrorCambio;
+
+    private static DateOnly Hoy => PrivacidadApi.HoyEcuador();
+
+    private IEnumerable<RiesgoDto> Visibles => Lista
+        .Where(r => FiltroTratamiento == 0 || r.TratamientoId == FiltroTratamiento)
+        .Where(r => FiltroEstado == "" || r.Estado == FiltroEstado)
+        .OrderBy(r => r.Estado == "CERRADO")
+        .ThenByDescending(r => r.Nivel)
+        .ThenBy(r => r.Id);
+
+    private sealed class CambioEstado
+    {
+        public required RiesgoDto Riesgo { get; init; }
+        public required string Estado { get; init; }
+        public string? MedidasMitigacion { get; set; }
+        public byte? RiesgoResidual { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Tratamientos = await Api.ListarTratamientosAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La API tardó demasiado en responder. Recarga la página.";
+        }
+
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        Cargando = true;
+
+        try
+        {
+            Lista = await Api.ListarRiesgosAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La API tardó demasiado en responder. Recarga la página.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private string NombreTratamiento(int id) =>
+        Tratamientos.FirstOrDefault(t => t.Id == id)?.Nombre ?? $"Tratamiento {id}";
+
+    private static string NombreEstado(string estado) => estado switch
+    {
+        "ABIERTO" => "Abierto",
+        "MITIGADO" => "Mitigado",
+        "ACEPTADO" => "Aceptado",
+        "CERRADO" => "Cerrado",
+        _ => estado
+    };
+
+    private static string ClaseEstado(string estado) => estado switch
+    {
+        "ABIERTO" => "pf-status danger",
+        "MITIGADO" => "pf-status success",
+        "ACEPTADO" => "pf-status warning",
+        _ => "pf-status info"
+    };
+
+    private static string TextoBoton(string estado) => estado switch
+    {
+        "ABIERTO" => "Reabrir",
+        "MITIGADO" => "Marcar mitigado",
+        "ACEPTADO" => "Aceptar",
+        "CERRADO" => "Cerrar",
+        _ => estado
+    };
+
+    private static string TituloCambio(string estado) => estado switch
+    {
+        "ABIERTO" => "Reabrir el riesgo",
+        "MITIGADO" => "Marcar como mitigado",
+        "ACEPTADO" => "Aceptar el riesgo",
+        "CERRADO" => "Cerrar el riesgo",
+        _ => estado
+    };
+
+    private static string AyudaCambio(string estado) => estado switch
+    {
+        "MITIGADO" => "Indica las medidas aplicadas y el riesgo residual que queda.",
+        "ACEPTADO" => "El centro asume el riesgo tal como está. Puedes actualizar las medidas y el residual.",
+        "CERRADO" => "El riesgo dejará de aplicar y ya no se podrá modificar ni reabrir.",
+        _ => "El riesgo vuelve a quedar abierto para tratarlo."
+    };
+
+    private void Nuevo()
+    {
+        AbrirFormulario(new RiesgoGuardarDto { TratamientoId = FiltroTratamiento }, null);
+    }
+
+    private void Editar(RiesgoDto riesgo)
+    {
+        AbrirFormulario(RiesgoGuardarDto.Desde(riesgo), riesgo.Id);
+    }
+
+    private void AbrirFormulario(RiesgoGuardarDto formulario, long? id)
+    {
+        Formulario = formulario;
+        EditandoId = id;
+        Cambio = null;
+        ErrorFormulario = null;
+        Mensaje = null;
+        Error = null;
+    }
+
+    private void CerrarFormulario()
+    {
+        Formulario = null;
+        EditandoId = null;
+        ErrorFormulario = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando || Formulario == null)
+            return;
+
+        ErrorFormulario = Formulario.Validar(EditandoId == null);
+
+        if (ErrorFormulario != null)
+            return;
+
+        Procesando = true;
+
+        try
+        {
+            var editado = EditandoId;
+
+            if (EditandoId.HasValue)
+                await Api.ActualizarRiesgoAsync(EditandoId.Value, Formulario);
+            else
+                await Api.CrearRiesgoAsync(Formulario);
+
+            CerrarFormulario();
+            Error = null;
+            await CargarAsync();
+            Mensaje = editado.HasValue ? $"Riesgo #{editado} actualizado." : "Riesgo registrado como ABIERTO.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorFormulario = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorFormulario = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorFormulario = "La operación tardó demasiado. Recarga la página para ver si se guardó.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private void PrepararCambio(RiesgoDto riesgo, string estado)
+    {
+        CerrarFormulario();
+        Mensaje = null;
+        Error = null;
+        ErrorCambio = null;
+        Cambio = new CambioEstado
+        {
+            Riesgo = riesgo,
+            Estado = estado,
+            MedidasMitigacion = riesgo.MedidasMitigacion,
+            RiesgoResidual = riesgo.RiesgoResidual
+        };
+    }
+
+    private async Task ConfirmarCambioAsync()
+    {
+        if (Procesando || Cambio == null)
+            return;
+
+        ErrorCambio = ValidarCambio(Cambio);
+
+        if (ErrorCambio != null)
+            return;
+
+        Procesando = true;
+
+        try
+        {
+            var conDatos = Cambio.Estado is "MITIGADO" or "ACEPTADO";
+
+            await Api.CambiarEstadoRiesgoAsync(
+                Cambio.Riesgo.Id,
+                Cambio.Estado,
+                conDatos ? Cambio.MedidasMitigacion : null,
+                conDatos ? Cambio.RiesgoResidual : null);
+
+            var texto = $"Riesgo #{Cambio.Riesgo.Id}: {NombreEstado(Cambio.Riesgo.Estado)} → {NombreEstado(Cambio.Estado)}.";
+            Cambio = null;
+            await CargarAsync();
+            Mensaje = texto;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorCambio = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorCambio = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorCambio = "La operación tardó demasiado. Recarga la página para ver su estado.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private static string? ValidarCambio(CambioEstado cambio)
+    {
+        if (cambio.MedidasMitigacion?.Trim().Length > 2000)
+            return "Las medidas no pueden pasar de 2000 caracteres.";
+
+        if (cambio.RiesgoResidual.HasValue && (cambio.RiesgoResidual.Value < 1 || cambio.RiesgoResidual.Value > cambio.Riesgo.Nivel))
+            return $"El riesgo residual va de 1 al nivel del riesgo ({cambio.Riesgo.Nivel}).";
+
+        if (cambio.Estado == "MITIGADO" && string.IsNullOrWhiteSpace(cambio.MedidasMitigacion))
+            return "Para marcarlo como mitigado indica las medidas aplicadas.";
+
+        if (cambio.Estado == "MITIGADO" && !cambio.RiesgoResidual.HasValue)
+            return "Para marcarlo como mitigado indica el riesgo residual.";
+
+        return null;
+    }
+}

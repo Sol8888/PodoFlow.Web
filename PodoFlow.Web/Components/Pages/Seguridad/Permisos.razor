@@ -1,0 +1,311 @@
+@page "/seguridad/permisos"
+@rendermode InteractiveServer
+
+@using PodoFlow.Web.Modelos.Seguridad
+
+@inject ISeguridadApi Api
+
+<PageTitle>Catálogo de permisos | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">SEGURIDAD</span>
+            <h1>Catálogo de permisos</h1>
+            <p>Los códigos deben coincidir con los que exige la API; cambiarlos deja sin efecto las políticas.</p>
+        </div>
+
+        <button type="button" class="pf-btn pf-btn-main" disabled="@(Cargando || Procesando)" @onclick="Nuevo">
+            + Nuevo permiso
+        </button>
+    </div>
+
+    <SeguridadPestanas Activa="permisos" />
+
+    @if (Cargando)
+    {
+        <div class="pf-empty">Cargando permisos...</div>
+    }
+    else
+    {
+        <div class="pf-module-toolbar">
+            <label class="pf-checkbox">
+                <input type="checkbox" @bind="IncluirInactivos" />
+                Incluir inactivos
+            </label>
+        </div>
+
+        @if (Mensaje != null)
+        {
+            <div class="pf-contact-success" aria-live="polite">@Mensaje</div>
+        }
+
+        @if (Error != null && !FormularioAbierto)
+        {
+            <div class="pf-detail-error" role="alert">@Error</div>
+        }
+
+        @if (FormularioAbierto)
+        {
+            <section class="pf-card pf-info-card">
+                <h2>@(EditandoId == null ? "Nuevo permiso" : "Editar permiso")</h2>
+
+                <form novalidate @onsubmit="GuardarAsync">
+                    <div class="pf-patient-form-grid">
+                        <div class="pf-form-group">
+                            <label for="permiso-codigo">Código *</label>
+                            <input id="permiso-codigo" class="pf-field" maxlength="80" @bind="Codigo" />
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="permiso-nombre">Nombre *</label>
+                            <input id="permiso-nombre" class="pf-field" maxlength="120" @bind="Nombre" />
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="permiso-modulo">Módulo *</label>
+                            <input id="permiso-modulo" class="pf-field" maxlength="80" list="permiso-modulos" @bind="Modulo" />
+                            <datalist id="permiso-modulos">
+                                @foreach (var modulo in Modulos)
+                                {
+                                    <option value="@modulo"></option>
+                                }
+                            </datalist>
+                        </div>
+
+                        <div class="pf-form-group completo">
+                            <label for="permiso-descripcion">Descripción</label>
+                            <textarea id="permiso-descripcion" class="pf-field" rows="2" maxlength="500" @bind="Descripcion"></textarea>
+                        </div>
+                    </div>
+
+                    @if (Error != null)
+                    {
+                        <div class="pf-detail-error" role="alert">@Error</div>
+                    }
+
+                    <div class="pf-form-actions">
+                        <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="CerrarFormulario">Cancelar</button>
+                        <button type="submit" class="pf-btn pf-btn-main" disabled="@Procesando">
+                            @(Procesando ? "Guardando..." : "Guardar permiso")
+                        </button>
+                    </div>
+                </form>
+            </section>
+        }
+
+        <section class="pf-card pf-directory">
+            <div class="pf-card-header">
+                <div>
+                    <h2>Permisos</h2>
+                    <p>Agrupados por módulo.</p>
+                </div>
+
+                <span class="pf-soft-chip">@(Visibles.Count == 1 ? "1 visible" : $"{Visibles.Count} visibles")</span>
+            </div>
+
+            @if (Visibles.Count == 0)
+            {
+                <div class="pf-empty">No hay permisos registrados.</div>
+            }
+            else
+            {
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th>Módulo</th>
+                                <th>Código</th>
+                                <th>Nombre</th>
+                                <th>Descripción</th>
+                                <th>Estado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var permiso in Visibles)
+                            {
+                                <tr @key="permiso.Id">
+                                    <td>@permiso.Modulo</td>
+                                    <td><strong class="nombre">@permiso.Codigo</strong></td>
+                                    <td>@permiso.Nombre</td>
+                                    <td>@(permiso.Descripcion ?? "—")</td>
+                                    <td>
+                                        <span class="pf-status @(permiso.Estatus ? "success" : "")">@(permiso.Estatus ? "Activo" : "Inactivo")</span>
+                                    </td>
+                                    <td>
+                                        <div class="acciones">
+                                            @if (permiso.Estatus)
+                                            {
+                                                <button type="button" class="pf-action-link boton-tabla" disabled="@Procesando" @onclick="() => Editar(permiso)">Editar</button>
+                                                <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => CambiarEstadoAsync(permiso)">Desactivar</button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => CambiarEstadoAsync(permiso)">Reactivar</button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private List<PermisoDto> PermisosLista = [];
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private bool FormularioAbierto;
+    private bool IncluirInactivos;
+    private int? EditandoId;
+    private string Codigo = "";
+    private string Nombre = "";
+    private string Modulo = "";
+    private string? Descripcion;
+    private string? Mensaje;
+    private string? Error;
+
+    private List<PermisoDto> Visibles => PermisosLista
+        .Where(x => IncluirInactivos || x.Estatus)
+        .OrderBy(x => x.Modulo)
+        .ThenBy(x => x.Codigo)
+        .ToList();
+
+    private IEnumerable<string> Modulos => PermisosLista
+        .Select(x => x.Modulo)
+        .Distinct()
+        .OrderBy(x => x);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        Cargando = false;
+    }
+
+    private async Task CargarAsync()
+    {
+        try
+        {
+            PermisosLista = await Api.ListarPermisosAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+    }
+
+    private void Nuevo()
+    {
+        EditandoId = null;
+        Codigo = "";
+        Nombre = "";
+        Modulo = "";
+        Descripcion = null;
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void Editar(PermisoDto permiso)
+    {
+        EditandoId = permiso.Id;
+        Codigo = permiso.Codigo;
+        Nombre = permiso.Nombre;
+        Modulo = permiso.Modulo;
+        Descripcion = permiso.Descripcion;
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void CerrarFormulario()
+    {
+        FormularioAbierto = false;
+        Error = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando)
+            return;
+
+        Error = null;
+        Mensaje = null;
+
+        if (string.IsNullOrWhiteSpace(Codigo) || string.IsNullOrWhiteSpace(Nombre) || string.IsNullOrWhiteSpace(Modulo))
+        {
+            Error = "El código, el nombre y el módulo son obligatorios.";
+            return;
+        }
+
+        var dto = new PermisoGuardarDto
+        {
+            Codigo = Codigo.Trim().ToUpperInvariant(),
+            Nombre = Nombre.Trim(),
+            Modulo = Modulo.Trim().ToUpperInvariant(),
+            Descripcion = string.IsNullOrWhiteSpace(Descripcion) ? null : Descripcion.Trim()
+        };
+
+        await EjecutarAsync(async () =>
+        {
+            if (EditandoId.HasValue)
+                await Api.ActualizarPermisoAsync(EditandoId.Value, dto);
+            else
+                await Api.CrearPermisoAsync(dto);
+
+            FormularioAbierto = false;
+            Mensaje = "Permiso guardado.";
+        });
+    }
+
+    private Task CambiarEstadoAsync(PermisoDto permiso)
+    {
+        Error = null;
+        Mensaje = null;
+
+        return EjecutarAsync(async () =>
+        {
+            if (permiso.Estatus)
+                await Api.DesactivarPermisoAsync(permiso.Id);
+            else
+                await Api.ReactivarPermisoAsync(permiso.Id);
+
+            Mensaje = permiso.Estatus ? "Permiso desactivado." : "Permiso reactivado.";
+        });
+    }
+
+    private async Task EjecutarAsync(Func<Task> accion)
+    {
+        Procesando = true;
+
+        try
+        {
+            await accion();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        finally
+        {
+            await CargarAsync();
+            Procesando = false;
+        }
+    }
+}

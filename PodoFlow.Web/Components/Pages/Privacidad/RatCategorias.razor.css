@@ -1,0 +1,23 @@
+﻿.boton-derecha {
+    margin-left: auto;
+}
+
+.detalle {
+    display: block;
+    margin-top: 2px;
+    max-width: 60ch;
+}
+
+.casilla-formulario {
+    margin-top: 26px;
+}
+
+.acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+    .acciones button {
+        white-space: nowrap;
+    }

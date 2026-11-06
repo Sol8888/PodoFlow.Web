@@ -13,7 +13,6 @@ legend {
     font-weight: 600;
 }
 
-/* Las opciones son tarjetas completas: se conserva el radio nativo para el teclado y los lectores. */
 input[type="radio"] {
     position: absolute;
     width: 1px;
