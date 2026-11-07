@@ -1,0 +1,391 @@
+@page "/inventario/movimientos"
+@rendermode InteractiveServer
+
+@using System.Globalization
+@using PodoFlow.Web.Modelos.Inventario
+@using PodoFlow.Web.Modelos.Seguridad
+
+@inject IInventarioApi Api
+@inject ISeguridadApi Seguridad
+
+<PageTitle>Movimientos de stock | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">INVENTARIO</span>
+            <h1>Movimientos de stock</h1>
+            <p>Cada ingreso, consumo o ajuste queda registrado y no se puede editar.</p>
+        </div>
+
+        <button type="button" class="pf-btn pf-btn-main" disabled="@(Cargando || Procesando)" @onclick="Nuevo">
+            + Registrar movimiento
+        </button>
+    </div>
+
+    <InventarioPestanas Activa="movimientos" />
+
+    @if (Cargando)
+    {
+        <div class="pf-empty">Cargando movimientos...</div>
+    }
+    else
+    {
+        <div class="pf-module-toolbar">
+            <select class="pf-field filtro" aria-label="Filtrar por insumo" value="@(FiltroInsumo?.ToString() ?? "")" @onchange="CambiarFiltroInsumoAsync">
+                <option value="">Todos los insumos</option>
+                @foreach (var insumo in Insumos.OrderBy(x => x.Nombre))
+                {
+                    <option value="@insumo.Id">@insumo.Nombre</option>
+                }
+            </select>
+
+            <select class="pf-field filtro" aria-label="Filtrar por tipo" value="@FiltroTipo" @onchange="CambiarFiltroTipoAsync">
+                <option value="">Todos los tipos</option>
+                @foreach (var tipo in TiposMovimiento.Todos)
+                {
+                    <option value="@tipo.Codigo">@tipo.Texto</option>
+                }
+            </select>
+        </div>
+
+        @if (Mensaje != null)
+        {
+            <div class="pf-contact-success" aria-live="polite">@Mensaje</div>
+        }
+
+        @if (Error != null && !FormularioAbierto)
+        {
+            <div class="pf-detail-error" role="alert">@Error</div>
+        }
+
+        @if (FormularioAbierto)
+        {
+            <section class="pf-card pf-info-card">
+                <h2>Registrar movimiento</h2>
+
+                <form novalidate @onsubmit="GuardarAsync">
+                    <div class="pf-patient-form-grid">
+                        <div class="pf-form-group">
+                            <label for="mov-insumo">Insumo *</label>
+                            <select id="mov-insumo" class="pf-field" @bind="InsumoTexto">
+                                <option value="">Selecciona un insumo</option>
+                                @foreach (var insumo in Insumos.Where(x => x.Estatus).OrderBy(x => x.Nombre))
+                                {
+                                    <option value="@insumo.Id">@insumo.Nombre (@Cantidad(insumo.StockActual) @insumo.Unidad)</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="mov-tipo">Tipo *</label>
+                            <select id="mov-tipo" class="pf-field" @bind="Tipo">
+                                @foreach (var tipo in TiposMovimiento.Todos)
+                                {
+                                    <option value="@tipo.Codigo">@tipo.Texto</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="mov-cantidad">Cantidad *</label>
+                            <input id="mov-cantidad" type="number" min="0.01" step="0.01" class="pf-field" @bind="CantidadMovimiento" />
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="mov-usuario">Responsable *</label>
+                            <select id="mov-usuario" class="pf-field" @bind="UsuarioTexto">
+                                <option value="">Selecciona un responsable</option>
+                                @foreach (var usuario in Usuarios.Where(x => x.Estatus).OrderBy(x => x.Nombre))
+                                {
+                                    <option value="@usuario.Id">@usuario.Nombre</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="mov-atencion">N.º de atención (consumo en consulta)</label>
+                            <input id="mov-atencion" type="number" min="1" step="1" class="pf-field" placeholder="Opcional" @bind="AtencionId" />
+                        </div>
+
+                        <div class="pf-form-group completo">
+                            <label for="mov-motivo">Motivo *</label>
+                            <textarea id="mov-motivo" class="pf-field" rows="2" maxlength="500" @bind="Motivo"></textarea>
+                        </div>
+                    </div>
+
+                    @if (InsumoSeleccionado is { } seleccionado && CantidadMovimiento > 0)
+                    {
+                        <p class="pf-detail-muted">
+                            Stock de @seleccionado.Nombre: @Cantidad(seleccionado.StockActual) → @Cantidad(StockResultante(seleccionado)) @seleccionado.Unidad
+                        </p>
+                    }
+
+                    @if (Error != null)
+                    {
+                        <div class="pf-detail-error" role="alert">@Error</div>
+                    }
+
+                    <div class="pf-form-actions">
+                        <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="CerrarFormulario">Cancelar</button>
+                        <button type="submit" class="pf-btn pf-btn-main" disabled="@Procesando">
+                            @(Procesando ? "Guardando..." : "Registrar")
+                        </button>
+                    </div>
+                </form>
+            </section>
+        }
+
+        <section class="pf-card pf-directory">
+            <div class="pf-card-header">
+                <div>
+                    <h2>Historial</h2>
+                    <p>Del más reciente al más antiguo.</p>
+                </div>
+
+                <span class="pf-soft-chip">@(MovimientosLista.Count == 1 ? "1 movimiento" : $"{MovimientosLista.Count} movimientos")</span>
+            </div>
+
+            @if (MovimientosLista.Count == 0)
+            {
+                <div class="pf-empty">No hay movimientos registrados con este filtro.</div>
+            }
+            else
+            {
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Insumo</th>
+                                <th>Tipo</th>
+                                <th>Cantidad</th>
+                                <th>Stock</th>
+                                <th>Motivo</th>
+                                <th>Responsable</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var movimiento in MovimientosLista.OrderByDescending(x => x.FechaHora).ThenByDescending(x => x.Id))
+                            {
+                                <tr @key="movimiento.Id">
+                                    <td>@movimiento.FechaHora.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td><strong class="nombre">@NombreInsumo(movimiento.InsumoId)</strong></td>
+                                    <td>@TiposMovimiento.Texto(movimiento.Tipo)</td>
+                                    <td class="@(TiposMovimiento.Suma(movimiento.Tipo) ? "suma" : "resta")">
+                                        @(TiposMovimiento.Suma(movimiento.Tipo) ? "+" : "−")@Cantidad(movimiento.Cantidad)
+                                    </td>
+                                    <td>@Cantidad(movimiento.StockAnterior) → @Cantidad(movimiento.StockNuevo)</td>
+                                    <td>
+                                        @movimiento.Motivo
+                                        @if (movimiento.AtencionId is { } atencion)
+                                        {
+                                            <div class="detalle">Atención #@atencion</div>
+                                        }
+                                    </td>
+                                    <td>@NombreUsuario(movimiento.UsuarioId)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "insumo")]
+    public int? InsumoInicial { get; set; }
+
+    private List<MovimientoDto> MovimientosLista = [];
+    private List<InsumoDto> Insumos = [];
+    private List<UsuarioDto> Usuarios = [];
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private bool FormularioAbierto;
+    private int? FiltroInsumo;
+    private string FiltroTipo = "";
+    private string InsumoTexto = "";
+    private string Tipo = "INGRESO";
+    private decimal CantidadMovimiento = 1;
+    private string UsuarioTexto = "";
+    private long? AtencionId;
+    private string Motivo = "";
+    private string? Mensaje;
+    private string? Error;
+
+    private InsumoDto? InsumoSeleccionado =>
+        int.TryParse(InsumoTexto, out var id) ? Insumos.FirstOrDefault(x => x.Id == id) : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        FiltroInsumo = InsumoInicial;
+
+        try
+        {
+            var insumos = Api.ListarInsumosAsync();
+            var usuarios = Seguridad.ListarUsuariosAsync();
+
+            await Task.WhenAll(insumos, usuarios);
+
+            Insumos = await insumos;
+            Usuarios = await usuarios;
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+
+        await CargarMovimientosAsync();
+
+        if (InsumoInicial.HasValue && Insumos.Any(x => x.Id == InsumoInicial && x.Estatus))
+        {
+            Nuevo();
+            InsumoTexto = InsumoInicial.Value.ToString();
+        }
+
+        Cargando = false;
+    }
+
+    private async Task CargarMovimientosAsync()
+    {
+        try
+        {
+            MovimientosLista = await Api.ListarMovimientosAsync(FiltroInsumo, FiltroTipo);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+    }
+
+    private async Task CambiarFiltroInsumoAsync(ChangeEventArgs e)
+    {
+        FiltroInsumo = int.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await CargarMovimientosAsync();
+    }
+
+    private async Task CambiarFiltroTipoAsync(ChangeEventArgs e)
+    {
+        FiltroTipo = e.Value?.ToString() ?? "";
+        await CargarMovimientosAsync();
+    }
+
+    private void Nuevo()
+    {
+        InsumoTexto = FiltroInsumo?.ToString() ?? "";
+        Tipo = "INGRESO";
+        CantidadMovimiento = 1;
+        UsuarioTexto = Usuarios.Count(x => x.Estatus) == 1 ? Usuarios.First(x => x.Estatus).Id.ToString() : "";
+        AtencionId = null;
+        Motivo = "";
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void CerrarFormulario()
+    {
+        FormularioAbierto = false;
+        Error = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando)
+            return;
+
+        Error = null;
+        Mensaje = null;
+
+        if (InsumoSeleccionado is not { } insumo)
+        {
+            Error = "Selecciona un insumo.";
+            return;
+        }
+
+        if (!long.TryParse(UsuarioTexto, out var usuarioId))
+        {
+            Error = "Selecciona al responsable.";
+            return;
+        }
+
+        if (CantidadMovimiento <= 0)
+        {
+            Error = "La cantidad debe ser mayor que 0.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Motivo))
+        {
+            Error = "Indica el motivo del movimiento.";
+            return;
+        }
+
+        if (StockResultante(insumo) < 0)
+        {
+            Error = $"No hay stock suficiente: quedan {Cantidad(insumo.StockActual)} {insumo.Unidad}.";
+            return;
+        }
+
+        var dto = new MovimientoCrearDto
+        {
+            InsumoId = insumo.Id,
+            AtencionId = AtencionId > 0 ? AtencionId : null,
+            UsuarioId = usuarioId,
+            Tipo = Tipo,
+            Cantidad = Math.Round(CantidadMovimiento, 2),
+            Motivo = Motivo.Trim()
+        };
+
+        Procesando = true;
+
+        try
+        {
+            await Api.CrearMovimientoAsync(dto);
+
+            FormularioAbierto = false;
+            Mensaje = "Movimiento registrado.";
+            Insumos = await Api.ListarInsumosAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        finally
+        {
+            await CargarMovimientosAsync();
+            Procesando = false;
+        }
+    }
+
+    private decimal StockResultante(InsumoDto insumo) =>
+        TiposMovimiento.Suma(Tipo)
+            ? insumo.StockActual + CantidadMovimiento
+            : insumo.StockActual - CantidadMovimiento;
+
+    private string NombreInsumo(int id) =>
+        Insumos.FirstOrDefault(x => x.Id == id)?.Nombre ?? $"Insumo {id}";
+
+    private string NombreUsuario(long id) =>
+        Usuarios.FirstOrDefault(x => x.Id == id)?.Nombre ?? $"Usuario {id}";
+
+    private static string Cantidad(decimal valor) =>
+        valor.ToString("0.##", CultureInfo.GetCultureInfo("es-EC"));
+}

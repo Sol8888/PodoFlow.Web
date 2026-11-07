@@ -1,0 +1,35 @@
+.acciones-atencion {
+    margin-top: 12px;
+}
+
+.botones {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.confirmacion {
+    padding: 12px 14px;
+    background: #fffaeb;
+    border-radius: 10px;
+}
+
+    .confirmacion p {
+        margin: 0 0 8px;
+    }
+
+.boton-enlace {
+    padding: 6px 4px;
+    font-family: inherit;
+    white-space: nowrap;
+    color: #b42318;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+    .boton-enlace:hover {
+        text-decoration: underline;
+    }

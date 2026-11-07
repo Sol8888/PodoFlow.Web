@@ -1,10 +1,44 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 
 namespace PodoFlow.Web.Servicios
 {
     public static class RespuestaApi
     {
+        private const int TamanoLote = 100;
+        private const int MaximoLotes = 20;
+
+        public static async Task<List<T>> LeerTodoAsync<T>(HttpClient http, string rutaConConsulta)
+        {
+            var resultado = new List<T>();
+
+            for (var pagina = 1; pagina <= MaximoLotes; pagina++)
+            {
+                using var respuesta = await http.GetAsync($"{rutaConConsulta}pagina={pagina}&tamano={TamanoLote}");
+                await ValidarAsync(respuesta);
+
+                var lote = await respuesta.Content.ReadFromJsonAsync<List<T>>() ?? [];
+                resultado.AddRange(lote);
+
+                if (lote.Count < TamanoLote)
+                    break;
+            }
+
+            return resultado;
+        }
+
+        public static async Task EnviarAsync(HttpClient http, HttpMethod metodo, string ruta, object? datos)
+        {
+            using var solicitud = new HttpRequestMessage(metodo, ruta);
+
+            if (datos != null)
+                solicitud.Content = JsonContent.Create(datos, datos.GetType());
+
+            using var respuesta = await http.SendAsync(solicitud);
+            await ValidarAsync(respuesta);
+        }
+
         public static async Task ValidarAsync(HttpResponseMessage respuesta)
         {
             if (respuesta.IsSuccessStatusCode)

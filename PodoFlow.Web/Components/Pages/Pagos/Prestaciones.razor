@@ -1,0 +1,751 @@
+@page "/pagos"
+@page "/pagos/prestaciones"
+@rendermode InteractiveServer
+
+@using System.Globalization
+@using PodoFlow.Web.Modelos.Configuracion
+@using PodoFlow.Web.Modelos.Pacientes
+@using PodoFlow.Web.Modelos.Pagos
+@using PodoFlow.Web.Modelos.Seguridad
+
+@inject IPagosApi Api
+@inject IPacientesApi PacientesApi
+@inject IConfiguracionApi Configuracion
+@inject ISeguridadApi Seguridad
+
+<PageTitle>Prestaciones y cobros | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">PAGOS INTERNOS</span>
+            <h1>Prestaciones y cobros</h1>
+            <p>Registra los servicios prestados a cada paciente y los pagos que se reciben por ellos.</p>
+        </div>
+
+        <button type="button" class="pf-btn pf-btn-main" disabled="@(Cargando || Procesando)" @onclick="NuevaPrestacion">
+            + Nueva prestación
+        </button>
+    </div>
+
+    <PagosPestanas Activa="prestaciones" />
+
+    @if (Cargando)
+    {
+        <div class="pf-empty">Cargando prestaciones...</div>
+    }
+    else
+    {
+        <div class="pf-module-toolbar">
+            <input type="search" class="pf-field buscar" placeholder="Buscar por paciente o servicio"
+                   aria-label="Buscar prestación" @bind="Busqueda" @bind:event="oninput" />
+
+            <select class="pf-field filtro" aria-label="Filtrar por estado" value="@FiltroEstado" @onchange="CambiarEstadoFiltroAsync">
+                <option value="">Todos los estados</option>
+                <option value="PENDIENTE">Pendientes</option>
+                <option value="PAGADA">Pagadas</option>
+                <option value="ANULADA">Anuladas</option>
+            </select>
+
+            <span class="pf-soft-chip resumen">Por cobrar: @Dinero(TotalPendiente)</span>
+        </div>
+
+        @if (Mensaje != null)
+        {
+            <div class="pf-contact-success" aria-live="polite">@Mensaje</div>
+        }
+
+        @if (Error != null && !FormularioAbierto && Seleccionada == null)
+        {
+            <div class="pf-detail-error" role="alert">@Error</div>
+        }
+
+        @if (FormularioAbierto)
+        {
+            <section class="pf-card pf-info-card">
+                <h2>@(EditandoId == null ? "Nueva prestación" : $"Editar prestación #{EditandoId}")</h2>
+
+                <form novalidate @onsubmit="GuardarPrestacionAsync">
+                    <div class="pf-patient-form-grid">
+                        @if (EditandoId == null)
+                        {
+                            <div class="pf-form-group">
+                                <label for="pre-paciente">Paciente *</label>
+                                <select id="pre-paciente" class="pf-field" @bind="PacienteTexto">
+                                    <option value="">Selecciona un paciente</option>
+                                    @foreach (var paciente in Pacientes.Where(x => x.Estatus).OrderBy(x => x.NombreCompleto))
+                                    {
+                                        <option value="@paciente.Id">@paciente.NombreCompleto</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="pf-form-group">
+                                <label for="pre-servicio">Servicio *</label>
+                                <select id="pre-servicio" class="pf-field" value="@ServicioTexto" @onchange="ElegirServicio">
+                                    <option value="">Selecciona un servicio</option>
+                                    @foreach (var servicio in Servicios.Where(x => x.Estatus).OrderBy(x => x.Nombre))
+                                    {
+                                        <option value="@servicio.Id">@servicio.Nombre (@Dinero(servicio.Precio))</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="pf-form-group">
+                                <label for="pre-usuario">Profesional *</label>
+                                <select id="pre-usuario" class="pf-field" @bind="UsuarioTexto">
+                                    <option value="">Selecciona un profesional</option>
+                                    @foreach (var usuario in Usuarios.Where(x => x.Estatus).OrderBy(x => x.Nombre))
+                                    {
+                                        <option value="@usuario.Id">@usuario.Nombre</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+
+                        <div class="pf-form-group">
+                            <label for="pre-precio">Precio aplicado (USD) *</label>
+                            <input id="pre-precio" type="number" min="0" step="0.01" class="pf-field" @bind="Precio" />
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="pre-cantidad">Cantidad *</label>
+                            <input id="pre-cantidad" type="number" min="0.01" step="1" class="pf-field" @bind="Cantidad" />
+                        </div>
+
+                        <div class="pf-form-group completo">
+                            <label for="pre-observaciones">Observaciones</label>
+                            <textarea id="pre-observaciones" class="pf-field" rows="2" maxlength="1000" @bind="Observaciones"></textarea>
+                        </div>
+                    </div>
+
+                    <p class="pf-detail-muted">Total: <strong>@Dinero(Math.Round(Precio * Cantidad, 2))</strong></p>
+
+                    @if (Error != null)
+                    {
+                        <div class="pf-detail-error" role="alert">@Error</div>
+                    }
+
+                    <div class="pf-form-actions">
+                        <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="CerrarFormulario">Cancelar</button>
+                        <button type="submit" class="pf-btn pf-btn-main" disabled="@Procesando">
+                            @(Procesando ? "Guardando..." : "Guardar prestación")
+                        </button>
+                    </div>
+                </form>
+            </section>
+        }
+
+        @if (Seleccionada is { } prestacion)
+        {
+            <section class="pf-card pf-info-card detalle">
+                <div class="pf-card-header">
+                    <div>
+                        <h2>Prestación #@prestacion.Id · @NombreServicio(prestacion.ServicioId)</h2>
+                        <p>@NombrePaciente(prestacion.PacienteId) · @prestacion.FechaPrestacion.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p>
+                    </div>
+
+                    <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="CerrarDetalle">Cerrar</button>
+                </div>
+
+                <div class="cifras">
+                    <div><span>Total</span><strong>@Dinero(prestacion.Total)</strong></div>
+                    <div><span>Cobrado</span><strong>@Dinero(Cobrado)</strong></div>
+                    <div><span>Saldo</span><strong class="@(Saldo > 0 ? "pendiente" : "")">@Dinero(Saldo)</strong></div>
+                    <div><span>Estado</span><span class="pf-status @ClaseEstado(prestacion.Estado)">@prestacion.Estado</span></div>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(prestacion.Observaciones))
+                {
+                    <p class="pf-detail-muted">@prestacion.Observaciones</p>
+                }
+
+                @if (Error != null && !FormularioAbierto)
+                {
+                    <div class="pf-detail-error" role="alert">@Error</div>
+                }
+
+                @if (Anulando != null)
+                {
+                    <div class="anulacion">
+                        <label for="motivo-anulacion">
+                            @(Anulando == "prestacion" ? "Motivo para anular la prestación *" : $"Motivo para anular el cobro #{AnulandoCobroId} *")
+                        </label>
+                        <textarea id="motivo-anulacion" class="pf-field" rows="2" maxlength="500" @bind="MotivoAnulacion"></textarea>
+
+                        <div class="pf-form-actions">
+                            <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="CancelarAnulacion">Volver</button>
+                            <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="ConfirmarAnulacionAsync">
+                                @(Procesando ? "Anulando..." : "Confirmar anulación")
+                            </button>
+                        </div>
+                    </div>
+                }
+
+                <h3 class="subtitulo">Cobros</h3>
+
+                @if (Cobros.Count == 0)
+                {
+                    <p class="pf-detail-muted">Todavía no hay cobros para esta prestación.</p>
+                }
+                else
+                {
+                    <div class="pf-table-wrap">
+                        <table class="pf-table">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Forma de pago</th>
+                                    <th>Valor</th>
+                                    <th>Referencia</th>
+                                    <th>Estado</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                @foreach (var cobro in Cobros.OrderByDescending(x => x.FechaPago))
+                                {
+                                    <tr @key="cobro.Id">
+                                        <td>@cobro.FechaPago.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td>@NombreForma(cobro.FormaPagoId)</td>
+                                        <td>@Dinero(cobro.Valor)</td>
+                                        <td>@(cobro.Referencia ?? "—")</td>
+                                        <td><span class="pf-status @(cobro.Estado == "REGISTRADO" ? "success" : "")">@cobro.Estado</span></td>
+                                        <td>
+                                            @if (cobro.Estado == "REGISTRADO" && prestacion.Estado != "ANULADA")
+                                            {
+                                                <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => IniciarAnulacionCobro(cobro)">Anular</button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+                @if (prestacion.Estado == "PENDIENTE" && Saldo > 0)
+                {
+                    <h3 class="subtitulo">Registrar cobro</h3>
+
+                    <form novalidate @onsubmit="RegistrarCobroAsync">
+                        <div class="pf-patient-form-grid">
+                            <div class="pf-form-group">
+                                <label for="cobro-forma">Forma de pago *</label>
+                                <select id="cobro-forma" class="pf-field" @bind="FormaTexto">
+                                    <option value="">Selecciona</option>
+                                    @foreach (var forma in Formas.Where(x => x.Estatus).OrderBy(x => x.Nombre))
+                                    {
+                                        <option value="@forma.Id">@forma.Nombre</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="pf-form-group">
+                                <label for="cobro-valor">Valor (USD) *</label>
+                                <input id="cobro-valor" type="number" min="0.01" step="0.01" class="pf-field" @bind="ValorCobro" />
+                            </div>
+
+                            <div class="pf-form-group">
+                                <label for="cobro-usuario">Recibido por *</label>
+                                <select id="cobro-usuario" class="pf-field" @bind="UsuarioCobroTexto">
+                                    <option value="">Selecciona</option>
+                                    @foreach (var usuario in Usuarios.Where(x => x.Estatus).OrderBy(x => x.Nombre))
+                                    {
+                                        <option value="@usuario.Id">@usuario.Nombre</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div class="pf-form-group">
+                                <label for="cobro-referencia">Referencia</label>
+                                <input id="cobro-referencia" class="pf-field" maxlength="150" placeholder="N.º de transferencia o voucher" @bind="Referencia" />
+                            </div>
+                        </div>
+
+                        @if (Formas.All(x => !x.Estatus))
+                        {
+                            <p class="pf-detail-muted">No hay formas de pago activas. Créalas en la pestaña Formas de pago.</p>
+                        }
+
+                        <div class="pf-form-actions">
+                            <button type="submit" class="pf-btn pf-btn-main" disabled="@Procesando">
+                                @(Procesando ? "Registrando..." : "Registrar cobro")
+                            </button>
+                        </div>
+                    </form>
+                }
+
+                @if (prestacion.Estado == "PENDIENTE" && Anulando == null)
+                {
+                    <div class="acciones-detalle">
+                        @if (Cobrado == 0)
+                        {
+                            <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => EditarPrestacion(prestacion)">Editar prestación</button>
+                        }
+                        <button type="button" class="pf-link boton-enlace peligro" disabled="@Procesando" @onclick="IniciarAnulacionPrestacion">Anular prestación</button>
+                    </div>
+                }
+            </section>
+        }
+
+        <section class="pf-card pf-directory">
+            <div class="pf-card-header">
+                <div>
+                    <h2>Prestaciones</h2>
+                    <p>Una prestación pasa a PAGADA cuando sus cobros cubren el total.</p>
+                </div>
+
+                <span class="pf-soft-chip">@(Visibles.Count == 1 ? "1 visible" : $"{Visibles.Count} visibles")</span>
+            </div>
+
+            @if (Visibles.Count == 0)
+            {
+                <div class="pf-empty">No hay prestaciones con este filtro.</div>
+            }
+            else
+            {
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Paciente</th>
+                                <th>Servicio</th>
+                                <th>Total</th>
+                                <th>Estado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var item in Visibles)
+                            {
+                                <tr @key="item.Id" class="@(Seleccionada?.Id == item.Id ? "activa" : "")">
+                                    <td>@item.FechaPrestacion.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                                    <td><strong class="nombre">@NombrePaciente(item.PacienteId)</strong></td>
+                                    <td>@NombreServicio(item.ServicioId)</td>
+                                    <td>@Dinero(item.Total)</td>
+                                    <td><span class="pf-status @ClaseEstado(item.Estado)">@item.Estado</span></td>
+                                    <td>
+                                        <button type="button" class="pf-action-link boton-tabla" disabled="@Procesando" @onclick="() => SeleccionarAsync(item)">
+                                            @(item.Estado == "PENDIENTE" ? "Cobrar" : "Ver")
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private static readonly CultureInfo Moneda = CultureInfo.GetCultureInfo("es-EC");
+
+    private List<PrestacionDto> PrestacionesLista = [];
+    private List<CobroDto> Cobros = [];
+    private List<PacienteDto> Pacientes = [];
+    private List<ServicioDetalleDto> Servicios = [];
+    private List<UsuarioDto> Usuarios = [];
+    private List<FormaPagoDto> Formas = [];
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private bool FormularioAbierto;
+    private string Busqueda = "";
+    private string FiltroEstado = "PENDIENTE";
+    private string? Mensaje;
+    private string? Error;
+
+    private long? EditandoId;
+    private string PacienteTexto = "";
+    private string ServicioTexto = "";
+    private string UsuarioTexto = "";
+    private decimal Precio;
+    private decimal Cantidad = 1;
+    private string? Observaciones;
+
+    private PrestacionDto? Seleccionada;
+    private string FormaTexto = "";
+    private decimal ValorCobro;
+    private string UsuarioCobroTexto = "";
+    private string? Referencia;
+
+    private string? Anulando;
+    private long? AnulandoCobroId;
+    private string MotivoAnulacion = "";
+
+    private decimal Cobrado => Cobros.Where(x => x.Estado == "REGISTRADO").Sum(x => x.Valor);
+
+    private decimal Saldo => Seleccionada == null ? 0 : Math.Max(0, Seleccionada.Total - Cobrado);
+
+    private decimal TotalPendiente => PrestacionesLista.Where(x => x.Estado == "PENDIENTE").Sum(x => x.Total);
+
+    private List<PrestacionDto> Visibles => PrestacionesLista
+        .Where(x => string.IsNullOrWhiteSpace(Busqueda) ||
+                    NombrePaciente(x.PacienteId).Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                    NombreServicio(x.ServicioId).Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(x => x.FechaPrestacion)
+        .ThenByDescending(x => x.Id)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var servicios = Configuracion.ListarServiciosAsync();
+            var usuarios = Seguridad.ListarUsuariosAsync();
+            var formas = Api.ListarFormasPagoAsync();
+            var pacientes = ListarPacientesAsync();
+
+            await Task.WhenAll(servicios, usuarios, formas, pacientes);
+
+            Servicios = await servicios;
+            Usuarios = await usuarios;
+            Formas = await formas;
+            Pacientes = await pacientes;
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+
+        await CargarPrestacionesAsync();
+        Cargando = false;
+    }
+
+    private async Task<List<PacienteDto>> ListarPacientesAsync()
+    {
+        var resultado = new List<PacienteDto>();
+
+        for (var pagina = 1; pagina <= 20; pagina++)
+        {
+            var lote = await PacientesApi.ListarAsync(true, pagina, 100);
+            resultado.AddRange(lote);
+
+            if (lote.Count < 100)
+                break;
+        }
+
+        return resultado;
+    }
+
+    private async Task CargarPrestacionesAsync()
+    {
+        try
+        {
+            PrestacionesLista = await Api.ListarPrestacionesAsync(null, FiltroEstado);
+
+            if (Seleccionada != null)
+            {
+                var actualizada = await Api.ListarPrestacionesAsync(Seleccionada.PacienteId, null);
+                Seleccionada = actualizada.FirstOrDefault(x => x.Id == Seleccionada.Id) ?? Seleccionada;
+                Cobros = await Api.ListarCobrosAsync(Seleccionada.Id);
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+    }
+
+    private async Task CambiarEstadoFiltroAsync(ChangeEventArgs e)
+    {
+        FiltroEstado = e.Value?.ToString() ?? "";
+        await CargarPrestacionesAsync();
+    }
+
+    private void NuevaPrestacion()
+    {
+        EditandoId = null;
+        PacienteTexto = "";
+        ServicioTexto = "";
+        UsuarioTexto = Usuarios.Count(x => x.Estatus) == 1 ? Usuarios.First(x => x.Estatus).Id.ToString() : "";
+        Precio = 0;
+        Cantidad = 1;
+        Observaciones = null;
+        Mensaje = null;
+        Error = null;
+        Seleccionada = null;
+        FormularioAbierto = true;
+    }
+
+    private void EditarPrestacion(PrestacionDto prestacion)
+    {
+        EditandoId = prestacion.Id;
+        Precio = prestacion.PrecioAplicado;
+        Cantidad = prestacion.Cantidad;
+        Observaciones = prestacion.Observaciones;
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void ElegirServicio(ChangeEventArgs e)
+    {
+        ServicioTexto = e.Value?.ToString() ?? "";
+
+        if (int.TryParse(ServicioTexto, out var id) && Servicios.FirstOrDefault(x => x.Id == id) is { } servicio)
+            Precio = servicio.Precio;
+    }
+
+    private void CerrarFormulario()
+    {
+        FormularioAbierto = false;
+        Error = null;
+    }
+
+    private async Task GuardarPrestacionAsync()
+    {
+        if (Procesando)
+            return;
+
+        Error = null;
+        Mensaje = null;
+
+        if (Precio < 0 || Cantidad <= 0)
+        {
+            Error = "El precio no puede ser negativo y la cantidad debe ser mayor que 0.";
+            return;
+        }
+
+        var observaciones = string.IsNullOrWhiteSpace(Observaciones) ? null : Observaciones.Trim();
+
+        if (EditandoId == null)
+        {
+            if (!long.TryParse(PacienteTexto, out var pacienteId) ||
+                !int.TryParse(ServicioTexto, out var servicioId) ||
+                !long.TryParse(UsuarioTexto, out var usuarioId))
+            {
+                Error = "Selecciona el paciente, el servicio y el profesional.";
+                return;
+            }
+
+            var dto = new PrestacionCrearDto
+            {
+                PacienteId = pacienteId,
+                ServicioId = servicioId,
+                UsuarioId = usuarioId,
+                PrecioAplicado = Math.Round(Precio, 2),
+                Cantidad = Math.Round(Cantidad, 2),
+                Observaciones = observaciones
+            };
+
+            await EjecutarAsync(async () =>
+            {
+                await Api.CrearPrestacionAsync(dto);
+                FormularioAbierto = false;
+                Mensaje = "Prestación registrada.";
+            });
+        }
+        else
+        {
+            var id = EditandoId.Value;
+
+            var dto = new PrestacionActualizarDto
+            {
+                PrecioAplicado = Math.Round(Precio, 2),
+                Cantidad = Math.Round(Cantidad, 2),
+                Observaciones = observaciones
+            };
+
+            await EjecutarAsync(async () =>
+            {
+                await Api.ActualizarPrestacionAsync(id, dto);
+                FormularioAbierto = false;
+                Mensaje = "Prestación actualizada.";
+            });
+        }
+    }
+
+    private async Task SeleccionarAsync(PrestacionDto prestacion)
+    {
+        Mensaje = null;
+        Error = null;
+        Anulando = null;
+        FormularioAbierto = false;
+        Seleccionada = prestacion;
+
+        try
+        {
+            Cobros = await Api.ListarCobrosAsync(prestacion.Id);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+            Cobros = [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+            Cobros = [];
+        }
+
+        PrepararCobro();
+    }
+
+    private void PrepararCobro()
+    {
+        FormaTexto = Formas.Count(x => x.Estatus) == 1 ? Formas.First(x => x.Estatus).Id.ToString() : "";
+        ValorCobro = Saldo;
+        UsuarioCobroTexto = Usuarios.Count(x => x.Estatus) == 1 ? Usuarios.First(x => x.Estatus).Id.ToString() : "";
+        Referencia = null;
+    }
+
+    private void CerrarDetalle()
+    {
+        Seleccionada = null;
+        Cobros = [];
+        Anulando = null;
+        Error = null;
+    }
+
+    private async Task RegistrarCobroAsync()
+    {
+        if (Procesando || Seleccionada == null)
+            return;
+
+        Error = null;
+        Mensaje = null;
+
+        if (!int.TryParse(FormaTexto, out var formaId) || !long.TryParse(UsuarioCobroTexto, out var usuarioId))
+        {
+            Error = "Selecciona la forma de pago y quién recibe el cobro.";
+            return;
+        }
+
+        if (ValorCobro <= 0 || ValorCobro > Saldo)
+        {
+            Error = $"El valor debe ser mayor que 0 y no superar el saldo de {Dinero(Saldo)}.";
+            return;
+        }
+
+        var dto = new CobroCrearDto
+        {
+            PrestacionId = Seleccionada.Id,
+            FormaPagoId = formaId,
+            UsuarioId = usuarioId,
+            Valor = Math.Round(ValorCobro, 2),
+            Referencia = string.IsNullOrWhiteSpace(Referencia) ? null : Referencia.Trim()
+        };
+
+        await EjecutarAsync(async () =>
+        {
+            await Api.RegistrarCobroAsync(dto);
+            Mensaje = "Cobro registrado.";
+        });
+
+        PrepararCobro();
+    }
+
+    private void IniciarAnulacionPrestacion()
+    {
+        Anulando = "prestacion";
+        AnulandoCobroId = null;
+        MotivoAnulacion = "";
+        Error = null;
+    }
+
+    private void IniciarAnulacionCobro(CobroDto cobro)
+    {
+        Anulando = "cobro";
+        AnulandoCobroId = cobro.Id;
+        MotivoAnulacion = "";
+        Error = null;
+    }
+
+    private void CancelarAnulacion()
+    {
+        Anulando = null;
+        AnulandoCobroId = null;
+        Error = null;
+    }
+
+    private async Task ConfirmarAnulacionAsync()
+    {
+        if (Procesando || Seleccionada == null)
+            return;
+
+        Error = null;
+        Mensaje = null;
+
+        if (string.IsNullOrWhiteSpace(MotivoAnulacion))
+        {
+            Error = "Indica el motivo de la anulación.";
+            return;
+        }
+
+        var motivo = MotivoAnulacion.Trim();
+        var prestacionId = Seleccionada.Id;
+        var cobroId = AnulandoCobroId;
+        var esPrestacion = Anulando == "prestacion";
+
+        await EjecutarAsync(async () =>
+        {
+            if (esPrestacion)
+                await Api.AnularPrestacionAsync(prestacionId, motivo);
+            else if (cobroId.HasValue)
+                await Api.AnularCobroAsync(cobroId.Value, motivo);
+
+            Anulando = null;
+            AnulandoCobroId = null;
+            Mensaje = esPrestacion ? "Prestación anulada." : "Cobro anulado.";
+        });
+
+        PrepararCobro();
+    }
+
+    private async Task EjecutarAsync(Func<Task> accion)
+    {
+        Procesando = true;
+
+        try
+        {
+            await accion();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        finally
+        {
+            await CargarPrestacionesAsync();
+            Procesando = false;
+        }
+    }
+
+    private string NombrePaciente(long id) =>
+        Pacientes.FirstOrDefault(x => x.Id == id)?.NombreCompleto ?? $"Paciente {id}";
+
+    private string NombreServicio(int id) =>
+        Servicios.FirstOrDefault(x => x.Id == id)?.Nombre ?? $"Servicio {id}";
+
+    private string NombreForma(int id) =>
+        Formas.FirstOrDefault(x => x.Id == id)?.Nombre ?? $"Forma {id}";
+
+    private static string ClaseEstado(string estado) => estado switch
+    {
+        "PAGADA" => "success",
+        "PENDIENTE" => "por-cobrar",
+        _ => ""
+    };
+
+    private static string Dinero(decimal valor) => valor.ToString("C", Moneda);
+}

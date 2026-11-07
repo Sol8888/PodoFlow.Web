@@ -1,0 +1,110 @@
+.buscar {
+    max-width: 320px;
+}
+
+.filtro {
+    max-width: 200px;
+}
+
+.resumen {
+    margin-left: auto;
+}
+
+.nombre {
+    color: var(--pf-navy);
+    font-size: 13px;
+}
+
+.completo {
+    grid-column: 1 / -1;
+}
+
+.detalle {
+    border-left: 4px solid var(--pf-navy);
+}
+
+.cifras {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin: 12px 0;
+}
+
+    .cifras > div {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 10px 12px;
+        border: 1px solid var(--pf-border, #e3e8ef);
+        border-radius: 10px;
+    }
+
+    .cifras span:first-child {
+        font-size: 12px;
+        opacity: .7;
+    }
+
+    .cifras strong {
+        font-size: 16px;
+        color: var(--pf-navy);
+    }
+
+        .cifras strong.pendiente {
+            color: #b54708;
+        }
+
+.subtitulo {
+    margin: 18px 0 8px;
+    font-size: 15px;
+}
+
+.anulacion {
+    margin: 12px 0;
+    padding: 12px;
+    background: #fef3f2;
+    border-radius: 10px;
+}
+
+.acciones-detalle {
+    display: flex;
+    gap: 16px;
+    justify-content: flex-end;
+    margin-top: 14px;
+}
+
+.por-cobrar {
+    color: #b54708;
+    background: #fffaeb;
+}
+
+tr.activa td {
+    background: rgba(0, 0, 0, .03);
+}
+
+.boton-tabla {
+    border: 0;
+    cursor: pointer;
+}
+
+.boton-enlace {
+    padding: 6px 4px;
+    font-family: inherit;
+    white-space: nowrap;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+    .boton-enlace:hover:not(:disabled) {
+        text-decoration: underline;
+    }
+
+.peligro {
+    color: #b42318;
+}
+
+.boton-tabla:disabled,
+.boton-enlace:disabled {
+    cursor: not-allowed;
+    opacity: .6;
+}

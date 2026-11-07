@@ -73,6 +73,14 @@
             </div>
 
         </dl>
+
+        @if (HistoriaId is { } historiaId && !string.IsNullOrWhiteSpace(VersionHistoria))
+        {
+            <HistoriaEstado HistoriaId="@historiaId"
+                            Estado="@EstadoHistoria"
+                            Version="@VersionHistoria"
+                            Cambio="CambioClinicoAsync" />
+        }
     }
 
     <!-- MENSAJES -->
@@ -106,6 +114,13 @@
                         Los campos con * son obligatorios; puedes
                         completar lo demás con la información disponible.
                     </p>
+                    @if (Formulario.CitaId is { } citaVinculada)
+                    {
+                        <p class="pf-detail-muted">
+                            Se vinculará a la cita #@citaVinculada.
+                            <button type="button" class="pf-contact-action" @onclick="() => Formulario.CitaId = null">Quitar vínculo</button>
+                        </p>
+                    }
                 </div>
             </div>
 
@@ -490,6 +505,11 @@
                                         <p class="pf-clinic-entry-footer pf-clinic-full">
                                             Atendido por @NombreProfesional(atencion.UsuarioId)
 
+                                            @if (atencion.CitaId is { } citaAtencion)
+                                            {
+                                                <text> · Cita #@citaAtencion</text>
+                                            }
+
                                             @if (atencion.FechaModificacion is { } modificada)
                                             {
                                                 <text> · Modificada el @modificada.ToString("dd/MM/yyyy HH:mm")</text>
@@ -517,6 +537,16 @@
                                                           atencion.Estado,
                                                           "ABIERTA",
                                                           StringComparison.OrdinalIgnoreCase))" />
+
+                                    <AtencionAcciones @key="@($"acciones-{atencion.Id}-{atencion.Version}")"
+                                                      Atencion="@atencion"
+                                                      PuedeEditar="@(
+                                                      HistoriaActiva &&
+                                                      string.Equals(
+                                                          atencion.Estado,
+                                                          "ABIERTA",
+                                                          StringComparison.OrdinalIgnoreCase))"
+                                                      Cambio="CambioClinicoAsync" />
 
                                 }
 
@@ -557,6 +587,12 @@
 
     [Parameter, EditorRequired]
     public long PacienteId { get; set; }
+
+    [Parameter]
+    public long? CitaId { get; set; }
+
+    private long? CitaAplicada;
+    private string? VersionHistoria;
 
     private sealed class ProfesionalDto
     {
@@ -661,6 +697,38 @@
             await CargarProfesionalesAsync();
             await CargarAsync();
         }
+
+        if (CitaId is { } cita && CitaAplicada != cita && !Cargando && PuedeCrear)
+        {
+            CitaAplicada = cita;
+
+            if (Atenciones.Any(x => x.CitaId == cita))
+            {
+                Mensaje = $"La cita #{cita} ya tiene una atención registrada.";
+                AtencionAbiertaId = Atenciones.First(x => x.CitaId == cita).Id;
+            }
+            else
+            {
+                AbrirFormulario();
+                Formulario.CitaId = cita;
+            }
+        }
+    }
+
+    private async Task CambioClinicoAsync(string mensaje)
+    {
+        var abierta = AtencionAbiertaId;
+
+        await CargarAsync();
+
+        if (Error is null)
+        {
+            if (abierta.HasValue && Atenciones.Any(x => x.Id == abierta))
+                AtencionAbiertaId = abierta;
+
+            Mensaje = mensaje;
+            EnfocarMensaje = true;
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -751,6 +819,7 @@
             FechaApertura = historia?.FechaApertura;
             MotivoBloqueo = historia?.MotivoBloqueo;
             ResponsableHistoriaId = historia?.UsuarioId;
+            VersionHistoria = historia?.Version;
 
             HistoriaActiva = string.Equals(
                 historia?.Estado,

@@ -716,7 +716,8 @@
                 {
                     <AtencionesPanel
                         @key="Id"
-                        PacienteId="@Id" />
+                        PacienteId="@Id"
+                        CitaId="@Cita" />
                 }
                 else
                 {
@@ -836,6 +837,9 @@
 
     [SupplyParameterFromQuery(Name = "clinica")]
     public string? Clinica { get; set; }
+
+    [SupplyParameterFromQuery(Name = "cita")]
+    public long? Cita { get; set; }
 
     private string SubseccionClinica =>
         Clinica?.Trim().ToLowerInvariant() == "antecedentes"

@@ -1,0 +1,50 @@
+.buscar {
+    max-width: 320px;
+}
+
+.nombre {
+    color: var(--pf-navy);
+    font-size: 13px;
+}
+
+.alerta {
+    font-weight: 700;
+    color: #b42318;
+}
+
+.bajo {
+    margin-left: 6px;
+    color: #b42318;
+    background: #fef3f2;
+}
+
+.acciones {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.boton-tabla {
+    border: 0;
+    cursor: pointer;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+.boton-enlace {
+    padding: 6px 4px;
+    font-family: inherit;
+    white-space: nowrap;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+    .boton-enlace:hover:not(:disabled) {
+        text-decoration: underline;
+    }
+
+.boton-enlace:disabled {
+    cursor: not-allowed;
+    opacity: .6;
+}
