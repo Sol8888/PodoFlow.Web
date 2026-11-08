@@ -1,3 +1,5 @@
+@page "/configuracion"
+@page "/configuracion/profesionales"
 @page "/seguridad"
 @page "/seguridad/usuarios"
 @rendermode InteractiveServer
@@ -6,19 +8,19 @@
 
 @inject ISeguridadApi Api
 
-<PageTitle>Usuarios | PodoFlow</PageTitle>
+<PageTitle>Profesionales | PodoFlow</PageTitle>
 
 <div class="pf-pacientes">
 
     <div class="pf-module-header">
         <div>
-            <span class="pf-module-eyebrow">SEGURIDAD</span>
-            <h1>Usuarios</h1>
+            <span class="pf-module-eyebrow">CONFIGURACIÓN</span>
+            <h1>Profesionales</h1>
             <p>Registra al personal de la clínica y define qué roles tiene cada persona.</p>
         </div>
 
         <button type="button" class="pf-btn pf-btn-main" disabled="@(Cargando || Procesando)" @onclick="Nuevo">
-            + Nuevo usuario
+            + Nuevo profesional
         </button>
     </div>
 
@@ -26,13 +28,13 @@
 
     @if (Cargando)
     {
-        <div class="pf-empty">Cargando usuarios...</div>
+        <div class="pf-empty">Cargando profesionales...</div>
     }
     else
     {
         <div class="pf-module-toolbar">
             <input type="search" class="pf-field buscar" placeholder="Buscar por nombre o correo"
-                   aria-label="Buscar usuario" @bind="Busqueda" @bind:event="oninput" />
+                   aria-label="Buscar profesional" @bind="Busqueda" @bind:event="oninput" />
 
             <label class="pf-checkbox">
                 <input type="checkbox" @bind="IncluirInactivos" />
@@ -53,7 +55,7 @@
         @if (FormularioAbierto)
         {
             <section class="pf-card pf-info-card">
-                <h2>@(Editando == null ? "Nuevo usuario" : "Editar usuario")</h2>
+                <h2>@(Editando == null ? "Nuevo profesional" : "Editar profesional")</h2>
 
                 <form novalidate @onsubmit="GuardarAsync">
                     <div class="pf-patient-form-grid">
@@ -100,7 +102,7 @@
             <div class="pf-card-header">
                 <div>
                     <h2>Personal registrado</h2>
-                    <p>Desactivar a un usuario conserva su historial, pero ya no podrá operar.</p>
+                    <p>Desactivar a un profesional conserva su historial, pero ya no podrá operar.</p>
                 </div>
 
                 <span class="pf-soft-chip">@(Visibles.Count == 1 ? "1 visible" : $"{Visibles.Count} visibles")</span>
@@ -108,7 +110,7 @@
 
             @if (Visibles.Count == 0)
             {
-                <div class="pf-empty">No hay usuarios que coincidan con la búsqueda.</div>
+                <div class="pf-empty">No hay profesionales que coincidan con la búsqueda.</div>
             }
             else
             {
@@ -319,7 +321,7 @@
                 await Api.QuitarRolAsync(usuarioId, rolId);
 
             FormularioAbierto = false;
-            Mensaje = "Usuario guardado.";
+            Mensaje = "Profesional guardado.";
         });
     }
 
@@ -335,7 +337,7 @@
             else
                 await Api.ReactivarUsuarioAsync(usuario.Id);
 
-            Mensaje = usuario.Estatus ? "Usuario desactivado." : "Usuario reactivado.";
+            Mensaje = usuario.Estatus ? "Profesional desactivado." : "Profesional reactivado.";
         });
     }
 

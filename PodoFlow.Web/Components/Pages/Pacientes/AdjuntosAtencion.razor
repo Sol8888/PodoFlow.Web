@@ -33,6 +33,7 @@
     @if (!string.IsNullOrWhiteSpace(Mensaje))
     {
         <div class="pf-contact-success" role="status">@Mensaje</div>
+        <AvisoTemporal @bind-Mensaje="Mensaje" />
     }
 
     @if (MostrarFormulario && PuedeEditar)

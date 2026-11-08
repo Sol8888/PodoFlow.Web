@@ -108,3 +108,24 @@ tr.activa td {
     cursor: not-allowed;
     opacity: .6;
 }
+
+.forma-con-boton {
+    display: flex;
+    gap: 8px;
+}
+
+    .forma-con-boton .pf-field {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .forma-con-boton .pf-btn {
+        flex-shrink: 0;
+    }
+
+.nueva-forma {
+    padding: 12px;
+    border: 1px dashed var(--pf-border);
+    border-radius: 8px;
+    background: var(--pf-surface-soft);
+}

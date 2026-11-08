@@ -198,7 +198,7 @@
 
     .cita:focus-visible {
         z-index: 3;
-        outline: 3px solid rgba(20, 93, 160, .35);
+        outline: 3px solid rgba(0, 152, 218, .35);
     }
 
     .cita strong,

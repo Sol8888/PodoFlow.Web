@@ -1,0 +1,60 @@
+﻿@implements IDisposable
+
+@code {
+    [Parameter]
+    public string? Mensaje { get; set; }
+
+    [Parameter]
+    public EventCallback<string?> MensajeChanged { get; set; }
+
+    [Parameter]
+    public int Segundos { get; set; } = 5;
+
+    private string? Actual;
+    private CancellationTokenSource? Espera;
+
+    protected override void OnParametersSet()
+    {
+        if (Mensaje == Actual)
+            return;
+
+        Actual = Mensaje;
+        Cancelar();
+
+        if (string.IsNullOrWhiteSpace(Mensaje))
+            return;
+
+        Espera = new CancellationTokenSource();
+        _ = OcultarAsync(Espera.Token);
+    }
+
+    private async Task OcultarAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(Segundos), token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        await InvokeAsync(async () =>
+        {
+            if (token.IsCancellationRequested)
+                return;
+
+            Actual = null;
+            await MensajeChanged.InvokeAsync(null);
+        });
+    }
+
+    private void Cancelar()
+    {
+        Espera?.Cancel();
+        Espera?.Dispose();
+        Espera = null;
+    }
+
+    public void Dispose() => Cancelar();
+}

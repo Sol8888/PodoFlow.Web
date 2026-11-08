@@ -1,4 +1,4 @@
-<nav class="pf-profile-tabs" aria-label="Secciones de seguridad">
+<nav class="pf-profile-tabs" aria-label="Secciones de configuración">
     @foreach (var (codigo, ruta, texto) in Secciones)
     {
         <a href="@ruta"
@@ -15,8 +15,9 @@
 
     private static readonly (string Codigo, string Ruta, string Texto)[] Secciones =
     [
-        ("usuarios", "/seguridad/usuarios", "Usuarios"),
-        ("roles", "/seguridad/roles", "Roles y permisos"),
-        ("permisos", "/seguridad/permisos", "Catálogo de permisos")
+        ("usuarios", "/configuracion/profesionales", "Profesionales"),
+        ("roles", "/configuracion/roles", "Roles y permisos"),
+        ("permisos", "/configuracion/permisos", "Catálogo de permisos"),
+        ("servicios", "/configuracion/servicios", "Servicios")
     ];
 }

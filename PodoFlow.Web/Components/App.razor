@@ -18,6 +18,14 @@
 <body>
     <Routes />
     <script src="_framework/blazor.web.js"></script>
+    <script>
+        document.addEventListener("click", function (e) {
+            if (e.target.closest(".pf-nav a")) {
+                var menu = document.getElementById("pf-menu");
+                if (menu) menu.checked = false;
+            }
+        });
+    </script>
 </body>
 
 </html>

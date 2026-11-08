@@ -99,6 +99,7 @@
                 &times;
             </button>
         </div>
+        <AvisoTemporal @bind-Mensaje="Mensaje" />
     }
 
     <!-- FORMULARIO DE NUEVA ATENCION -->
@@ -342,10 +343,21 @@
                 empezar a registrar sus atenciones.
             </p>
 
-            <a class="pf-btn pf-btn-main pf-clinic-empty-action"
-               href="@RutaAntecedentes">
-                Ir a Antecedentes
-            </a>
+            @if (PacienteActivo)
+            {
+                <button type="button"
+                        class="pf-btn pf-btn-main pf-clinic-empty-action"
+                        disabled="@CreandoHistoria"
+                        @onclick="CrearHistoriaAsync">
+                    @(CreandoHistoria ? "Abriendo..." : "Abrir historia clínica")
+                </button>
+            }
+            else
+            {
+                <p class="pf-detail-error">
+                    El paciente está inactivo. No es posible abrir su historia.
+                </p>
+            }
         </div>
     }
     else
@@ -591,6 +603,11 @@
     [Parameter]
     public long? CitaId { get; set; }
 
+    [Parameter]
+    public bool PacienteActivo { get; set; } = true;
+
+    private bool CreandoHistoria;
+
     private long? CitaAplicada;
     private string? VersionHistoria;
 
@@ -642,9 +659,6 @@
 
     private int Pagina = 1;
     private const int Tamano = 10;
-
-    private string RutaAntecedentes =>
-        $"/pacientes/{PacienteId}?seccion=historia&clinica=antecedentes";
 
     private bool PuedeRegistrar =>
         TieneHistoria &&
@@ -800,6 +814,47 @@
 
             ErrorProfesionales =
                 "No se pudo cargar la lista de profesionales.";
+        }
+    }
+
+    private async Task CrearHistoriaAsync()
+    {
+        if (CreandoHistoria || TieneHistoria || !PacienteActivo)
+            return;
+
+        CreandoHistoria = true;
+        Error = null;
+        Mensaje = null;
+
+        try
+        {
+            await Api.CrearHistoriaPacienteAsync(PacienteId);
+
+            Pagina = 1;
+            await CargarAsync();
+
+            if (Error is null)
+            {
+                Mensaje = "Historia clínica abierta. Ya puedes registrar atenciones.";
+                EnfocarMensaje = true;
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(
+                ex,
+                "Error creando historia clínica del paciente {PacienteId}",
+                PacienteId);
+
+            Error = "No fue posible abrir la historia clínica.";
+        }
+        finally
+        {
+            CreandoHistoria = false;
         }
     }
 

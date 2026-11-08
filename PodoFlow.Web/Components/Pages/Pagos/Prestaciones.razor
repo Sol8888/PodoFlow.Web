@@ -13,23 +13,42 @@
 @inject IConfiguracionApi Configuracion
 @inject ISeguridadApi Seguridad
 
-<PageTitle>Prestaciones y cobros | PodoFlow</PageTitle>
+@if (PacienteFijo is null)
+{
+    <PageTitle>Prestaciones y cobros | PodoFlow</PageTitle>
+}
 
 <div class="pf-pacientes">
 
-    <div class="pf-module-header">
-        <div>
-            <span class="pf-module-eyebrow">PAGOS INTERNOS</span>
-            <h1>Prestaciones y cobros</h1>
-            <p>Registra los servicios prestados a cada paciente y los pagos que se reciben por ellos.</p>
+    @if (PacienteFijo is null)
+    {
+        <div class="pf-module-header">
+            <div>
+                <span class="pf-module-eyebrow">PAGOS INTERNOS</span>
+                <h1>Prestaciones y cobros</h1>
+                <p>Registra los servicios prestados a cada paciente y los pagos que se reciben por ellos.</p>
+            </div>
+
+            <button type="button" class="pf-btn pf-btn-main" disabled="@(Cargando || Procesando)" @onclick="NuevaPrestacion">
+                + Nueva prestación
+            </button>
         </div>
 
-        <button type="button" class="pf-btn pf-btn-main" disabled="@(Cargando || Procesando)" @onclick="NuevaPrestacion">
-            + Nueva prestación
-        </button>
-    </div>
+        <PagosPestanas Activa="prestaciones" />
+    }
+    else
+    {
+        <div class="pf-detail-heading">
+            <div>
+                <h2>Prestaciones y cobros</h2>
+                <p class="pf-detail-muted">Registra los servicios prestados al paciente y cobra sin salir de su ficha.</p>
+            </div>
 
-    <PagosPestanas Activa="prestaciones" />
+            <button type="button" class="pf-btn pf-btn-main" disabled="@(Cargando || Procesando)" @onclick="NuevaPrestacion">
+                + Nueva prestación
+            </button>
+        </div>
+    }
 
     @if (Cargando)
     {
@@ -54,6 +73,7 @@
         @if (Mensaje != null)
         {
             <div class="pf-contact-success" aria-live="polite">@Mensaje</div>
+            <AvisoTemporal @bind-Mensaje="Mensaje" />
         }
 
         @if (Error != null && !FormularioAbierto && Seleccionada == null)
@@ -70,16 +90,19 @@
                     <div class="pf-patient-form-grid">
                         @if (EditandoId == null)
                         {
-                            <div class="pf-form-group">
-                                <label for="pre-paciente">Paciente *</label>
-                                <select id="pre-paciente" class="pf-field" @bind="PacienteTexto">
-                                    <option value="">Selecciona un paciente</option>
-                                    @foreach (var paciente in Pacientes.Where(x => x.Estatus).OrderBy(x => x.NombreCompleto))
-                                    {
-                                        <option value="@paciente.Id">@paciente.NombreCompleto</option>
-                                    }
-                                </select>
-                            </div>
+                            @if (PacienteFijo is null)
+                            {
+                                <div class="pf-form-group">
+                                    <label for="pre-paciente">Paciente *</label>
+                                    <select id="pre-paciente" class="pf-field" @bind="PacienteTexto">
+                                        <option value="">Selecciona un paciente</option>
+                                        @foreach (var paciente in Pacientes.Where(x => x.Estatus).OrderBy(x => x.NombreCompleto))
+                                        {
+                                            <option value="@paciente.Id">@paciente.NombreCompleto</option>
+                                        }
+                                    </select>
+                                </div>
+                            }
 
                             <div class="pf-form-group">
                                 <label for="pre-servicio">Servicio *</label>
@@ -234,14 +257,38 @@
                         <div class="pf-patient-form-grid">
                             <div class="pf-form-group">
                                 <label for="cobro-forma">Forma de pago *</label>
-                                <select id="cobro-forma" class="pf-field" @bind="FormaTexto">
-                                    <option value="">Selecciona</option>
-                                    @foreach (var forma in Formas.Where(x => x.Estatus).OrderBy(x => x.Nombre))
-                                    {
-                                        <option value="@forma.Id">@forma.Nombre</option>
-                                    }
-                                </select>
+                                <div class="forma-con-boton">
+                                    <select id="cobro-forma" class="pf-field" @bind="FormaTexto">
+                                        <option value="">Selecciona</option>
+                                        @foreach (var forma in Formas.Where(x => x.Estatus).OrderBy(x => x.Nombre))
+                                        {
+                                            <option value="@forma.Id">@forma.Nombre</option>
+                                        }
+                                    </select>
+
+                                    <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="AbrirNuevaForma">
+                                        + Nueva
+                                    </button>
+                                </div>
                             </div>
+
+                            @if (CreandoForma)
+                            {
+                                <div class="pf-form-group completo nueva-forma">
+                                    <label for="nueva-forma-nombre">Nueva forma de pago *</label>
+                                    <div class="forma-con-boton">
+                                        <input id="nueva-forma-nombre" class="pf-field" maxlength="80" placeholder="Ej.: Depósito bancario" @bind="NombreNuevaForma" />
+
+                                        <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="() => CreandoForma = false">
+                                            Cancelar
+                                        </button>
+
+                                        <button type="button" class="pf-btn pf-btn-main" disabled="@(Procesando || string.IsNullOrWhiteSpace(NombreNuevaForma))" @onclick="GuardarNuevaFormaAsync">
+                                            Agregar
+                                        </button>
+                                    </div>
+                                </div>
+                            }
 
                             <div class="pf-form-group">
                                 <label for="cobro-valor">Valor (USD) *</label>
@@ -271,7 +318,7 @@
                         }
 
                         <div class="pf-form-actions">
-                            <button type="submit" class="pf-btn pf-btn-main" disabled="@Procesando">
+                            <button type="submit" class="pf-btn pf-btn-main" disabled="@(Procesando || string.IsNullOrEmpty(FormaTexto) || string.IsNullOrEmpty(UsuarioCobroTexto))">
                                 @(Procesando ? "Registrando..." : "Registrar cobro")
                             </button>
                         </div>
@@ -347,6 +394,12 @@
 @code {
     private static readonly CultureInfo Moneda = CultureInfo.GetCultureInfo("es-EC");
 
+    [Parameter]
+    public long? PacienteFijo { get; set; }
+
+    private bool CreandoForma;
+    private string NombreNuevaForma = "";
+
     private List<PrestacionDto> PrestacionesLista = [];
     private List<CobroDto> Cobros = [];
     private List<PacienteDto> Pacientes = [];
@@ -396,6 +449,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (PacienteFijo is not null)
+            FiltroEstado = "";
+
         try
         {
             var servicios = Configuracion.ListarServiciosAsync();
@@ -443,7 +499,7 @@
     {
         try
         {
-            PrestacionesLista = await Api.ListarPrestacionesAsync(null, FiltroEstado);
+            PrestacionesLista = await Api.ListarPrestacionesAsync(PacienteFijo, FiltroEstado);
 
             if (Seleccionada != null)
             {
@@ -471,7 +527,7 @@
     private void NuevaPrestacion()
     {
         EditandoId = null;
-        PacienteTexto = "";
+        PacienteTexto = PacienteFijo?.ToString() ?? "";
         ServicioTexto = "";
         UsuarioTexto = Usuarios.Count(x => x.Estatus) == 1 ? Usuarios.First(x => x.Estatus).Id.ToString() : "";
         Precio = 0;
@@ -706,6 +762,76 @@
         });
 
         PrepararCobro();
+    }
+
+    private void AbrirNuevaForma()
+    {
+        NombreNuevaForma = "";
+        Error = null;
+        CreandoForma = true;
+    }
+
+    private async Task GuardarNuevaFormaAsync()
+    {
+        if (Procesando || string.IsNullOrWhiteSpace(NombreNuevaForma))
+            return;
+
+        var nombre = NombreNuevaForma.Trim();
+        var codigo = CodigoForma(nombre);
+
+        if (codigo.Length == 0)
+        {
+            Error = "El nombre de la forma de pago debe tener letras o números.";
+            return;
+        }
+
+        if (Formas.Any(x => string.Equals(x.Codigo, codigo, StringComparison.OrdinalIgnoreCase)))
+        {
+            Error = "Ya existe una forma de pago con ese nombre.";
+            return;
+        }
+
+        Procesando = true;
+        Error = null;
+
+        try
+        {
+            await Api.CrearFormaPagoAsync(new FormaPagoGuardarDto { Codigo = codigo, Nombre = nombre });
+
+            Formas = await Api.ListarFormasPagoAsync();
+
+            if (Formas.FirstOrDefault(x => string.Equals(x.Codigo, codigo, StringComparison.OrdinalIgnoreCase)) is { } nueva)
+                FormaTexto = nueva.Id.ToString();
+
+            CreandoForma = false;
+            Mensaje = $"Forma de pago «{nombre}» agregada.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private static string CodigoForma(string nombre)
+    {
+        var sinTildes = new string(nombre
+            .Normalize(System.Text.NormalizationForm.FormD)
+            .Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+            .ToArray());
+
+        var codigo = string.Join("_", sinTildes
+            .ToUpperInvariant()
+            .Split(sinTildes.Where(c => !char.IsLetterOrDigit(c)).Distinct().ToArray(), StringSplitOptions.RemoveEmptyEntries));
+
+        return codigo.Length > 30 ? codigo[..30] : codigo;
     }
 
     private async Task EjecutarAsync(Func<Task> accion)

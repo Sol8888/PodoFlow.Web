@@ -48,7 +48,7 @@ input[type="radio"] {
     .opcion.activa {
         background: var(--pf-surface-soft);
         border-color: var(--pf-blue);
-        box-shadow: 0 6px 18px rgba(20, 93, 160, .10);
+        box-shadow: 0 6px 18px rgba(0, 152, 218, .10);
     }
 
     .opcion.bloqueada {
@@ -63,7 +63,7 @@ input[type="radio"] {
 
     .opcion:focus-within,
     .medio:focus-within {
-        outline: 3px solid rgba(20, 93, 160, .25);
+        outline: 3px solid rgba(0, 152, 218, .25);
         outline-offset: 2px;
     }
 

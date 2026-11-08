@@ -15,6 +15,6 @@
 }
 
     .boton-tabla:focus-visible {
-        outline: 3px solid rgba(20, 93, 160, .25);
+        outline: 3px solid rgba(0, 152, 218, .25);
         outline-offset: 2px;
     }

@@ -2,9 +2,14 @@
 @rendermode InteractiveServer
 
 @using PodoFlow.Web.Modelos.Pacientes
+@using PodoFlow.Web.Modelos.Citas
 @using PodoFlow.Web.Servicios
+@using PodoFlow.Web.Components.Pages.Citas
+@using PodoFlow.Web.Components.Pages.Pagos
+@using PodoFlow.Web.Components.Pages.Privacidad
 
 @inject IPacientesApi Api
+@inject IAgendaApi Agenda
 @inject ILogger<PacienteDetalle> Logger
 
 <PageTitle>Ficha del paciente | PodoFlow</PageTitle>
@@ -76,7 +81,7 @@
             <div class="pf-profile-actions">
 
                 <a class="pf-profile-button"
-                   href="@($"/privacidad/consentimientos?pacienteId={Id}")">
+                   href="@Ruta("consentimientos")">
                     Gestionar consentimientos
                 </a>
 
@@ -120,6 +125,7 @@
             <div class="pf-contact-success" role="status">
                 @MensajeEstado
             </div>
+            <AvisoTemporal @bind-Mensaje="MensajeEstado" />
         }
 
         @if (ConfirmandoDesactivacion)
@@ -232,6 +238,11 @@
             <a href="@Ruta("pagos")"
                class="@ClasePestana("pagos")">
                 Pagos
+            </a>
+
+            <a href="@Ruta("consentimientos")"
+               class="@ClasePestana("consentimientos")">
+                Consentimientos
             </a>
 
         </nav>
@@ -417,6 +428,7 @@
                     <p class="pf-contact-success" role="status">
                         @MensajeContacto
                     </p>
+                    <AvisoTemporal @bind-Mensaje="MensajeContacto" />
                 }
                 @if (CargandoContactos)
                 {
@@ -609,13 +621,46 @@
                         </p>
                     </div>
 
-                    <button type="button"
-                            class="pf-btn pf-btn-neutral"
-                            disabled="@CargandoCitas"
-                            @onclick="CargarCitasAsync">
-                        Actualizar
-                    </button>
+                    <div class="pf-form-actions-inline">
+                        <button type="button"
+                                class="pf-btn pf-btn-neutral"
+                                disabled="@CargandoCitas"
+                                @onclick="CargarCitasAsync">
+                            Actualizar
+                        </button>
+
+                        @if (Paciente.Estatus && !AgendandoCita)
+                        {
+                            <button type="button"
+                                    class="pf-btn pf-btn-main"
+                                    disabled="@CargandoCatalogos"
+                                    @onclick="AbrirAgendaAsync">
+                                @(CargandoCatalogos ? "Cargando..." : "+ Agendar cita")
+                            </button>
+                        }
+                    </div>
                 </div>
+
+                @if (!string.IsNullOrWhiteSpace(MensajeCita))
+                {
+                    <p class="pf-contact-success" role="status">@MensajeCita</p>
+                    <AvisoTemporal @bind-Mensaje="MensajeCita" />
+                }
+
+                @if (ErrorAgenda is not null)
+                {
+                    <p class="pf-detail-error" role="alert">@ErrorAgenda</p>
+                }
+
+                @if (AgendandoCita && CatalogosAgenda is not null)
+                {
+                    <div class="pf-ficha-cita">
+                        <CitaFormulario Catalogos="CatalogosAgenda"
+                                        PacienteFijo="@Id"
+                                        Cancelar="() => AgendandoCita = false"
+                                        Guardado="CitaAgendadaAsync" />
+                    </div>
+                }
 
                 @if (CargandoCitas)
                 {
@@ -717,6 +762,7 @@
                     <AtencionesPanel
                         @key="Id"
                         PacienteId="@Id"
+                        PacienteActivo="@Paciente.Estatus"
                         CitaId="@Cita" />
                 }
                 else
@@ -732,96 +778,12 @@
 
         else if (SeccionActual == "pagos")
         {
-            <section class="pf-card pf-info-card">
+            <Prestaciones @key="Id" PacienteFijo="@Id" />
+        }
 
-                <div class="pf-detail-heading">
-                    <div>
-                        <h2>Prestaciones y pagos</h2>
-
-                        <p class="pf-detail-muted">
-                            Servicios prestados y estado administrativo.
-                        </p>
-                    </div>
-
-                    <button type="button"
-                            class="pf-btn pf-btn-neutral"
-                            disabled="@CargandoPrestaciones"
-                            @onclick="CargarPrestacionesAsync">
-                        Actualizar
-                    </button>
-                </div>
-
-                @if (CargandoPrestaciones)
-                {
-                    <div class="pf-detail-empty">
-                        Cargando prestaciones...
-                    </div>
-                }
-                else if (ErrorPrestaciones is not null)
-                {
-                    <p class="pf-detail-error">
-                        @ErrorPrestaciones
-                    </p>
-                }
-                else if (Prestaciones.Count == 0)
-                {
-                    <div class="pf-detail-empty">
-                        No hay prestaciones registradas.
-                    </div>
-                }
-                else
-                {
-                    <div class="pf-table-wrap">
-                        <table class="pf-table">
-
-                            <thead>
-                                <tr>
-                                    <th>Fecha</th>
-                                    <th>Prestación</th>
-                                    <th>Total</th>
-                                    <th>Estado</th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                @foreach (var prestacion in Prestaciones
-                                    .OrderByDescending(x => x.FechaPrestacion))
-                                {
-                                    <tr @key="prestacion.Id">
-
-                                        <td>
-                                            @prestacion.FechaPrestacion
-                                            .ToString("dd/MM/yyyy")
-                                        </td>
-
-                                        <td>
-                                            Prestación #@prestacion.Id
-                                        </td>
-
-                                        <td>
-                                            @prestacion.Total.ToString("C2", Cultura)
-                                        </td>
-
-                                        <td>
-                                            <span class="pf-status @ClaseEstado(prestacion.Estado)">
-                                                @prestacion.Estado
-                                            </span>
-                                        </td>
-
-                                    </tr>
-                                }
-                            </tbody>
-
-                        </table>
-                    </div>
-                }
-
-                <p class="pf-detail-muted">
-                    El detalle de cobros y saldos
-                    se integrará posteriormente.
-                </p>
-
-            </section>
+        else if (SeccionActual == "consentimientos")
+        {
+            <Consentimientos @key="Id" PacienteFijo="@Id" />
         }
     }
 
@@ -854,24 +816,17 @@
 
     private List<ContactoPacienteDto> Contactos = new();
     private List<CitaPacienteDto> Citas = new();
-    private List<PrestacionPacienteDto> Prestaciones = new();
 
     private bool Cargando = true;
     private bool CargandoContactos;
     private bool CargandoCitas;
-    private bool CargandoPrestaciones;
 
     private bool ContactosConsultados;
     private bool CitasConsultadas;
-    private bool PrestacionesConsultadas;
 
     private string? ErrorPaciente;
     private string? ErrorContactos;
     private string? ErrorCitas;
-    private string? ErrorPrestaciones;
-
-    private readonly System.Globalization.CultureInfo Cultura =
-        System.Globalization.CultureInfo.GetCultureInfo("es-EC");
 
     // ============================================
     // ESTADO DEL PACIENTE
@@ -910,6 +865,7 @@
             "citas" => "citas",
             "historia" => "historia",
             "pagos" => "pagos",
+            "consentimientos" => "consentimientos",
             _ => "resumen"
         };
 
@@ -971,11 +927,55 @@
                     await CargarContactosAsync();
                 break;
 
-            case "pagos":
-                if (!PrestacionesConsultadas && !CargandoPrestaciones)
-                    await CargarPrestacionesAsync();
-                break;
         }
+    }
+
+    private CatalogosAgenda? CatalogosAgenda;
+    private bool CargandoCatalogos;
+    private bool AgendandoCita;
+    private string? ErrorAgenda;
+    private string? MensajeCita;
+
+    private async Task AbrirAgendaAsync()
+    {
+        if (CargandoCatalogos)
+            return;
+
+        ErrorAgenda = null;
+        MensajeCita = null;
+
+        if (CatalogosAgenda is null)
+        {
+            CargandoCatalogos = true;
+
+            try
+            {
+                CatalogosAgenda = await Agenda.CargarCatalogosAsync();
+            }
+            catch (InvalidOperationException ex)
+            {
+                ErrorAgenda = ex.Message;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error cargando la agenda para el paciente {PacienteId}", Id);
+                ErrorAgenda = "No se pudo cargar la agenda.";
+            }
+            finally
+            {
+                CargandoCatalogos = false;
+            }
+        }
+
+        AgendandoCita = CatalogosAgenda is not null;
+    }
+
+    private async Task CitaAgendadaAsync(CitaDto cita)
+    {
+        AgendandoCita = false;
+        MensajeCita = $"Cita agendada para el {cita.InicioLocal:dd/MM/yyyy} a las {cita.InicioLocal:HH:mm}.";
+
+        await CargarCitasAsync();
     }
 
     private async Task CargarPacienteAsync()
@@ -987,11 +987,9 @@
 
         Contactos.Clear();
         Citas.Clear();
-        Prestaciones.Clear();
 
         ContactosConsultados = false;
         CitasConsultadas = false;
-        PrestacionesConsultadas = false;
 
         CancelarCambioEstado();
         CancelarEdicionContacto();
@@ -1098,43 +1096,6 @@
         finally
         {
             CargandoCitas = false;
-        }
-    }
-
-    // ============================================
-    // CONSULTAR PRESTACIONES
-    // ============================================
-
-    private async Task CargarPrestacionesAsync()
-    {
-        if (CargandoPrestaciones)
-            return;
-
-        CargandoPrestaciones = true;
-        ErrorPrestaciones = null;
-
-        try
-        {
-            Prestaciones = await Api.PrestacionesAsync(Id);
-            PrestacionesConsultadas = true;
-        }
-        catch (InvalidOperationException ex)
-        {
-            ErrorPrestaciones = ex.Message;
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(
-                ex,
-                "Error consultando prestaciones del paciente {PacienteId}",
-                Id);
-
-            ErrorPrestaciones =
-                "No se pudieron cargar las prestaciones.";
-        }
-        finally
-        {
-            CargandoPrestaciones = false;
         }
     }
 
