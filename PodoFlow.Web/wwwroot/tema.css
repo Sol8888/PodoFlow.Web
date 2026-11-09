@@ -925,7 +925,7 @@ h1, h2, h3, h4 {
 
     .pf-info-card h2 {
         margin: 0 0 8px;
-        font-size: 16px;
+        font-size: 18px;
         font-weight: 700;
         color: var(--pf-navy);
     }
@@ -1512,6 +1512,166 @@ button.pf-link,
     font-weight: 700;
     line-height: 1.3;
     color: var(--pf-navy);
+}
+
+.pf-detail-grid {
+    align-items: start;
+}
+
+.pf-info-card .pf-detail-heading h2 {
+    font-size: 18px;
+}
+
+.pf-info-card .pf-pagination {
+    margin-top: 16px;
+}
+
+.pf-detail-heading + .pf-subtabs {
+    margin-top: -8px;
+}
+
+.pf-subtabs {
+    display: inline-flex;
+    align-self: flex-start;
+    gap: 4px;
+    max-width: 100%;
+    padding: 4px;
+    overflow-x: auto;
+    border: 1px solid var(--pf-border);
+    border-bottom: 1px solid var(--pf-border);
+    border-radius: 10px;
+    background: #f1f5f9;
+}
+
+    .pf-subtabs a {
+        min-height: 34px;
+        padding: 6px 14px;
+        border-bottom: none;
+        border-radius: 8px;
+        color: #475569;
+        font-size: 13px;
+    }
+
+        .pf-subtabs a:hover {
+            color: var(--pf-navy);
+            background: rgba(255, 255, 255, 0.6);
+        }
+
+        .pf-subtabs a.active {
+            background: #ffffff;
+            color: var(--pf-navy);
+            box-shadow: var(--pf-shadow-sm), 0 0 0 1px var(--pf-border);
+        }
+
+.pf-clinic-panel {
+    padding: 24px;
+}
+
+.pf-clinic-toolbar h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--pf-navy);
+}
+
+.pf-clinic-summary {
+    border-radius: var(--pf-radius-md);
+}
+
+.pf-clinic-entry {
+    border-radius: var(--pf-radius-xl);
+    overflow: hidden;
+}
+
+.pf-clinic-entry-detail {
+    gap: 12px;
+    padding: 16px 20px;
+}
+
+.pf-clinic-field {
+    padding: 12px 16px;
+    border: 1px solid var(--pf-border-soft);
+    border-radius: var(--pf-radius-md);
+}
+
+    .pf-clinic-field > span {
+        color: var(--pf-text-soft);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+    }
+
+    .pf-clinic-field > p {
+        font-size: 14px;
+    }
+
+.pf-clinic-entry-footer {
+    margin: 0;
+}
+
+.pf-evo {
+    margin: 0 20px 16px;
+    padding: 16px 20px;
+    border: 1px solid var(--pf-border);
+    border-radius: var(--pf-radius-md);
+    background: var(--pf-surface-soft);
+}
+
+.pf-evo-header {
+    margin-bottom: 12px;
+}
+
+    .pf-evo-header h5 {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--pf-navy);
+    }
+
+    .pf-evo-header .pf-btn,
+    .pf-evo-header .pf-btn-main {
+        height: var(--pf-control-alto-sm);
+        min-height: var(--pf-control-alto-sm);
+        padding: 0 12px;
+        border-color: var(--pf-blue-line);
+        background: var(--pf-blue-soft);
+        color: var(--pf-blue-dark);
+        font-size: 13px;
+        box-shadow: none;
+    }
+
+        .pf-evo-header .pf-btn:hover:not(:disabled),
+        .pf-evo-header .pf-btn-main:hover:not(:disabled) {
+            border-color: var(--pf-blue);
+            background: var(--pf-blue);
+            color: #ffffff;
+        }
+
+.pf-evo-empty {
+    border-color: var(--pf-border);
+    border-radius: var(--pf-radius-md);
+    color: var(--pf-text-muted);
+    font-size: 13px;
+}
+
+.pf-evo-item {
+    border-radius: var(--pf-radius-md);
+    background: #ffffff;
+}
+
+@media (max-width: 650px) {
+    .pf-clinic-panel {
+        padding: 16px;
+    }
+
+    .pf-clinic-entry-detail {
+        padding: 12px;
+    }
+
+    .pf-evo {
+        margin: 0 12px 12px;
+        padding: 14px;
+    }
 }
 
 .pf-form-actions-inline {
