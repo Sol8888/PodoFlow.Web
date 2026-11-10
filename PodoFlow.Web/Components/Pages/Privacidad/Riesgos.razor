@@ -1,4 +1,6 @@
-﻿@page "/privacidad/riesgos"
+﻿@page "/reportes"
+@page "/reportes/riesgos"
+@page "/privacidad/riesgos"
 @rendermode InteractiveServer
 
 @inject IPrivacidadApi Api
@@ -9,13 +11,13 @@
 
     <div class="pf-module-header">
         <div>
-            <span class="pf-module-eyebrow">PRIVACIDAD Y LOPDP</span>
+            <span class="pf-module-eyebrow">REPORTES</span>
             <h1>Matriz de riesgos</h1>
             <p>Riesgos de cada tratamiento. El nivel es probabilidad × impacto (1 a 25); el residual es lo que queda después de las medidas.</p>
         </div>
     </div>
 
-    <PrivacidadPestanas Activa="riesgos" />
+    <ReportesPestanas Activa="riesgos" />
 
     @if (Mensaje != null)
     {

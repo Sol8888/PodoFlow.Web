@@ -1,4 +1,5 @@
-﻿@page "/privacidad/eipd"
+﻿@page "/reportes/eipd"
+@page "/privacidad/eipd"
 @rendermode InteractiveServer
 
 @inject IPrivacidadApi Api
@@ -9,13 +10,13 @@
 
     <div class="pf-module-header">
         <div>
-            <span class="pf-module-eyebrow">PRIVACIDAD Y LOPDP</span>
+            <span class="pf-module-eyebrow">REPORTES</span>
             <h1>Evaluaciones de impacto (EIPD)</h1>
             <p>Cada versión reúne los riesgos evaluados y su conclusión. Solo un borrador se edita; para cambiar una aprobada se crea una versión nueva.</p>
         </div>
     </div>
 
-    <PrivacidadPestanas Activa="eipd" />
+    <ReportesPestanas Activa="eipd" />
 
     @if (Mensaje != null)
     {

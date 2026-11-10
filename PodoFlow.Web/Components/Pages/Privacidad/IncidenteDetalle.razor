@@ -1,4 +1,5 @@
-﻿@page "/privacidad/incidentes/{Id:long}"
+﻿@page "/reportes/incidentes/{Id:long}"
+@page "/privacidad/incidentes/{Id:long}"
 @rendermode InteractiveServer
 
 @inject IPrivacidadApi Api
@@ -8,7 +9,7 @@
 
 <div class="pf-pacientes">
 
-    <a href="/privacidad/incidentes" class="pf-back-link">
+    <a href="/reportes/incidentes" class="pf-back-link">
         ← Volver a incidentes
     </a>
 
@@ -21,7 +22,7 @@
         <section class="pf-card pf-info-card">
             <h2>No se pudo abrir el incidente</h2>
             <p>@(ErrorCarga ?? "El incidente no existe.")</p>
-            <a href="/privacidad/incidentes" class="pf-link">Volver a incidentes</a>
+            <a href="/reportes/incidentes" class="pf-link">Volver a incidentes</a>
         </section>
     }
     else

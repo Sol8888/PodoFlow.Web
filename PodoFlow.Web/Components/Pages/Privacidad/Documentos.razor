@@ -1,4 +1,5 @@
-﻿@page "/privacidad/documentos"
+﻿@page "/reportes/documentos"
+@page "/privacidad/documentos"
 @rendermode InteractiveServer
 
 @inject IPrivacidadApi Api
@@ -9,13 +10,13 @@
 
     <div class="pf-module-header">
         <div>
-            <span class="pf-module-eyebrow">PRIVACIDAD Y LOPDP</span>
+            <span class="pf-module-eyebrow">REPORTES</span>
             <h1>Documentos de privacidad</h1>
             <p>Archivos que respaldan el cumplimiento: RAT, EIPD, matrices, evidencias y avisos publicados.</p>
         </div>
     </div>
 
-    <PrivacidadPestanas Activa="documentos" />
+    <ReportesPestanas Activa="documentos" />
 
     @if (Mensaje != null)
     {

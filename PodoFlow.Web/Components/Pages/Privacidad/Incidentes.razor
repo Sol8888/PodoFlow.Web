@@ -1,4 +1,5 @@
-﻿@page "/privacidad/incidentes"
+﻿@page "/reportes/incidentes"
+@page "/privacidad/incidentes"
 @rendermode InteractiveServer
 
 @inject IPrivacidadApi Api
@@ -10,13 +11,13 @@
 
     <div class="pf-module-header">
         <div>
-            <span class="pf-module-eyebrow">PRIVACIDAD Y LOPDP</span>
+            <span class="pf-module-eyebrow">REPORTES</span>
             <h1>Incidentes de seguridad</h1>
             <p>Vulneraciones o sospechas que afectan datos personales, con su bitácora desde la detección hasta el cierre.</p>
         </div>
     </div>
 
-    <PrivacidadPestanas Activa="incidentes" />
+    <ReportesPestanas Activa="incidentes" />
 
     @if (Error != null)
     {
@@ -124,7 +125,7 @@
                                     }
                                 </td>
                                 <td>
-                                    <a class="pf-contact-action enlace" href="@($"/privacidad/incidentes/{incidente.Id}")">Abrir</a>
+                                    <a class="pf-contact-action enlace" href="@($"/reportes/incidentes/{incidente.Id}")">Abrir</a>
                                 </td>
                             </tr>
                         }
@@ -230,7 +231,7 @@
         try
         {
             var creado = await Api.CrearIncidenteAsync(Formulario);
-            Navegacion.NavigateTo($"/privacidad/incidentes/{creado.Id}?nuevo=1");
+            Navegacion.NavigateTo($"/reportes/incidentes/{creado.Id}?nuevo=1");
         }
         catch (InvalidOperationException ex)
         {
