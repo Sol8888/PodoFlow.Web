@@ -1,0 +1,362 @@
+@page "/configuracion/roles"
+@page "/seguridad/roles"
+@rendermode InteractiveServer
+
+@using PodoFlow.Web.Modelos.Seguridad
+
+@inject ISeguridadApi Api
+
+<PageTitle>Roles y permisos | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">CONFIGURACIÓN</span>
+            <h1>Roles y permisos</h1>
+            <p>Cada rol agrupa los permisos que la API exige para cada operación.</p>
+        </div>
+
+        <button type="button" class="pf-btn pf-btn-main" disabled="@(Cargando || Procesando)" @onclick="Nuevo">
+            + Nuevo rol
+        </button>
+    </div>
+
+    <SeguridadPestanas Activa="roles" />
+
+    @if (Cargando)
+    {
+        <div class="pf-empty">Cargando roles...</div>
+    }
+    else
+    {
+        <div class="pf-module-toolbar">
+            <label class="pf-checkbox">
+                <input type="checkbox" @bind="IncluirInactivos" />
+                Incluir inactivos
+            </label>
+        </div>
+
+        @if (Mensaje != null)
+        {
+            <div class="pf-contact-success" aria-live="polite">@Mensaje</div>
+        }
+
+        @if (Error != null && !FormularioAbierto)
+        {
+            <div class="pf-detail-error" role="alert">@Error</div>
+        }
+
+        @if (FormularioAbierto)
+        {
+            <section class="pf-card pf-info-card">
+                <h2>@(EditandoId == null ? "Nuevo rol" : "Editar rol")</h2>
+
+                <form novalidate @onsubmit="GuardarAsync">
+                    <div class="pf-patient-form-grid">
+                        <div class="pf-form-group">
+                            <label for="rol-codigo">Código *</label>
+                            <input id="rol-codigo" class="pf-field" maxlength="50" @bind="Codigo" />
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="rol-nombre">Nombre *</label>
+                            <input id="rol-nombre" class="pf-field" maxlength="100" @bind="Nombre" />
+                        </div>
+
+                        <div class="pf-form-group completo">
+                            <label for="rol-descripcion">Descripción</label>
+                            <textarea id="rol-descripcion" class="pf-field" rows="2" maxlength="500" @bind="Descripcion"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="modulos">
+                        @foreach (var grupo in PermisosActivos)
+                        {
+                            <fieldset class="modulo">
+                                <legend>@grupo.Key</legend>
+
+                                @foreach (var permiso in grupo)
+                                {
+                                    <label class="pf-checkbox" title="@permiso.Descripcion">
+                                        <input type="checkbox" checked="@PermisosMarcados.Contains(permiso.Id)"
+                                               @onchange="e => MarcarPermiso(permiso.Id, e.Value is true)" />
+                                        @permiso.Nombre
+                                    </label>
+                                }
+                            </fieldset>
+                        }
+                    </div>
+
+                    @if (Error != null)
+                    {
+                        <div class="pf-detail-error" role="alert">@Error</div>
+                    }
+
+                    <div class="pf-form-actions">
+                        <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="CerrarFormulario">Cancelar</button>
+                        <button type="submit" class="pf-btn pf-btn-main" disabled="@Procesando">
+                            @(Procesando ? "Guardando..." : "Guardar rol")
+                        </button>
+                    </div>
+                </form>
+            </section>
+        }
+
+        <section class="pf-card pf-directory">
+            <div class="pf-card-header">
+                <div>
+                    <h2>Roles</h2>
+                    <p>El rol ADMIN_PODOLOGA es el único que puede administrar la seguridad.</p>
+                </div>
+
+                <span class="pf-soft-chip">@(Visibles.Count == 1 ? "1 visible" : $"{Visibles.Count} visibles")</span>
+            </div>
+
+            @if (Visibles.Count == 0)
+            {
+                <div class="pf-empty">No hay roles registrados.</div>
+            }
+            else
+            {
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th>Rol</th>
+                                <th>Descripción</th>
+                                <th>Permisos</th>
+                                <th>Estado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var rol in Visibles)
+                            {
+                                <tr @key="rol.Id">
+                                    <td>
+                                        <strong class="nombre">@rol.Nombre</strong>
+                                        <div class="codigo">@rol.Codigo</div>
+                                    </td>
+                                    <td>@(rol.Descripcion ?? "—")</td>
+                                    <td>@PermisosDe(rol.Id).Count()</td>
+                                    <td>
+                                        <span class="pf-status @(rol.Estatus ? "success" : "")">@(rol.Estatus ? "Activo" : "Inactivo")</span>
+                                    </td>
+                                    <td>
+                                        <div class="acciones">
+                                            @if (rol.Estatus)
+                                            {
+                                                <button type="button" class="pf-action-link boton-tabla" disabled="@Procesando" @onclick="() => Editar(rol)">Editar</button>
+                                                <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => CambiarEstadoAsync(rol)">Desactivar</button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => CambiarEstadoAsync(rol)">Reactivar</button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private List<RolDto> RolesLista = [];
+    private List<PermisoDto> Permisos = [];
+    private List<RolPermisoDto> Asignaciones = [];
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private bool FormularioAbierto;
+    private bool IncluirInactivos;
+    private int? EditandoId;
+    private string Codigo = "";
+    private string Nombre = "";
+    private string? Descripcion;
+    private HashSet<int> PermisosMarcados = [];
+    private string? Mensaje;
+    private string? Error;
+
+    private List<RolDto> Visibles => RolesLista
+        .Where(x => IncluirInactivos || x.Estatus)
+        .OrderBy(x => x.Nombre)
+        .ToList();
+
+    private IEnumerable<IGrouping<string, PermisoDto>> PermisosActivos => Permisos
+        .Where(x => x.Estatus)
+        .OrderBy(x => x.Modulo)
+        .ThenBy(x => x.Nombre)
+        .GroupBy(x => x.Modulo);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        Cargando = false;
+    }
+
+    private async Task CargarAsync()
+    {
+        try
+        {
+            var roles = Api.ListarRolesAsync();
+            var permisos = Api.ListarPermisosAsync();
+            var asignaciones = Api.ListarRolesPermisosAsync();
+
+            await Task.WhenAll(roles, permisos, asignaciones);
+
+            RolesLista = await roles;
+            Permisos = await permisos;
+            Asignaciones = await asignaciones;
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+    }
+
+    private IEnumerable<int> PermisosDe(int rolId)
+    {
+        var activos = Permisos.Where(x => x.Estatus).Select(x => x.Id).ToHashSet();
+
+        return Asignaciones
+            .Where(x => x.RolId == rolId && x.Estatus && activos.Contains(x.PermisoId))
+            .Select(x => x.PermisoId);
+    }
+
+    private void Nuevo()
+    {
+        EditandoId = null;
+        Codigo = "";
+        Nombre = "";
+        Descripcion = null;
+        PermisosMarcados = [];
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void Editar(RolDto rol)
+    {
+        EditandoId = rol.Id;
+        Codigo = rol.Codigo;
+        Nombre = rol.Nombre;
+        Descripcion = rol.Descripcion;
+        PermisosMarcados = PermisosDe(rol.Id).ToHashSet();
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void CerrarFormulario()
+    {
+        FormularioAbierto = false;
+        Error = null;
+    }
+
+    private void MarcarPermiso(int permisoId, bool marcado)
+    {
+        if (marcado)
+            PermisosMarcados.Add(permisoId);
+        else
+            PermisosMarcados.Remove(permisoId);
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando)
+            return;
+
+        Error = null;
+        Mensaje = null;
+
+        if (string.IsNullOrWhiteSpace(Codigo) || string.IsNullOrWhiteSpace(Nombre))
+        {
+            Error = "El código y el nombre son obligatorios.";
+            return;
+        }
+
+        var dto = new RolGuardarDto
+        {
+            Codigo = Codigo.Trim(),
+            Nombre = Nombre.Trim(),
+            Descripcion = string.IsNullOrWhiteSpace(Descripcion) ? null : Descripcion.Trim()
+        };
+
+        await EjecutarAsync(async () =>
+        {
+            int rolId;
+
+            if (EditandoId == null)
+            {
+                var creado = await Api.CrearRolAsync(dto);
+                rolId = creado.Id;
+            }
+            else
+            {
+                await Api.ActualizarRolAsync(EditandoId.Value, dto);
+                rolId = EditandoId.Value;
+            }
+
+            var actuales = PermisosDe(rolId).ToHashSet();
+
+            foreach (var permisoId in PermisosMarcados.Except(actuales))
+                await Api.AsignarPermisoAsync(rolId, permisoId);
+
+            foreach (var permisoId in actuales.Except(PermisosMarcados))
+                await Api.QuitarPermisoAsync(rolId, permisoId);
+
+            FormularioAbierto = false;
+            Mensaje = "Rol guardado.";
+        });
+    }
+
+    private Task CambiarEstadoAsync(RolDto rol)
+    {
+        Error = null;
+        Mensaje = null;
+
+        return EjecutarAsync(async () =>
+        {
+            if (rol.Estatus)
+                await Api.DesactivarRolAsync(rol.Id);
+            else
+                await Api.ReactivarRolAsync(rol.Id);
+
+            Mensaje = rol.Estatus ? "Rol desactivado." : "Rol reactivado.";
+        });
+    }
+
+    private async Task EjecutarAsync(Func<Task> accion)
+    {
+        Procesando = true;
+
+        try
+        {
+            await accion();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        finally
+        {
+            await CargarAsync();
+            Procesando = false;
+        }
+    }
+}

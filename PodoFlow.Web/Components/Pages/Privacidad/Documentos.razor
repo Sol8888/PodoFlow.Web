@@ -1,0 +1,348 @@
+﻿@page "/privacidad/documentos"
+@rendermode InteractiveServer
+
+@inject IPrivacidadApi Api
+
+<PageTitle>Documentos de privacidad | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">PRIVACIDAD Y LOPDP</span>
+            <h1>Documentos de privacidad</h1>
+            <p>Archivos que respaldan el cumplimiento: RAT, EIPD, matrices, evidencias y avisos publicados.</p>
+        </div>
+    </div>
+
+    <PrivacidadPestanas Activa="documentos" />
+
+    @if (Mensaje != null)
+    {
+        <div class="pf-contact-success" role="status">@Mensaje</div>
+    }
+
+    @if (Error != null)
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+
+    <div class="pf-module-toolbar">
+        <select class="pf-field filtro" aria-label="Filtrar por tipo" @bind="FiltroTipo">
+            <option value="">Todos los tipos</option>
+            @foreach (var tipo in DocumentoDto.Tipos)
+            {
+                <option value="@tipo.Key">@tipo.Value</option>
+            }
+        </select>
+
+        <label class="pf-checkbox">
+            <input type="checkbox" @bind="MostrarInactivos" />
+            Mostrar inactivos
+        </label>
+
+        <button type="button" class="pf-btn pf-btn-main boton-derecha" disabled="@Procesando" @onclick="Nuevo">
+            Registrar documento
+        </button>
+    </div>
+
+    @if (Formulario != null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>@(EditandoId == null ? "Registrar documento" : $"Editar: {NombreOriginal}")</h2>
+
+            @if (EditandoId != null)
+            {
+                <p class="pf-detail-muted">El archivo y su huella no se cambian. Si el archivo cambió, registra el nuevo con otra versión.</p>
+            }
+
+            <div class="pf-patient-form-grid">
+                <div class="pf-form-group">
+                    <label for="documento-tipo">Tipo *</label>
+                    <select id="documento-tipo" class="pf-field" @bind="Formulario.Tipo">
+                        <option value="">Selecciona un tipo</option>
+                        @foreach (var tipo in DocumentoDto.Tipos)
+                        {
+                            <option value="@tipo.Key">@tipo.Value</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="documento-version">Versión</label>
+                    <input id="documento-version" class="pf-field" maxlength="30" placeholder="1.0" @bind="Formulario.Version" />
+                    <small class="pf-detail-muted">No se repite el mismo tipo, nombre y versión.</small>
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="documento-nombre">Nombre *</label>
+                    <input id="documento-nombre" class="pf-field" maxlength="255" placeholder="Registro de actividades de tratamiento 2026" @bind="Formulario.Nombre" />
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="documento-ruta">Ruta del archivo *</label>
+                    <input id="documento-ruta" class="pf-field" maxlength="1000" placeholder="documentos/rat-2026-v1.pdf"
+                           disabled="@(EditandoId != null)"
+                           @bind="Formulario.RutaArchivo" />
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="documento-huella">Huella SHA-256 del archivo</label>
+                    <input id="documento-huella" class="pf-field huella" maxlength="128"
+                           disabled="@(EditandoId != null)"
+                           @bind="Formulario.Huella" />
+                    <small class="pf-detail-muted">Permite comprobar que el archivo no cambió. En Windows: Get-FileHash archivo.pdf.</small>
+                </div>
+            </div>
+
+            @if (ErrorFormulario != null)
+            {
+                <div class="pf-detail-error" role="alert">@ErrorFormulario</div>
+            }
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" @onclick="CerrarFormulario">Cancelar</button>
+
+                <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="GuardarAsync">
+                    @(Procesando ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </section>
+    }
+
+    <section class="pf-card pf-directory">
+        <div class="pf-card-header">
+            <div>
+                <h2>Documentos registrados</h2>
+                <p>Del más reciente al más antiguo. Dar de baja un documento no borra el archivo.</p>
+            </div>
+
+            <span class="pf-soft-chip">@(Visibles.Count() == 1 ? "1 visible" : $"{Visibles.Count()} visibles")</span>
+        </div>
+
+        @if (Cargando)
+        {
+            <div class="pf-empty" role="status">Cargando documentos...</div>
+        }
+        else if (!Visibles.Any())
+        {
+            <div class="pf-empty">No hay documentos@(MostrarInactivos ? "" : " activos") con este filtro.</div>
+        }
+        else
+        {
+            <div class="pf-table-wrap">
+                <table class="pf-table">
+                    <thead>
+                        <tr>
+                            <th>Documento</th>
+                            <th>Tipo</th>
+                            <th>Archivo</th>
+                            <th>Cargado</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var documento in Visibles)
+                        {
+                            <tr @key="documento.Id">
+                                <td>
+                                    <strong>@documento.Nombre</strong>
+                                    <small class="pf-detail-muted detalle">@(documento.Version == null ? "Sin versión" : $"Versión {documento.Version}")</small>
+                                </td>
+                                <td>@DocumentoDto.NombreTipo(documento.Tipo)</td>
+                                <td>
+                                    <span class="ruta">@documento.RutaArchivo</span>
+                                    @if (!string.IsNullOrWhiteSpace(documento.Huella))
+                                    {
+                                        <small class="pf-detail-muted detalle" title="@documento.Huella">Huella @documento.Huella[..Math.Min(12, documento.Huella.Length)]…</small>
+                                    }
+                                </td>
+                                <td>@PrivacidadApi.HoraEcuador(documento.FechaCarga).ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>
+                                    <span class="@(documento.Estatus ? "pf-mini-chip" : "pf-mini-chip warning")">
+                                        @(documento.Estatus ? "Activo" : "Inactivo")
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="acciones">
+                                        @if (documento.Estatus)
+                                        {
+                                            <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => Editar(documento)">Editar</button>
+                                        }
+
+                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => CambiarEstatusAsync(documento)">
+                                            @(documento.Estatus ? "Dar de baja" : "Reactivar")
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+</div>
+
+@code {
+    private List<DocumentoDto> Lista = new();
+    private DocumentoGuardarDto? Formulario;
+    private long? EditandoId;
+    private string NombreOriginal = "";
+    private string FiltroTipo = "";
+    private bool MostrarInactivos;
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private string? Mensaje;
+    private string? Error;
+    private string? ErrorFormulario;
+
+    private IEnumerable<DocumentoDto> Visibles => Lista
+        .Where(d => MostrarInactivos || d.Estatus)
+        .Where(d => FiltroTipo == "" || d.Tipo == FiltroTipo)
+        .OrderByDescending(d => d.FechaCarga)
+        .ThenByDescending(d => d.Id);
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        Cargando = true;
+
+        try
+        {
+            Lista = await Api.ListarDocumentosAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La API tardó demasiado en responder. Recarga la página.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private void Nuevo()
+    {
+        AbrirFormulario(new DocumentoGuardarDto { Tipo = FiltroTipo }, null, "");
+    }
+
+    private void Editar(DocumentoDto documento)
+    {
+        AbrirFormulario(DocumentoGuardarDto.Desde(documento), documento.Id, documento.Nombre);
+    }
+
+    private void AbrirFormulario(DocumentoGuardarDto formulario, long? id, string nombre)
+    {
+        Formulario = formulario;
+        EditandoId = id;
+        NombreOriginal = nombre;
+        ErrorFormulario = null;
+        Mensaje = null;
+        Error = null;
+    }
+
+    private void CerrarFormulario()
+    {
+        Formulario = null;
+        EditandoId = null;
+        ErrorFormulario = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando || Formulario == null)
+            return;
+
+        ErrorFormulario = Formulario.Validar(EditandoId == null);
+
+        if (ErrorFormulario != null)
+            return;
+
+        Procesando = true;
+
+        try
+        {
+            var nombre = Formulario.Nombre.Trim();
+            var editado = EditandoId.HasValue;
+
+            if (EditandoId.HasValue)
+                await Api.ActualizarDocumentoAsync(EditandoId.Value, Formulario);
+            else
+                await Api.CrearDocumentoAsync(Formulario);
+
+            CerrarFormulario();
+            Error = null;
+            await CargarAsync();
+            Mensaje = editado ? $"Documento «{nombre}» actualizado." : $"Documento «{nombre}» registrado.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorFormulario = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorFormulario = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorFormulario = "La operación tardó demasiado. Recarga la página para ver si se guardó.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private async Task CambiarEstatusAsync(DocumentoDto documento)
+    {
+        if (Procesando)
+            return;
+
+        Procesando = true;
+        Mensaje = null;
+        Error = null;
+
+        try
+        {
+            await Api.CambiarEstatusDocumentoAsync(documento.Id, !documento.Estatus);
+
+            if (EditandoId == documento.Id)
+                CerrarFormulario();
+
+            await CargarAsync();
+            Mensaje = documento.Estatus
+                ? $"Documento «{documento.Nombre}» dado de baja.{(MostrarInactivos ? "" : " Marca «Mostrar inactivos» para verlo.")}"
+                : $"Documento «{documento.Nombre}» reactivado.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La operación tardó demasiado. Recarga la página para ver su estado.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}

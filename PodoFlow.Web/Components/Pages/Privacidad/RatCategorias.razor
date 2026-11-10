@@ -1,0 +1,322 @@
+﻿@page "/privacidad/rat/categorias"
+@rendermode InteractiveServer
+
+@inject IPrivacidadApi Api
+
+<PageTitle>Categorías de datos | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">PRIVACIDAD Y LOPDP</span>
+            <h1>Categorías de datos</h1>
+            <p>Tipos de datos personales que se tratan. Las sensibles, como los datos de salud, piden medidas reforzadas.</p>
+        </div>
+    </div>
+
+    <PrivacidadPestanas Activa="rat" />
+    <RatPestanas Activa="categorias" />
+
+    @if (Mensaje != null)
+    {
+        <div class="pf-contact-success" role="status">@Mensaje</div>
+    }
+
+    @if (Error != null)
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+
+    <div class="pf-module-toolbar">
+        <label class="pf-checkbox">
+            <input type="checkbox" @bind="MostrarInactivas" />
+            Mostrar inactivas
+        </label>
+
+        <button type="button" class="pf-btn pf-btn-main boton-derecha" disabled="@Procesando" @onclick="Nueva">
+            Nueva categoría
+        </button>
+    </div>
+
+    @if (Formulario != null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>@(EditandoId == null ? "Nueva categoría de datos" : $"Editar: {NombreOriginal}")</h2>
+
+            @if (EditandoId == null)
+            {
+                <p class="pf-detail-muted">Si el nombre coincide con una categoría dada de baja, esa categoría se reactiva con estos datos.</p>
+            }
+
+            <div class="pf-patient-form-grid">
+                <div class="pf-form-group">
+                    <label for="categoria-nombre">Nombre *</label>
+                    <input id="categoria-nombre" class="pf-field" maxlength="150" placeholder="Datos de salud" @bind="Formulario.Nombre" />
+                </div>
+
+                <div class="pf-form-group">
+                    <label class="pf-checkbox casilla-formulario">
+                        <input type="checkbox" @bind="Formulario.EsSensible" />
+                        Dato sensible
+                    </label>
+                    <small class="pf-detail-muted">Salud, biometría, origen étnico, creencias, vida sexual o datos de menores.</small>
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="categoria-descripcion">Qué datos incluye</label>
+                    <textarea id="categoria-descripcion" class="pf-field" rows="3" maxlength="1000" @bind="Formulario.Descripcion"></textarea>
+                </div>
+            </div>
+
+            @if (ErrorFormulario != null)
+            {
+                <div class="pf-detail-error" role="alert">@ErrorFormulario</div>
+            }
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" @onclick="CerrarFormulario">Cancelar</button>
+
+                <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="GuardarAsync">
+                    @(Procesando ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </section>
+    }
+
+    <section class="pf-card pf-directory">
+        <div class="pf-card-header">
+            <div>
+                <h2>Categorías registradas</h2>
+                <p>Una categoría dada de baja deja de ofrecerse para nuevos tratamientos.</p>
+            </div>
+
+            <span class="pf-soft-chip">@(Visibles.Count() == 1 ? "1 visible" : $"{Visibles.Count()} visibles")</span>
+        </div>
+
+        @if (Cargando)
+        {
+            <div class="pf-empty" role="status">Cargando categorías...</div>
+        }
+        else if (!Visibles.Any())
+        {
+            <div class="pf-empty">No hay categorías de datos@(MostrarInactivas ? "" : " activas").</div>
+        }
+        else
+        {
+            <div class="pf-table-wrap">
+                <table class="pf-table">
+                    <thead>
+                        <tr>
+                            <th>Categoría</th>
+                            <th>Tipo</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var categoria in Visibles)
+                        {
+                            <tr @key="categoria.Id">
+                                <td>
+                                    <strong>@categoria.Nombre</strong>
+                                    @if (!string.IsNullOrWhiteSpace(categoria.Descripcion))
+                                    {
+                                        <small class="pf-detail-muted detalle">@categoria.Descripcion</small>
+                                    }
+                                </td>
+                                <td>
+                                    @if (categoria.EsSensible)
+                                    {
+                                        <span class="pf-status danger">Sensible</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="pf-detail-muted">General</span>
+                                    }
+                                </td>
+                                <td>
+                                    <span class="@(categoria.Estatus ? "pf-mini-chip" : "pf-mini-chip warning")">
+                                        @(categoria.Estatus ? "Activa" : "Inactiva")
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="acciones">
+                                        @if (categoria.Estatus)
+                                        {
+                                            <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => Editar(categoria)">Editar</button>
+                                        }
+
+                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => CambiarEstatusAsync(categoria)">
+                                            @(categoria.Estatus ? "Dar de baja" : "Reactivar")
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+</div>
+
+@code {
+    private List<CategoriaDatoDto> Lista = new();
+    private CategoriaDatoGuardarDto? Formulario;
+    private int? EditandoId;
+    private string NombreOriginal = "";
+    private bool MostrarInactivas;
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private string? Mensaje;
+    private string? Error;
+    private string? ErrorFormulario;
+
+    private IEnumerable<CategoriaDatoDto> Visibles => Lista
+        .Where(c => MostrarInactivas || c.Estatus)
+        .OrderByDescending(c => c.Estatus)
+        .ThenBy(c => c.Nombre);
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        Cargando = true;
+
+        try
+        {
+            Lista = await Api.ListarCategoriasDatoAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La API tardó demasiado en responder. Recarga la página.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private void Nueva()
+    {
+        AbrirFormulario(new CategoriaDatoGuardarDto(), null, "");
+    }
+
+    private void Editar(CategoriaDatoDto categoria)
+    {
+        AbrirFormulario(CategoriaDatoGuardarDto.Desde(categoria), categoria.Id, categoria.Nombre);
+    }
+
+    private void AbrirFormulario(CategoriaDatoGuardarDto formulario, int? id, string nombre)
+    {
+        Formulario = formulario;
+        EditandoId = id;
+        NombreOriginal = nombre;
+        ErrorFormulario = null;
+        Mensaje = null;
+        Error = null;
+    }
+
+    private void CerrarFormulario()
+    {
+        Formulario = null;
+        EditandoId = null;
+        ErrorFormulario = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando || Formulario == null)
+            return;
+
+        ErrorFormulario = Formulario.Validar();
+
+        if (ErrorFormulario != null)
+            return;
+
+        Procesando = true;
+
+        try
+        {
+            var nombre = Formulario.Nombre.Trim();
+            var editada = EditandoId.HasValue;
+
+            if (EditandoId.HasValue)
+                await Api.ActualizarCategoriaDatoAsync(EditandoId.Value, Formulario);
+            else
+                await Api.CrearCategoriaDatoAsync(Formulario);
+
+            CerrarFormulario();
+            Error = null;
+            await CargarAsync();
+            Mensaje = editada ? $"Categoría «{nombre}» actualizada." : $"Categoría «{nombre}» registrada.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorFormulario = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorFormulario = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorFormulario = "La operación tardó demasiado. Recarga la página para ver si se guardó.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private async Task CambiarEstatusAsync(CategoriaDatoDto categoria)
+    {
+        if (Procesando)
+            return;
+
+        Procesando = true;
+        Mensaje = null;
+        Error = null;
+
+        try
+        {
+            await Api.CambiarEstatusCategoriaDatoAsync(categoria.Id, !categoria.Estatus);
+
+            if (EditandoId == categoria.Id)
+                CerrarFormulario();
+
+            await CargarAsync();
+            Mensaje = categoria.Estatus
+                ? $"Categoría «{categoria.Nombre}» dada de baja.{(MostrarInactivas ? "" : " Marca «Mostrar inactivas» para verla.")}"
+                : $"Categoría «{categoria.Nombre}» reactivada.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La operación tardó demasiado. Recarga la página para ver su estado.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}

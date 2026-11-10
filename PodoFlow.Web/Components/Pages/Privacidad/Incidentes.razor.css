@@ -1,0 +1,23 @@
+﻿.boton-derecha {
+    margin-left: auto;
+}
+
+.filtro {
+    width: auto;
+    min-width: 200px;
+}
+
+.resumen {
+    margin: 0 0 12px;
+}
+
+.detalle {
+    display: block;
+    margin-top: 2px;
+    max-width: 60ch;
+}
+
+.enlace {
+    text-decoration: none;
+    white-space: nowrap;
+}

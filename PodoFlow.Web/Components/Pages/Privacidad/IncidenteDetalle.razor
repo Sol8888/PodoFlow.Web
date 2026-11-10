@@ -1,0 +1,499 @@
+﻿@page "/privacidad/incidentes/{Id:long}"
+@rendermode InteractiveServer
+
+@inject IPrivacidadApi Api
+@inject NavigationManager Navegacion
+
+<PageTitle>Incidente de seguridad | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <a href="/privacidad/incidentes" class="pf-back-link">
+        ← Volver a incidentes
+    </a>
+
+    @if (Cargando)
+    {
+        <div class="pf-card pf-empty" role="status">Cargando el incidente...</div>
+    }
+    else if (Incidente == null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>No se pudo abrir el incidente</h2>
+            <p>@(ErrorCarga ?? "El incidente no existe.")</p>
+            <a href="/privacidad/incidentes" class="pf-link">Volver a incidentes</a>
+        </section>
+    }
+    else
+    {
+        <section class="pf-profile-hero">
+            <div class="pf-profile-avatar">!</div>
+
+            <div class="pf-profile-info">
+                <span class="pf-profile-label">INCIDENTE #@Incidente.Id · @Incidente.Modulo</span>
+
+                <h1>@Incidente.Tipo</h1>
+
+                <div class="pf-profile-meta">
+                    <span>Detectado el @FechaHora(Incidente.FechaDeteccion)</span>
+                    <span class="pf-profile-state">@IncidenteDto.NombreEstado(Incidente.Estado).ToUpperInvariant()</span>
+                    @if (Incidente.FechaCierre.HasValue)
+                    {
+                        <span>Cerrado el @FechaHora(Incidente.FechaCierre.Value)</span>
+                    }
+                </div>
+            </div>
+
+            <div class="pf-profile-actions">
+                @if (!Incidente.EsCerrado && Edicion == null)
+                {
+                    <button type="button" class="pf-profile-button" disabled="@Procesando" @onclick="AbrirEdicion">Editar datos</button>
+                }
+            </div>
+        </section>
+
+        @if (Mensaje != null)
+        {
+            <div class="pf-contact-success espacio" role="status">@Mensaje</div>
+        }
+
+        @if (Error != null)
+        {
+            <div class="pf-detail-error espacio" role="alert">@Error</div>
+        }
+
+        @if (Edicion != null)
+        {
+            <section class="pf-card pf-info-card espacio">
+                <h2>Editar datos del incidente</h2>
+                <p class="pf-detail-muted">Si alguien más lo modificó mientras editabas, se te pedirá recargarlo para no pisar sus cambios.</p>
+
+                <IncidenteCampos Formulario="Edicion" Prefijo="editar" />
+
+                @if (ErrorEdicion != null)
+                {
+                    <div class="pf-detail-error" role="alert">@ErrorEdicion</div>
+                }
+
+                <div class="pf-form-actions">
+                    <button type="button" class="pf-btn pf-btn-neutral" @onclick="() => Edicion = null">Cancelar</button>
+
+                    <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="GuardarEdicionAsync">
+                        @(Procesando ? "Guardando..." : "Guardar")
+                    </button>
+                </div>
+            </section>
+        }
+
+        <div class="pf-detail-grid columnas espacio">
+            <section class="pf-card pf-info-card">
+                <h2>Datos del incidente</h2>
+
+                <div class="pf-data-row">
+                    <span>Qué pasó</span>
+                    <strong>@Incidente.Descripcion</strong>
+                </div>
+
+                <div class="pf-data-row">
+                    <span>Datos afectados</span>
+                    <strong>@(Incidente.DatosAfectados ?? "Sin determinar")</strong>
+                </div>
+
+                <div class="pf-data-row">
+                    <span>Impacto preliminar</span>
+                    <strong>@(Incidente.ImpactoPreliminar ?? "Sin determinar")</strong>
+                </div>
+
+                <div class="pf-data-row">
+                    <span>Registrado por</span>
+                    <strong>Usuario #@Incidente.UsuarioId</strong>
+                </div>
+            </section>
+
+            <section class="pf-card pf-info-card">
+                <h2>Estado</h2>
+
+                @if (Incidente.EsCerrado)
+                {
+                    <p class="pf-detail-muted">El incidente está cerrado: ya no se modifica ni se le registran acciones.</p>
+                }
+                else
+                {
+                    <p class="pf-detail-muted">Flujo: Abierto → En análisis → Contenido → Recuperado → Cerrado. Desde Abierto o En análisis también puede cerrarse si se descarta.</p>
+
+                    <div class="acciones">
+                        @foreach (var estado in Incidente.EstadosSiguientes)
+                        {
+                            <button type="button"
+                                    class="@(estado == "CERRADO" ? "pf-btn pf-btn-danger-confirm" : "pf-btn pf-btn-main")"
+                                    disabled="@Procesando"
+                                    @onclick="() => PrepararCambio(estado)">
+                                @TextoBoton(estado)
+                            </button>
+                        }
+                    </div>
+
+                    @if (EstadoPendiente != null)
+                    {
+                        <div class="cambio">
+                            <h3 class="subtitulo">@TextoBoton(EstadoPendiente)</h3>
+
+                            <div class="pf-form-group">
+                                <label for="cambio-accion">Acción realizada</label>
+                                <textarea id="cambio-accion" class="pf-field" rows="2" maxlength="2000"
+                                          placeholder="@($"Cambio de estado de {Incidente.Estado} a {EstadoPendiente}")"
+                                          @bind="AccionCambio"></textarea>
+                            </div>
+
+                            <div class="pf-form-group">
+                                <label for="cambio-observacion">@(EstadoPendiente == "CERRADO" ? "Resumen del cierre o motivo del descarte *" : "Observación")</label>
+                                <textarea id="cambio-observacion" class="pf-field" rows="2" maxlength="1500" @bind="ObservacionCambio"></textarea>
+                            </div>
+
+                            @if (ErrorCambio != null)
+                            {
+                                <div class="pf-detail-error" role="alert">@ErrorCambio</div>
+                            }
+
+                            <div class="pf-form-actions">
+                                <button type="button" class="pf-btn pf-btn-neutral" @onclick="CancelarCambio">Cancelar</button>
+
+                                <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="ConfirmarCambioAsync">
+                                    @(Procesando ? "Guardando..." : "Confirmar")
+                                </button>
+                            </div>
+                        </div>
+                    }
+                }
+            </section>
+        </div>
+
+        <section class="pf-card pf-info-card espacio">
+            <h2>Bitácora</h2>
+
+            @if (ErrorAcciones != null)
+            {
+                <div class="pf-detail-error" role="alert">@ErrorAcciones</div>
+            }
+
+            @if (!Acciones.Any())
+            {
+                <div class="pf-detail-empty">No hay acciones registradas.</div>
+            }
+            else
+            {
+                <ol class="bitacora">
+                    @foreach (var accion in Acciones.OrderByDescending(a => a.FechaHora).ThenByDescending(a => a.Id))
+                    {
+                        <li @key="accion.Id">
+                            <div class="bitacora-cabecera">
+                                <span class="@(accion.Tipo is "REGISTRO" or "CAMBIO_ESTADO" ? "pf-status info" : "pf-soft-chip")">@AccionIncidenteGuardarDto.NombreTipo(accion.Tipo)</span>
+                                <small class="pf-detail-muted">@FechaHora(accion.FechaHora) · usuario #@accion.UsuarioId</small>
+                            </div>
+                            <p>@accion.Accion</p>
+                            @if (!string.IsNullOrWhiteSpace(accion.Observacion))
+                            {
+                                <small class="pf-detail-muted">@accion.Observacion</small>
+                            }
+                        </li>
+                    }
+                </ol>
+            }
+
+            @if (!Incidente.EsCerrado)
+            {
+                <h3 class="subtitulo">Registrar una acción</h3>
+
+                <div class="pf-patient-form-grid">
+                    <div class="pf-form-group">
+                        <label for="accion-tipo">Tipo *</label>
+                        <select id="accion-tipo" class="pf-field" @bind="NuevaAccion.Tipo">
+                            <option value="">Selecciona un tipo</option>
+                            @foreach (var tipo in AccionIncidenteGuardarDto.Tipos)
+                            {
+                                <option value="@tipo.Key">@tipo.Value</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="pf-form-group pf-form-full">
+                        <label for="accion-descripcion">Acción realizada *</label>
+                        <textarea id="accion-descripcion" class="pf-field" rows="2" maxlength="2000" @bind="NuevaAccion.Accion"></textarea>
+                    </div>
+
+                    <div class="pf-form-group pf-form-full">
+                        <label for="accion-observacion">Observación</label>
+                        <textarea id="accion-observacion" class="pf-field" rows="2" maxlength="1500" @bind="NuevaAccion.Observacion"></textarea>
+                    </div>
+                </div>
+
+                @if (ErrorAccion != null)
+                {
+                    <div class="pf-detail-error" role="alert">@ErrorAccion</div>
+                }
+
+                <div class="pf-form-actions">
+                    <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="RegistrarAccionAsync">
+                        @(Procesando ? "Guardando..." : "Registrar acción")
+                    </button>
+                </div>
+            }
+        </section>
+    }
+
+</div>
+
+@code {
+    [Parameter]
+    public long Id { get; set; }
+
+    private IncidenteDto? Incidente;
+    private List<AccionIncidenteDto> Acciones = new();
+    private IncidenteGuardarDto? Edicion;
+    private AccionIncidenteGuardarDto NuevaAccion = new();
+
+    private string? EstadoPendiente;
+    private string? AccionCambio;
+    private string? ObservacionCambio;
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private string? Mensaje;
+    private string? Error;
+    private string? ErrorCarga;
+    private string? ErrorEdicion;
+    private string? ErrorCambio;
+    private string? ErrorAccion;
+    private string? ErrorAcciones;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Cargando = true;
+        Incidente = null;
+        Edicion = null;
+        EstadoPendiente = null;
+        Mensaje = null;
+        Error = null;
+
+        try
+        {
+            Incidente = await Api.ObtenerIncidenteAsync(Id);
+
+            if (Incidente != null)
+                await CargarAccionesAsync();
+
+            if (Incidente != null && new Uri(Navegacion.Uri).Query.Contains("nuevo=1"))
+                Mensaje = $"Incidente #{Incidente.Id} registrado como Abierto.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorCarga = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorCarga = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorCarga = "La API tardó demasiado en responder. Recarga la página.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private async Task RecargarAsync()
+    {
+        Incidente = await Api.ObtenerIncidenteAsync(Id) ?? Incidente;
+        await CargarAccionesAsync();
+    }
+
+    private async Task CargarAccionesAsync()
+    {
+        ErrorAcciones = null;
+
+        try
+        {
+            Acciones = await Api.AccionesIncidenteAsync(Id);
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorAcciones = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorAcciones = "No fue posible cargar la bitácora.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorAcciones = "La bitácora tardó demasiado en cargar. Recarga la página.";
+        }
+    }
+
+    private static string FechaHora(DateTime fecha) => PrivacidadApi.HoraEcuador(fecha).ToString("dd/MM/yyyy HH:mm");
+
+    private static string TextoBoton(string estado) => estado switch
+    {
+        "ANALISIS" => "Pasar a análisis",
+        "CONTENIDO" => "Marcar contenido",
+        "RECUPERADO" => "Marcar recuperado",
+        "CERRADO" => "Cerrar incidente",
+        _ => estado
+    };
+
+    private void AbrirEdicion()
+    {
+        if (Incidente == null)
+            return;
+
+        Edicion = IncidenteGuardarDto.Desde(Incidente, PrivacidadApi.HoraEcuador(Incidente.FechaDeteccion));
+        ErrorEdicion = null;
+        Mensaje = null;
+        Error = null;
+    }
+
+    private async Task GuardarEdicionAsync()
+    {
+        if (Procesando || Edicion == null || Incidente == null)
+            return;
+
+        ErrorEdicion = Edicion.Validar(PrivacidadApi.HoraEcuador(DateTime.UtcNow));
+
+        if (ErrorEdicion != null)
+            return;
+
+        Procesando = true;
+
+        try
+        {
+            await Api.ActualizarIncidenteAsync(Incidente.Id, Edicion, Incidente.Version);
+
+            Edicion = null;
+            await RecargarAsync();
+            Mensaje = "Datos del incidente actualizados.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorEdicion = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorEdicion = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorEdicion = "La operación tardó demasiado. Recarga la página para ver si se guardó.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private void PrepararCambio(string estado)
+    {
+        EstadoPendiente = estado;
+        AccionCambio = null;
+        ObservacionCambio = null;
+        ErrorCambio = null;
+        Mensaje = null;
+        Error = null;
+    }
+
+    private void CancelarCambio()
+    {
+        EstadoPendiente = null;
+        ErrorCambio = null;
+    }
+
+    private async Task ConfirmarCambioAsync()
+    {
+        if (Procesando || Incidente == null || EstadoPendiente == null)
+            return;
+
+        if (EstadoPendiente == "CERRADO" && string.IsNullOrWhiteSpace(ObservacionCambio))
+            ErrorCambio = "Para cerrar el incidente escribe el resumen del cierre o el motivo del descarte.";
+        else if (AccionCambio?.Trim().Length > 2000)
+            ErrorCambio = "La acción no puede pasar de 2000 caracteres.";
+        else if (ObservacionCambio?.Trim().Length > 1500)
+            ErrorCambio = "La observación no puede pasar de 1500 caracteres.";
+        else
+            ErrorCambio = null;
+
+        if (ErrorCambio != null)
+            return;
+
+        Procesando = true;
+
+        try
+        {
+            var anterior = Incidente.Estado;
+            var nuevo = EstadoPendiente;
+
+            Incidente = await Api.CambiarEstadoIncidenteAsync(
+                Incidente.Id, nuevo, AccionCambio, ObservacionCambio, Incidente.Version);
+
+            EstadoPendiente = null;
+            Edicion = null;
+            await CargarAccionesAsync();
+            Mensaje = $"Estado cambiado de {IncidenteDto.NombreEstado(anterior)} a {IncidenteDto.NombreEstado(nuevo)}.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorCambio = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorCambio = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorCambio = "La operación tardó demasiado. Recarga la página para ver su estado.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private async Task RegistrarAccionAsync()
+    {
+        if (Procesando || Incidente == null)
+            return;
+
+        ErrorAccion = NuevaAccion.Validar();
+
+        if (ErrorAccion != null)
+            return;
+
+        Procesando = true;
+        Mensaje = null;
+
+        try
+        {
+            await Api.RegistrarAccionIncidenteAsync(Incidente.Id, NuevaAccion);
+
+            var tipo = AccionIncidenteGuardarDto.NombreTipo(NuevaAccion.Tipo);
+            NuevaAccion = new AccionIncidenteGuardarDto();
+            await CargarAccionesAsync();
+            Mensaje = $"Acción «{tipo}» registrada en la bitácora.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorAccion = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorAccion = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorAccion = "La operación tardó demasiado. Recarga la página para ver si se guardó.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}

@@ -1,0 +1,60 @@
+﻿<div class="pf-patient-form-grid">
+    <div class="pf-form-group">
+        <label for="@($"{Prefijo}-fecha")">Detectado el *</label>
+        <input id="@($"{Prefijo}-fecha")" type="datetime-local" class="pf-field" @bind="Formulario.FechaDeteccion" />
+    </div>
+
+    <div class="pf-form-group">
+        <label for="@($"{Prefijo}-tipo")">Tipo de incidente *</label>
+        <input id="@($"{Prefijo}-tipo")" class="pf-field" maxlength="100" list="@($"{Prefijo}-tipos")" @bind="Formulario.Tipo" />
+        <datalist id="@($"{Prefijo}-tipos")">
+            @foreach (var tipo in Tipos)
+            {
+                <option value="@tipo"></option>
+            }
+        </datalist>
+    </div>
+
+    <div class="pf-form-group">
+        <label for="@($"{Prefijo}-modulo")">Módulo afectado *</label>
+        <input id="@($"{Prefijo}-modulo")" class="pf-field" maxlength="80" list="@($"{Prefijo}-modulos")" @bind="Formulario.Modulo" />
+        <datalist id="@($"{Prefijo}-modulos")">
+            @foreach (var modulo in Modulos)
+            {
+                <option value="@modulo"></option>
+            }
+        </datalist>
+    </div>
+
+    <div class="pf-form-group pf-form-full">
+        <label for="@($"{Prefijo}-descripcion")">Qué pasó *</label>
+        <textarea id="@($"{Prefijo}-descripcion")" class="pf-field" rows="3" maxlength="3000" @bind="Formulario.Descripcion"></textarea>
+    </div>
+
+    <div class="pf-form-group pf-form-full">
+        <label for="@($"{Prefijo}-datos")">Datos afectados</label>
+        <textarea id="@($"{Prefijo}-datos")" class="pf-field" rows="2" maxlength="2000" placeholder="Qué datos y de cuántos titulares, si se sabe" @bind="Formulario.DatosAfectados"></textarea>
+    </div>
+
+    <div class="pf-form-group pf-form-full">
+        <label for="@($"{Prefijo}-impacto")">Impacto preliminar</label>
+        <textarea id="@($"{Prefijo}-impacto")" class="pf-field" rows="2" maxlength="1500" @bind="Formulario.ImpactoPreliminar"></textarea>
+    </div>
+</div>
+
+@code {
+    private static readonly string[] Tipos =
+    [
+        "ACCESO_NO_AUTORIZADO", "PERDIDA_DATOS", "FILTRACION", "ROBO_CREDENCIALES",
+        "MALWARE", "ENVIO_ERRONEO", "PERDIDA_EQUIPO", "OTRO"
+    ];
+
+    private static readonly string[] Modulos =
+        ["GENERAL", "CLINICA", "AGENDA", "PACIENTES", "PAGOS", "COMUNICACIONES", "PRIVACIDAD", "INVENTARIO"];
+
+    [Parameter, EditorRequired]
+    public IncidenteGuardarDto Formulario { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public string Prefijo { get; set; } = "";
+}

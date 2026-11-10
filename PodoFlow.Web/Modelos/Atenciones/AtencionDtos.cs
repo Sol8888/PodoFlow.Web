@@ -27,6 +27,8 @@ public class AtencionDto
 
 public class AtencionCrearDto
 {
+    public long? CitaId { get; set; }
+
     [Range(1, long.MaxValue,
         ErrorMessage = "Ingresa un profesional responsable válido.")]
     public long UsuarioId { get; set; }

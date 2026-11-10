@@ -1,0 +1,338 @@
+﻿@page "/privacidad/rat/encargados"
+@rendermode InteractiveServer
+
+@inject IPrivacidadApi Api
+
+<PageTitle>Encargados del tratamiento | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">PRIVACIDAD Y LOPDP</span>
+            <h1>Encargados del tratamiento</h1>
+            <p>Terceros que tratan datos por cuenta del centro, como el hosting, el correo o la mensajería, y cómo se controlan.</p>
+        </div>
+    </div>
+
+    <PrivacidadPestanas Activa="rat" />
+    <RatPestanas Activa="encargados" />
+
+    @if (Mensaje != null)
+    {
+        <div class="pf-contact-success" role="status">@Mensaje</div>
+    }
+
+    @if (Error != null)
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+
+    <div class="pf-module-toolbar">
+        <label class="pf-checkbox">
+            <input type="checkbox" @bind="MostrarInactivos" />
+            Mostrar inactivos
+        </label>
+
+        <button type="button" class="pf-btn pf-btn-main boton-derecha" disabled="@Procesando" @onclick="Nuevo">
+            Nuevo encargado
+        </button>
+    </div>
+
+    @if (Formulario != null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>@(EditandoId == null ? "Nuevo encargado" : $"Editar: {NombreOriginal}")</h2>
+
+            <div class="pf-patient-form-grid">
+                <div class="pf-form-group">
+                    <label for="encargado-nombre">Nombre o razón social *</label>
+                    <input id="encargado-nombre" class="pf-field" maxlength="200" @bind="Formulario.Nombre" />
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="encargado-servicio">Servicio que presta *</label>
+                    <input id="encargado-servicio" class="pf-field" maxlength="200" placeholder="Correo transaccional" @bind="Formulario.Servicio" />
+                    <small class="pf-detail-muted">Un mismo proveedor puede registrarse una vez por cada servicio.</small>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="encargado-rol">Rol en el tratamiento</label>
+                    <input id="encargado-rol" class="pf-field" maxlength="100" placeholder="Encargado" @bind="Formulario.RolTratamiento" />
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="encargado-descripcion">Qué datos trata y para qué</label>
+                    <textarea id="encargado-descripcion" class="pf-field" rows="2" maxlength="1500" @bind="Formulario.Descripcion"></textarea>
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="encargado-riesgo">Riesgo identificado</label>
+                    <textarea id="encargado-riesgo" class="pf-field" rows="2" maxlength="1000" @bind="Formulario.Riesgo"></textarea>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="encargado-contractuales">Medidas contractuales</label>
+                    <textarea id="encargado-contractuales" class="pf-field" rows="3" maxlength="2000" placeholder="Contrato de encargo, cláusulas de confidencialidad" @bind="Formulario.MedidasContractuales"></textarea>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="encargado-tecnicas">Medidas técnicas</label>
+                    <textarea id="encargado-tecnicas" class="pf-field" rows="3" maxlength="2000" placeholder="Cifrado, control de acceso, respaldos" @bind="Formulario.MedidasTecnicas"></textarea>
+                </div>
+            </div>
+
+            @if (ErrorFormulario != null)
+            {
+                <div class="pf-detail-error" role="alert">@ErrorFormulario</div>
+            }
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" @onclick="CerrarFormulario">Cancelar</button>
+
+                <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="GuardarAsync">
+                    @(Procesando ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </section>
+    }
+
+    <section class="pf-card pf-directory">
+        <div class="pf-card-header">
+            <div>
+                <h2>Encargados registrados</h2>
+                <p>Un encargado dado de baja ya no se puede asignar a tratamientos nuevos.</p>
+            </div>
+
+            <span class="pf-soft-chip">@(Visibles.Count() == 1 ? "1 visible" : $"{Visibles.Count()} visibles")</span>
+        </div>
+
+        @if (Cargando)
+        {
+            <div class="pf-empty" role="status">Cargando encargados...</div>
+        }
+        else if (!Visibles.Any())
+        {
+            <div class="pf-empty">No hay encargados@(MostrarInactivos ? "" : " activos").</div>
+        }
+        else
+        {
+            <div class="pf-table-wrap">
+                <table class="pf-table">
+                    <thead>
+                        <tr>
+                            <th>Encargado</th>
+                            <th>Servicio</th>
+                            <th>Medidas</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var encargado in Visibles)
+                        {
+                            <tr @key="encargado.Id">
+                                <td>
+                                    <strong>@encargado.Nombre</strong>
+                                    @if (!string.IsNullOrWhiteSpace(encargado.RolTratamiento))
+                                    {
+                                        <small class="pf-detail-muted detalle">@encargado.RolTratamiento</small>
+                                    }
+                                </td>
+                                <td>
+                                    @encargado.Servicio
+                                    @if (!string.IsNullOrWhiteSpace(encargado.Riesgo))
+                                    {
+                                        <small class="pf-detail-muted detalle">Riesgo: @encargado.Riesgo</small>
+                                    }
+                                </td>
+                                <td>
+                                    <small class="detalle">Contractuales: @(encargado.MedidasContractuales ?? "sin registrar")</small>
+                                    <small class="detalle">Técnicas: @(encargado.MedidasTecnicas ?? "sin registrar")</small>
+                                </td>
+                                <td>
+                                    <span class="@(encargado.Estatus ? "pf-mini-chip" : "pf-mini-chip warning")">
+                                        @(encargado.Estatus ? "Activo" : "Inactivo")
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="acciones">
+                                        @if (encargado.Estatus)
+                                        {
+                                            <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => Editar(encargado)">Editar</button>
+                                        }
+
+                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => CambiarEstatusAsync(encargado)">
+                                            @(encargado.Estatus ? "Dar de baja" : "Reactivar")
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+</div>
+
+@code {
+    private List<EncargadoDto> Lista = new();
+    private EncargadoGuardarDto? Formulario;
+    private int? EditandoId;
+    private string NombreOriginal = "";
+    private bool MostrarInactivos;
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private string? Mensaje;
+    private string? Error;
+    private string? ErrorFormulario;
+
+    private IEnumerable<EncargadoDto> Visibles => Lista
+        .Where(e => MostrarInactivos || e.Estatus)
+        .OrderByDescending(e => e.Estatus)
+        .ThenBy(e => e.Nombre)
+        .ThenBy(e => e.Servicio);
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        Cargando = true;
+
+        try
+        {
+            Lista = await Api.ListarEncargadosAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La API tardó demasiado en responder. Recarga la página.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private void Nuevo()
+    {
+        AbrirFormulario(new EncargadoGuardarDto(), null, "");
+    }
+
+    private void Editar(EncargadoDto encargado)
+    {
+        AbrirFormulario(EncargadoGuardarDto.Desde(encargado), encargado.Id, encargado.Nombre);
+    }
+
+    private void AbrirFormulario(EncargadoGuardarDto formulario, int? id, string nombre)
+    {
+        Formulario = formulario;
+        EditandoId = id;
+        NombreOriginal = nombre;
+        ErrorFormulario = null;
+        Mensaje = null;
+        Error = null;
+    }
+
+    private void CerrarFormulario()
+    {
+        Formulario = null;
+        EditandoId = null;
+        ErrorFormulario = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando || Formulario == null)
+            return;
+
+        ErrorFormulario = Formulario.Validar();
+
+        if (ErrorFormulario != null)
+            return;
+
+        Procesando = true;
+
+        try
+        {
+            var nombre = Formulario.Nombre.Trim();
+            var editado = EditandoId.HasValue;
+
+            if (EditandoId.HasValue)
+                await Api.ActualizarEncargadoAsync(EditandoId.Value, Formulario);
+            else
+                await Api.CrearEncargadoAsync(Formulario);
+
+            CerrarFormulario();
+            Error = null;
+            await CargarAsync();
+            Mensaje = editado ? $"Encargado «{nombre}» actualizado." : $"Encargado «{nombre}» registrado.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorFormulario = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorFormulario = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorFormulario = "La operación tardó demasiado. Recarga la página para ver si se guardó.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private async Task CambiarEstatusAsync(EncargadoDto encargado)
+    {
+        if (Procesando)
+            return;
+
+        Procesando = true;
+        Mensaje = null;
+        Error = null;
+
+        try
+        {
+            await Api.CambiarEstatusEncargadoAsync(encargado.Id, !encargado.Estatus);
+
+            if (EditandoId == encargado.Id)
+                CerrarFormulario();
+
+            await CargarAsync();
+            Mensaje = encargado.Estatus
+                ? $"Encargado «{encargado.Nombre}» dado de baja.{(MostrarInactivos ? "" : " Marca «Mostrar inactivos» para verlo.")}"
+                : $"Encargado «{encargado.Nombre}» reactivado.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La operación tardó demasiado. Recarga la página para ver su estado.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}

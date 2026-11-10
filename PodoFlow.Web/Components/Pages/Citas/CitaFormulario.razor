@@ -27,7 +27,7 @@
                         <small>@PacienteElegido.TipoIdentificacion · @PacienteElegido.Identificacion</small>
                     </div>
 
-                    @if (Cita == null)
+                    @if (Cita == null && PacienteFijo == null)
                     {
                         <button type="button" class="pf-link boton-enlace" @onclick="QuitarPaciente">Cambiar</button>
                     }
@@ -236,6 +236,9 @@
     public SugerenciaCita? Sugerencia { get; set; }
 
     [Parameter]
+    public long? PacienteFijo { get; set; }
+
+    [Parameter]
     public EventCallback Cancelar { get; set; }
 
     [Parameter]
@@ -323,6 +326,9 @@
         }
         else
         {
+            if (PacienteFijo is { } pacienteFijo)
+                PacienteElegido = Catalogos.Pacientes.FirstOrDefault(x => x.Id == pacienteFijo);
+
             var activos = Catalogos.Usuarios.Where(x => x.Estatus).ToList();
 
             if (Sugerencia != null)

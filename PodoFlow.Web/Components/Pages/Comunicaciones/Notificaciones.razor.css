@@ -1,0 +1,63 @@
+﻿.recordatorios {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+    .recordatorios p {
+        margin: 6px 0 0;
+        max-width: 75ch;
+    }
+
+    .recordatorios button {
+        flex-shrink: 0;
+    }
+
+.filtro {
+    max-width: 240px;
+}
+
+.boton-derecha {
+    margin-left: auto;
+}
+
+.detalle {
+    display: block;
+    margin-top: 2px;
+}
+
+.acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+    .acciones button {
+        white-space: nowrap;
+    }
+
+.sin-margen {
+    margin: 0;
+}
+
+.intentos {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding-left: 20px;
+}
+
+    .intentos li {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+    }
+
+@media (max-width: 720px) {
+    .recordatorios {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

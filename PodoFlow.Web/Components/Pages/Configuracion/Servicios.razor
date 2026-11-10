@@ -1,0 +1,336 @@
+@page "/configuracion/servicios"
+@rendermode InteractiveServer
+
+@using System.Globalization
+@using PodoFlow.Web.Modelos.Configuracion
+
+@inject IConfiguracionApi Api
+
+<PageTitle>Servicios | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">CONFIGURACIÓN</span>
+            <h1>Servicios</h1>
+            <p>La duración de cada servicio define el tamaño de los turnos que ofrece la agenda.</p>
+        </div>
+
+        <button type="button" class="pf-btn pf-btn-main" disabled="@(Cargando || Procesando)" @onclick="Nuevo">
+            + Nuevo servicio
+        </button>
+    </div>
+
+    <PodoFlow.Web.Components.Pages.Seguridad.SeguridadPestanas Activa="servicios" />
+
+    @if (Cargando)
+    {
+        <div class="pf-empty">Cargando servicios...</div>
+    }
+    else
+    {
+        <div class="pf-module-toolbar">
+            <label class="pf-checkbox">
+                <input type="checkbox" @bind="IncluirInactivos" />
+                Incluir inactivos
+            </label>
+        </div>
+
+        @if (Mensaje != null)
+        {
+            <div class="pf-contact-success" aria-live="polite">@Mensaje</div>
+        }
+
+        @if (Error != null && !FormularioAbierto)
+        {
+            <div class="pf-detail-error" role="alert">@Error</div>
+        }
+
+        @if (FormularioAbierto)
+        {
+            <section class="pf-card pf-info-card">
+                <h2>@(EditandoId == null ? "Nuevo servicio" : "Editar servicio")</h2>
+
+                <form novalidate @onsubmit="GuardarAsync">
+                    <div class="pf-patient-form-grid">
+                        <div class="pf-form-group">
+                            <label for="servicio-nombre">Nombre *</label>
+                            <input id="servicio-nombre" class="pf-field" maxlength="150" @bind="Nombre" />
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="servicio-duracion">Duración (minutos) *</label>
+                            <input id="servicio-duracion" type="number" min="5" max="480" step="5" class="pf-field" @bind="Duracion" />
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="servicio-precio">Precio (USD) *</label>
+                            <input id="servicio-precio" type="number" min="0" step="0.01" class="pf-field" @bind="Precio" />
+                        </div>
+
+                        <div class="pf-form-group completo">
+                            <label for="servicio-descripcion">Descripción</label>
+                            <textarea id="servicio-descripcion" class="pf-field" rows="2" maxlength="1000" @bind="Descripcion"></textarea>
+                        </div>
+                    </div>
+
+                    @if (Error != null)
+                    {
+                        <div class="pf-detail-error" role="alert">@Error</div>
+                    }
+
+                    <div class="pf-form-actions">
+                        <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="CerrarFormulario">Cancelar</button>
+                        <button type="submit" class="pf-btn pf-btn-main" disabled="@Procesando">
+                            @(Procesando ? "Guardando..." : "Guardar servicio")
+                        </button>
+                    </div>
+                </form>
+            </section>
+        }
+
+        <section class="pf-card pf-directory">
+            <div class="pf-card-header">
+                <div>
+                    <h2>Catálogo de servicios</h2>
+                    <p>Solo los servicios activos se pueden elegir al agendar una cita.</p>
+                </div>
+
+                <span class="pf-soft-chip">@(Visibles.Count == 1 ? "1 visible" : $"{Visibles.Count} visibles")</span>
+            </div>
+
+            @if (Visibles.Count == 0)
+            {
+                <div class="pf-empty">No hay servicios registrados. Agrega uno para poder agendar citas.</div>
+            }
+            else
+            {
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th>Servicio</th>
+                                <th>Duración</th>
+                                <th>Precio</th>
+                                <th>Estado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var servicio in Visibles)
+                            {
+                                <tr @key="servicio.Id">
+                                    <td>
+                                        <strong class="nombre">@servicio.Nombre</strong>
+                                        @if (!string.IsNullOrWhiteSpace(servicio.Descripcion))
+                                        {
+                                            <div class="descripcion">@servicio.Descripcion</div>
+                                        }
+                                    </td>
+                                    <td>@servicio.DuracionMinutos min</td>
+                                    <td>@servicio.Precio.ToString("C", Moneda)</td>
+                                    <td>
+                                        <span class="pf-status @(servicio.Estatus ? "success" : "")">@(servicio.Estatus ? "Activo" : "Inactivo")</span>
+                                    </td>
+                                    <td>
+                                        <div class="acciones">
+                                            @if (servicio.Estatus)
+                                            {
+                                                <button type="button" class="pf-action-link boton-tabla" disabled="@Procesando" @onclick="() => Editar(servicio)">Editar</button>
+                                                <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => DesactivarAsync(servicio)">Desactivar</button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => ReactivarAsync(servicio)">Reactivar</button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private static readonly CultureInfo Moneda = CultureInfo.GetCultureInfo("es-EC");
+
+    private List<ServicioDetalleDto> ServiciosLista = [];
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private bool FormularioAbierto;
+    private bool IncluirInactivos;
+    private int? EditandoId;
+    private string Nombre = "";
+    private string? Descripcion;
+    private decimal Precio;
+    private short Duracion = 30;
+    private string? Mensaje;
+    private string? Error;
+
+    private List<ServicioDetalleDto> Visibles => ServiciosLista
+        .Where(x => IncluirInactivos || x.Estatus)
+        .OrderBy(x => x.Nombre)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        Cargando = false;
+    }
+
+    private async Task CargarAsync()
+    {
+        try
+        {
+            ServiciosLista = await Api.ListarServiciosAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+    }
+
+    private void Nuevo()
+    {
+        EditandoId = null;
+        Nombre = "";
+        Descripcion = null;
+        Precio = 0;
+        Duracion = 30;
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void Editar(ServicioDetalleDto servicio)
+    {
+        EditandoId = servicio.Id;
+        Nombre = servicio.Nombre;
+        Descripcion = servicio.Descripcion;
+        Precio = servicio.Precio;
+        Duracion = servicio.DuracionMinutos;
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void CerrarFormulario()
+    {
+        FormularioAbierto = false;
+        Error = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando)
+            return;
+
+        Error = null;
+        Mensaje = null;
+
+        if (string.IsNullOrWhiteSpace(Nombre))
+        {
+            Error = "El nombre es obligatorio.";
+            return;
+        }
+
+        if (Duracion < 5 || Duracion > 480)
+        {
+            Error = "La duración debe estar entre 5 y 480 minutos.";
+            return;
+        }
+
+        if (Precio < 0)
+        {
+            Error = "El precio no puede ser negativo.";
+            return;
+        }
+
+        var dto = new ServicioGuardarDto
+        {
+            Nombre = Nombre.Trim(),
+            Descripcion = string.IsNullOrWhiteSpace(Descripcion) ? null : Descripcion.Trim(),
+            Precio = Math.Round(Precio, 2),
+            DuracionMinutos = Duracion,
+            Estatus = true
+        };
+
+        await EjecutarAsync(async () =>
+        {
+            if (EditandoId.HasValue)
+                await Api.ActualizarServicioAsync(EditandoId.Value, dto);
+            else
+                await Api.CrearServicioAsync(dto);
+
+            FormularioAbierto = false;
+            Mensaje = "Servicio guardado.";
+        });
+    }
+
+    private Task DesactivarAsync(ServicioDetalleDto servicio)
+    {
+        Error = null;
+        Mensaje = null;
+
+        return EjecutarAsync(async () =>
+        {
+            await Api.DesactivarServicioAsync(servicio.Id);
+            Mensaje = "Servicio desactivado.";
+        });
+    }
+
+    private Task ReactivarAsync(ServicioDetalleDto servicio)
+    {
+        Error = null;
+        Mensaje = null;
+
+        var dto = new ServicioGuardarDto
+        {
+            Nombre = servicio.Nombre,
+            Descripcion = servicio.Descripcion,
+            Precio = servicio.Precio,
+            DuracionMinutos = servicio.DuracionMinutos,
+            Estatus = true
+        };
+
+        return EjecutarAsync(async () =>
+        {
+            await Api.ActualizarServicioAsync(servicio.Id, dto);
+            Mensaje = "Servicio reactivado.";
+        });
+    }
+
+    private async Task EjecutarAsync(Func<Task> accion)
+    {
+        Procesando = true;
+
+        try
+        {
+            await accion();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        finally
+        {
+            await CargarAsync();
+            Procesando = false;
+        }
+    }
+}

@@ -3,24 +3,40 @@
 
 @inject IPrivacidadApi Api
 
-<PageTitle>Consentimientos | PodoFlow</PageTitle>
+@if (PacienteFijo is null)
+{
+    <PageTitle>Consentimientos | PodoFlow</PageTitle>
+}
 
 <div class="pf-pacientes">
 
-    <div class="pf-module-header">
-        <div>
-            <span class="pf-module-eyebrow">PRIVACIDAD Y LOPDP</span>
-            <h1>Consentimientos</h1>
-            <p>Consulta, revoca o vuelve a activar lo que autorizó cada paciente.</p>
+    @if (PacienteFijo is null)
+    {
+        <div class="pf-module-header">
+            <div>
+                <span class="pf-module-eyebrow">PRIVACIDAD Y LOPDP</span>
+                <h1>Consentimientos</h1>
+                <p>Consulta, revoca o vuelve a activar lo que autorizó cada paciente.</p>
+            </div>
         </div>
-    </div>
 
-    <PrivacidadPestanas Activa="consentimientos" />
+        <PrivacidadPestanas Activa="consentimientos" />
+    }
+    else
+    {
+        <div class="pf-detail-heading">
+            <div>
+                <h2>Consentimientos</h2>
+                <p class="pf-detail-muted">Consulta y registra lo que autorizó el paciente para cada finalidad.</p>
+            </div>
+        </div>
+    }
 
     <div class="zona-mensajes" aria-live="polite">
         @if (Mensaje != null)
         {
             <div class="pf-contact-success">@Mensaje</div>
+            <AvisoTemporal @bind-Mensaje="Mensaje" />
         }
     </div>
 
@@ -117,13 +133,16 @@
                 }
             </select>
 
-            <div class="toolbar-acciones">
-                <a class="pf-btn pf-btn-neutral" href="@($"/pacientes/{Paciente.Id}")">Ver ficha</a>
+            @if (PacienteFijo is null)
+            {
+                <div class="toolbar-acciones">
+                    <a class="pf-btn pf-btn-neutral" href="@($"/pacientes/{Paciente.Id}")">Ver ficha</a>
 
-                <button type="button" class="pf-btn pf-btn-neutral" @onclick="CambiarPacienteAsync">
-                    Cambiar paciente
-                </button>
-            </div>
+                    <button type="button" class="pf-btn pf-btn-neutral" @onclick="CambiarPacienteAsync">
+                        Cambiar paciente
+                    </button>
+                </div>
+            }
         </div>
 
         @if (Pendiente && Filas.Any(f => f.Registro == null))
@@ -368,6 +387,9 @@
     [SupplyParameterFromQuery]
     public bool Pendiente { get; set; }
 
+    [Parameter]
+    public long? PacienteFijo { get; set; }
+
     private List<PacienteDto> Pacientes = new();
     private List<FinalidadDto> Finalidades = new();
     private List<AvisoDto> Avisos = new();
@@ -399,7 +421,7 @@
     {
         get
         {
-            var hoy = DateOnly.FromDateTime(DateTime.UtcNow);
+            var hoy = PrivacidadApi.HoyEcuador();
 
             return Avisos
                 .Where(a => a.EsVigente(hoy))
@@ -450,9 +472,9 @@
             Finalidades = await Api.ListarFinalidadesAsync();
             Avisos = await Api.ListarAvisosAsync();
 
-            if (PacienteId.HasValue)
+            if ((PacienteFijo ?? PacienteId) is { } pacienteId)
             {
-                Paciente = await Api.ObtenerPacienteAsync(PacienteId.Value);
+                Paciente = await Api.ObtenerPacienteAsync(pacienteId);
 
                 if (Paciente != null)
                 {
@@ -531,7 +553,6 @@
 
     private (string Estado, string Texto)[] AccionesDe(Fila fila)
     {
-        // Revocar siempre se permite; aceptar exige paciente y finalidad activos y un aviso vigente.
         var puedeAceptar = Paciente is { Estatus: true } && fila.Finalidad.Estatus && AvisoVigente != null;
 
         return fila.Registro?.Estado switch
@@ -607,7 +628,9 @@
                     AvisoId = AvisoVigente!.Id,
                     Estado = estado,
                     Medio = Autorizacion.Medio,
-                    Observacion = Autorizacion.ComponerObservacion(Nota)
+                    Observacion = Nota,
+                    RepresentanteNombre = Autorizacion.NombreParaEnviar,
+                    RepresentanteRelacion = Autorizacion.RelacionParaEnviar
                 });
             }
             else
@@ -619,7 +642,9 @@
                         Estado = estado,
                         Medio = Autorizacion.Medio,
                         AvisoId = estado == "ACEPTADO" ? AvisoVigente!.Id : null,
-                        Observacion = Autorizacion.ComponerObservacion(Nota),
+                        Observacion = Nota,
+                        RepresentanteNombre = Autorizacion.NombreParaEnviar,
+                        RepresentanteRelacion = Autorizacion.RelacionParaEnviar,
                         Version = FilaAccion.Registro.Version
                     });
             }

@@ -1,0 +1,24 @@
+﻿<nav class="secciones" aria-label="Secciones del registro de tratamientos">
+    <a href="/privacidad/rat"
+       class="@(Activa == "tratamientos" ? "active" : "")"
+       aria-current="@(Activa == "tratamientos" ? "page" : null)">
+        Tratamientos
+    </a>
+
+    <a href="/privacidad/rat/categorias"
+       class="@(Activa == "categorias" ? "active" : "")"
+       aria-current="@(Activa == "categorias" ? "page" : null)">
+        Categorías de datos
+    </a>
+
+    <a href="/privacidad/rat/encargados"
+       class="@(Activa == "encargados" ? "active" : "")"
+       aria-current="@(Activa == "encargados" ? "page" : null)">
+        Encargados
+    </a>
+</nav>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Activa { get; set; } = "";
+}

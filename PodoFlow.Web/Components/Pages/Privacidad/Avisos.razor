@@ -1,0 +1,373 @@
+﻿@page "/privacidad/avisos"
+@rendermode InteractiveServer
+
+@inject IPrivacidadApi Api
+
+<PageTitle>Avisos de privacidad | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">PRIVACIDAD Y LOPDP</span>
+            <h1>Avisos de privacidad</h1>
+            <p>Versiones del aviso que se informa al paciente. Cada consentimiento queda ligado a la versión vigente al aceptarlo.</p>
+        </div>
+    </div>
+
+    <PrivacidadPestanas Activa="avisos" />
+
+    @if (Mensaje != null)
+    {
+        <div class="pf-contact-success" role="status">@Mensaje</div>
+    }
+
+    @if (Error != null)
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+
+    @if (!Cargando && Error == null && Vigente == null)
+    {
+        <div class="pf-detail-error">
+            No hay un aviso vigente hoy. Mientras no se publique uno, no se pueden aceptar ni registrar consentimientos.
+        </div>
+    }
+    else if (!Cargando && Vigente != null)
+    {
+        <p class="pf-detail-muted vigente">
+            Vigente hoy: versión <strong>@Vigente.Version</strong>, @Vigencia(Vigente).
+        </p>
+    }
+
+    <div class="pf-module-toolbar">
+        <label class="pf-checkbox">
+            <input type="checkbox" @bind="MostrarInactivos" />
+            Mostrar inactivos
+        </label>
+
+        <button type="button" class="pf-btn pf-btn-main boton-derecha" disabled="@Procesando" @onclick="Nuevo">
+            Publicar nueva versión
+        </button>
+    </div>
+
+    @if (Formulario != null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>@(EditandoId == null ? "Nueva versión del aviso" : $"Editar versión {Formulario.Version}")</h2>
+
+            @if (EditandoId == null && Vigente != null)
+            {
+                <p class="pf-detail-muted">
+                    Para reemplazar la versión @Vigente.Version, pon aquí la fecha de inicio y luego ponle fecha de fin a la anterior.
+                    Si dos versiones se cruzan, se usa la que empezó más tarde.
+                </p>
+            }
+
+            <div class="pf-patient-form-grid">
+                <div class="pf-form-group">
+                    <label for="aviso-version">Versión *</label>
+                    <input id="aviso-version" class="pf-field" maxlength="30" placeholder="5.0"
+                           disabled="@(EditandoId != null)"
+                           @bind="Formulario.Version" />
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="aviso-desde">Vigente desde *</label>
+                    <input id="aviso-desde" type="date" class="pf-field" @bind="Formulario.FechaDesde" />
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="aviso-hasta">Vigente hasta</label>
+                    <input id="aviso-hasta" type="date" class="pf-field" @bind="Formulario.FechaHasta" />
+                    <small class="pf-detail-muted">Déjalo vacío si no tiene fecha de fin.</small>
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="aviso-ruta">Documento publicado</label>
+                    <input id="aviso-ruta" class="pf-field" maxlength="1000" placeholder="avisos/aviso-privacidad-v5.pdf" @bind="Formulario.RutaArchivo" />
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="aviso-huella">Huella SHA-256 del documento</label>
+                    <input id="aviso-huella" class="pf-field huella" maxlength="64" @bind="Formulario.Huella" />
+                    <small class="pf-detail-muted">Permite comprobar después que el documento no cambió. En Windows: Get-FileHash archivo.pdf.</small>
+                </div>
+            </div>
+
+            @if (ErrorFormulario != null)
+            {
+                <div class="pf-detail-error" role="alert">@ErrorFormulario</div>
+            }
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" @onclick="CerrarFormulario">Cancelar</button>
+
+                <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="GuardarAsync">
+                    @(Procesando ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </section>
+    }
+
+    <section class="pf-card pf-directory">
+        <div class="pf-card-header">
+            <div>
+                <h2>Versiones</h2>
+                <p>La versión no se edita: si el texto cambia, se publica una versión nueva.</p>
+            </div>
+
+            <span class="pf-soft-chip">@(Visibles.Count() == 1 ? "1 visible" : $"{Visibles.Count()} visibles")</span>
+        </div>
+
+        @if (Cargando)
+        {
+            <div class="pf-empty" role="status">Cargando avisos...</div>
+        }
+        else if (!Visibles.Any())
+        {
+            <div class="pf-empty">No hay avisos de privacidad@(MostrarInactivos ? "" : " activos").</div>
+        }
+        else
+        {
+            <div class="pf-table-wrap">
+                <table class="pf-table">
+                    <thead>
+                        <tr>
+                            <th>Versión</th>
+                            <th>Vigencia</th>
+                            <th>Documento</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var aviso in Visibles)
+                        {
+                            var (estado, clase) = EstadoDe(aviso);
+
+                            <tr @key="aviso.Id">
+                                <td><strong>@aviso.Version</strong></td>
+                                <td>@Vigencia(aviso)</td>
+                                <td>
+                                    @if (string.IsNullOrWhiteSpace(aviso.RutaArchivo))
+                                    {
+                                        <span class="pf-detail-muted">—</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="ruta">@aviso.RutaArchivo</span>
+                                        @if (!string.IsNullOrWhiteSpace(aviso.Huella))
+                                        {
+                                            <small class="pf-detail-muted detalle" title="@aviso.Huella">SHA-256 @aviso.Huella[..Math.Min(12, aviso.Huella.Length)]…</small>
+                                        }
+                                    }
+                                </td>
+                                <td><span class="@clase">@estado</span></td>
+                                <td>
+                                    <div class="acciones">
+                                        @if (aviso.Estatus)
+                                        {
+                                            <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => Editar(aviso)">Editar</button>
+                                        }
+
+                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => CambiarEstatusAsync(aviso)">
+                                            @(aviso.Estatus ? "Dar de baja" : "Reactivar")
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+</div>
+
+@code {
+    private List<AvisoDto> Lista = new();
+    private AvisoGuardarDto? Formulario;
+    private int? EditandoId;
+    private bool MostrarInactivos;
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private string? Mensaje;
+    private string? Error;
+    private string? ErrorFormulario;
+
+    private static DateOnly Hoy => PrivacidadApi.HoyEcuador();
+
+    private AvisoDto? Vigente => Lista
+        .Where(a => a.EsVigente(Hoy))
+        .OrderByDescending(a => a.FechaDesde)
+        .ThenByDescending(a => a.Id)
+        .FirstOrDefault();
+
+    private IEnumerable<AvisoDto> Visibles => Lista
+        .Where(a => MostrarInactivos || a.Estatus)
+        .OrderByDescending(a => a.FechaDesde)
+        .ThenByDescending(a => a.Id);
+
+    protected override Task OnInitializedAsync() => CargarAsync();
+
+    private async Task CargarAsync()
+    {
+        Cargando = true;
+
+        try
+        {
+            Lista = await Api.ListarAvisosAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La API tardó demasiado en responder. Recarga la página.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private (string Texto, string Clase) EstadoDe(AvisoDto aviso)
+    {
+        if (!aviso.Estatus)
+            return ("Inactivo", "pf-mini-chip warning");
+
+        if (ReferenceEquals(aviso, Vigente))
+            return ("Vigente", "pf-mini-chip");
+
+        if (aviso.FechaDesde > Hoy)
+            return ("Programado", "pf-soft-chip");
+
+        if (aviso.FechaHasta.HasValue && aviso.FechaHasta.Value < Hoy)
+            return ("Vencido", "pf-soft-chip");
+
+        return ("Reemplazado", "pf-soft-chip");
+    }
+
+    private static string Vigencia(AvisoDto aviso) => aviso.FechaHasta.HasValue
+        ? $"del {aviso.FechaDesde:dd/MM/yyyy} al {aviso.FechaHasta.Value:dd/MM/yyyy}"
+        : $"desde el {aviso.FechaDesde:dd/MM/yyyy}, sin fecha de fin";
+
+    private void Nuevo()
+    {
+        AbrirFormulario(new AvisoGuardarDto { FechaDesde = Hoy }, null);
+    }
+
+    private void Editar(AvisoDto aviso)
+    {
+        AbrirFormulario(AvisoGuardarDto.Desde(aviso), aviso.Id);
+    }
+
+    private void AbrirFormulario(AvisoGuardarDto formulario, int? id)
+    {
+        Formulario = formulario;
+        EditandoId = id;
+        ErrorFormulario = null;
+        Mensaje = null;
+        Error = null;
+    }
+
+    private void CerrarFormulario()
+    {
+        Formulario = null;
+        EditandoId = null;
+        ErrorFormulario = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando || Formulario == null)
+            return;
+
+        ErrorFormulario = Formulario.Validar(EditandoId == null);
+
+        if (ErrorFormulario != null)
+            return;
+
+        Procesando = true;
+
+        try
+        {
+            var version = Formulario.Version.Trim();
+            var editado = EditandoId.HasValue;
+
+            if (EditandoId.HasValue)
+                await Api.ActualizarAvisoAsync(EditandoId.Value, Formulario);
+            else
+                await Api.CrearAvisoAsync(Formulario);
+
+            CerrarFormulario();
+            Error = null;
+            await CargarAsync();
+            Mensaje = editado ? $"Aviso versión {version} actualizado." : $"Aviso versión {version} publicado.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorFormulario = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorFormulario = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorFormulario = "La operación tardó demasiado. Recarga la página para ver si se guardó.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private async Task CambiarEstatusAsync(AvisoDto aviso)
+    {
+        if (Procesando)
+            return;
+
+        Procesando = true;
+        Mensaje = null;
+        Error = null;
+
+        try
+        {
+            await Api.CambiarEstatusAvisoAsync(aviso.Id, !aviso.Estatus);
+
+            if (EditandoId == aviso.Id)
+                CerrarFormulario();
+
+            await CargarAsync();
+            Mensaje = aviso.Estatus
+                ? $"Aviso versión {aviso.Version} dado de baja.{(MostrarInactivos ? "" : " Marca «Mostrar inactivos» para verlo.")}"
+                : $"Aviso versión {aviso.Version} reactivado.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La operación tardó demasiado. Recarga la página para ver su estado.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}

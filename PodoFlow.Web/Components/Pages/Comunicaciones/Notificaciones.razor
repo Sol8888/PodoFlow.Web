@@ -1,0 +1,623 @@
+﻿@page "/comunicaciones/notificaciones"
+@rendermode InteractiveServer
+
+@inject IComunicacionesApi Api
+@inject IPrivacidadApi Privacidad
+@inject IPacientesApi ApiPacientes
+
+<PageTitle>Notificaciones | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">COMUNICACIONES</span>
+            <h1>Notificaciones</h1>
+            <p>Mensajes programados para los pacientes, su estado y cada intento de envío.</p>
+        </div>
+    </div>
+
+    <ComunicacionesPestanas Activa="notificaciones" />
+
+    @if (Mensaje != null)
+    {
+        <div class="pf-contact-success" role="status">@Mensaje</div>
+    }
+
+    @if (Error != null)
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+
+    <section class="pf-card pf-info-card recordatorios">
+        <div>
+            <h2>Recordatorios de citas</h2>
+            <p class="pf-detail-muted">
+                Se programan solos para las citas de las próximas @HorasAntes horas, por cada canal que el paciente autorizó
+                para «Recordatorios de citas» y con su consentimiento aceptado. Usan la plantilla activa más reciente de tipo
+                RECORDATORIO_CITA de ese canal. Una cita no recibe dos recordatorios por el mismo canal.
+            </p>
+        </div>
+
+        <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="ProgramarRecordatoriosAsync">
+            Programar ahora
+        </button>
+    </section>
+
+    <div class="pf-module-toolbar">
+        <select class="pf-field filtro" aria-label="Filtrar por paciente" @bind="FiltroPaciente" @bind:after="RecargarAsync">
+            <option value="0">Todos los pacientes</option>
+            @foreach (var paciente in PacientesOrdenados)
+            {
+                <option value="@paciente.Id">@paciente.NombreCompleto</option>
+            }
+        </select>
+
+        <select class="pf-field filtro" aria-label="Filtrar por estado" @bind="FiltroEstado" @bind:after="RecargarAsync">
+            <option value="">Todos los estados</option>
+            @foreach (var estado in EstadosNotificacion.Todos)
+            {
+                <option value="@estado.Codigo">@estado.Nombre</option>
+            }
+        </select>
+
+        <button type="button" class="pf-btn pf-btn-main boton-derecha" disabled="@Procesando" @onclick="AbrirFormularioAsync">
+            Nuevo mensaje
+        </button>
+    </div>
+
+    @if (Formulario != null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>Nuevo mensaje</h2>
+            <p class="pf-detail-muted">Solo se ofrecen los canales que el paciente autorizó. La API vuelve a comprobar permiso y consentimiento antes de enviar.</p>
+
+            <div class="pf-patient-form-grid">
+                <div class="pf-form-group">
+                    <label for="mensaje-paciente">Paciente *</label>
+                    <select id="mensaje-paciente" class="pf-field" @bind="PacienteFormulario" @bind:after="CargarDatosPacienteAsync">
+                        <option value="0">Selecciona un paciente</option>
+                        @foreach (var paciente in PacientesOrdenados)
+                        {
+                            <option value="@paciente.Id">@paciente.NombreCompleto · @paciente.Identificacion</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="mensaje-opcion">Canal y finalidad *</label>
+                    <select id="mensaje-opcion" class="pf-field" disabled="@(PacienteFormulario == 0 || CargandoPaciente)"
+                            @bind="Formulario.OpcionId" @bind:after="AlCambiarOpcion">
+                        <option value="0">@(CargandoPaciente ? "Cargando..." : OpcionesPaciente.Count == 0 && PacienteFormulario != 0 ? "Sin canales autorizados" : "Selecciona")</option>
+                        @foreach (var opcion in OpcionesPaciente)
+                        {
+                            <option value="@opcion.Id">@CanalesComunicacion.NombreDe(opcion.Canal) · @NombreFinalidad(opcion.FinalidadId)</option>
+                        }
+                    </select>
+                    @if (PacienteFormulario != 0 && !CargandoPaciente && OpcionesPaciente.Count == 0)
+                    {
+                        <small class="pf-detail-muted">Registra el permiso en <a href="/comunicaciones/preferencias">Preferencias del paciente</a>.</small>
+                    }
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="mensaje-plantilla">Plantilla *</label>
+                    <select id="mensaje-plantilla" class="pf-field" disabled="@(OpcionSeleccionada == null)" @bind="Formulario.PlantillaId">
+                        <option value="0">@(OpcionSeleccionada != null && PlantillasDelCanal.Count == 0 ? "No hay plantillas activas de este canal" : "Selecciona")</option>
+                        @foreach (var plantilla in PlantillasDelCanal)
+                        {
+                            <option value="@plantilla.Id">@plantilla.Nombre · v@(plantilla.Version) · @plantilla.Tipo</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="mensaje-cita">Cita</label>
+                    <select id="mensaje-cita" class="pf-field" disabled="@(PacienteFormulario == 0 || CargandoPaciente)" @bind="CitaFormulario">
+                        <option value="0">Sin cita</option>
+                        @foreach (var cita in CitasPaciente)
+                        {
+                            <option value="@cita.Id">@PrivacidadApi.HoraEcuador(cita.FechaInicio).ToString("dd/MM/yyyy HH:mm") · @cita.Estado</option>
+                        }
+                    </select>
+                    <small class="pf-detail-muted">Con cita, la plantilla puede usar la fecha y la hora; el mensaje se cancela si la cita deja de estar vigente.</small>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="mensaje-fecha">Enviar el *</label>
+                    <input id="mensaje-fecha" type="datetime-local" class="pf-field" @bind="Formulario.FechaLocal" />
+                    <small class="pf-detail-muted">Hora de Ecuador.</small>
+                </div>
+            </div>
+
+            @if (ErrorFormulario != null)
+            {
+                <div class="pf-detail-error" role="alert">@ErrorFormulario</div>
+            }
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" @onclick="CerrarFormulario">Cancelar</button>
+
+                <button type="button" class="pf-btn pf-btn-main" disabled="@(Procesando || CargandoPaciente)" @onclick="GuardarAsync">
+                    @(Procesando ? "Programando..." : "Programar mensaje")
+                </button>
+            </div>
+        </section>
+    }
+
+    <section class="pf-card pf-directory">
+        <div class="pf-card-header">
+            <div>
+                <h2>Bandeja</h2>
+                <p>Lo más reciente primero. Un mensaje enviado o cancelado ya no cambia.</p>
+            </div>
+
+            <span class="pf-soft-chip">@(Lista.Count == 1 ? "1 visible" : $"{Lista.Count} visibles")</span>
+        </div>
+
+        @if (Cargando && Lista.Count == 0)
+        {
+            <div class="pf-empty" role="status">Cargando notificaciones...</div>
+        }
+        else if (Lista.Count == 0)
+        {
+            <div class="pf-empty">No hay notificaciones con esos filtros.</div>
+        }
+        else
+        {
+            <div class="pf-table-wrap">
+                <table class="pf-table">
+                    <thead>
+                        <tr>
+                            <th>Programada</th>
+                            <th>Paciente</th>
+                            <th>Mensaje</th>
+                            <th>Canal</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var notificacion in Lista)
+                        {
+                            var abierta = Abierta == notificacion.Id;
+
+                            <tr @key="notificacion.Id">
+                                <td>@PrivacidadApi.HoraEcuador(notificacion.FechaProgramada).ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>@NombrePaciente(notificacion.PacienteId)</td>
+                                <td>
+                                    <strong>@NombrePlantilla(notificacion.PlantillaId)</strong>
+                                    <small class="pf-detail-muted detalle">@DetalleMensaje(notificacion)</small>
+                                </td>
+                                <td>@CanalesComunicacion.NombreDe(notificacion.Canal)</td>
+                                <td><span class="@EstadosNotificacion.ClaseDe(notificacion.Estado)">@EstadosNotificacion.NombreDe(notificacion.Estado)</span></td>
+                                <td>
+                                    <div class="acciones">
+                                        <button type="button" class="pf-contact-action" disabled="@Procesando"
+                                                aria-expanded="@(abierta ? "true" : "false")"
+                                                @onclick="() => VerEnviosAsync(notificacion)">
+                                            Intentos
+                                        </button>
+
+                                        @if (notificacion.SePuedeReintentar)
+                                        {
+                                            <button type="button" class="pf-contact-action" disabled="@Procesando"
+                                                    @onclick="() => CambiarEstadoAsync(notificacion, EstadosNotificacion.Pendiente)">
+                                                Reintentar
+                                            </button>
+                                        }
+
+                                        @if (notificacion.SePuedeCancelar)
+                                        {
+                                            <button type="button" class="pf-contact-action" disabled="@Procesando"
+                                                    @onclick="() => CambiarEstadoAsync(notificacion, EstadosNotificacion.Cancelada)">
+                                                Cancelar
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+
+                            @if (abierta)
+                            {
+                                <tr class="fila-detalle">
+                                    <td colspan="6">
+                                        @if (Envios.Count == 0)
+                                        {
+                                            <p class="pf-detail-muted sin-margen">Todavía no hay intentos de envío.</p>
+                                        }
+                                        else
+                                        {
+                                            <ol class="intentos">
+                                                @foreach (var envio in Envios)
+                                                {
+                                                    <li @key="envio.Id">
+                                                        <strong>Intento @envio.NumeroIntento</strong>
+                                                        <span>@PrivacidadApi.HoraEcuador(envio.FechaHora).ToString("dd/MM/yyyy HH:mm:ss")</span>
+                                                        <span class="@(envio.Resultado == "ENVIADO" ? "pf-status success" : "pf-status danger")">@envio.Resultado</span>
+                                                        @if (!string.IsNullOrWhiteSpace(envio.CodigoError) || !string.IsNullOrWhiteSpace(envio.DetalleError))
+                                                        {
+                                                            <small class="pf-detail-muted detalle">@envio.CodigoError @envio.DetalleError</small>
+                                                        }
+                                                    </li>
+                                                }
+                                            </ol>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (HayMas)
+            {
+                <div class="pf-form-actions">
+                    <button type="button" class="pf-btn pf-btn-neutral" disabled="@Cargando" @onclick="CargarMasAsync">
+                        @(Cargando ? "Cargando..." : "Ver más")
+                    </button>
+                </div>
+            }
+        }
+    </section>
+
+</div>
+
+@code {
+    private const int HorasAntes = 24;
+    private const int TamanoPagina = 20;
+
+    private static readonly string[] EstadosCitaVigente = ["SOLICITADA", "CONFIRMADA", "REPROGRAMADA"];
+
+    private List<NotificacionDto> Lista = new();
+    private List<EnvioDto> Envios = new();
+    private List<PacienteDto> Pacientes = new();
+    private List<PlantillaDto> Plantillas = new();
+    private List<FinalidadDto> Finalidades = new();
+    private List<OpcionComunicacionDto> OpcionesPaciente = new();
+    private List<CitaPacienteDto> CitasPaciente = new();
+
+    private NotificacionGuardarDto? Formulario;
+    private long PacienteFormulario;
+    private long CitaFormulario;
+    private long FiltroPaciente;
+    private string FiltroEstado = "";
+    private long? Abierta;
+    private int Pagina = 1;
+    private bool HayMas;
+
+    private bool Cargando = true;
+    private bool CargandoPaciente;
+    private bool Procesando;
+    private string? Mensaje;
+    private string? Error;
+    private string? ErrorFormulario;
+
+    private IEnumerable<PacienteDto> PacientesOrdenados => Pacientes.OrderBy(p => p.NombreCompleto);
+
+    private OpcionComunicacionDto? OpcionSeleccionada =>
+        Formulario == null ? null : OpcionesPaciente.FirstOrDefault(o => o.Id == Formulario.OpcionId);
+
+    private List<PlantillaDto> PlantillasDelCanal => OpcionSeleccionada == null
+        ? new()
+        : Plantillas.Where(p => p.Estatus && p.Canal == OpcionSeleccionada.Canal).OrderBy(p => p.Nombre).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Pacientes = await Privacidad.ListarPacientesActivosAsync();
+            Plantillas = await Api.PlantillasAsync(true);
+            Finalidades = await Privacidad.ListarFinalidadesAsync();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            Error = ex is InvalidOperationException ? ex.Message : "No fue posible conectar con PodoFlow.Api.";
+        }
+
+        await RecargarAsync();
+    }
+
+    private async Task RecargarAsync()
+    {
+        Pagina = 1;
+        Abierta = null;
+        Lista = new();
+        await CargarPaginaAsync();
+    }
+
+    private async Task CargarMasAsync()
+    {
+        Pagina++;
+        await CargarPaginaAsync();
+    }
+
+    private async Task CargarPaginaAsync()
+    {
+        Cargando = true;
+
+        try
+        {
+            var lote = await Api.NotificacionesAsync(
+                FiltroPaciente == 0 ? null : FiltroPaciente,
+                FiltroEstado == "" ? null : FiltroEstado,
+                Pagina,
+                TamanoPagina);
+
+            Lista.AddRange(lote.Where(n => Lista.All(x => x.Id != n.Id)));
+            HayMas = lote.Count == TamanoPagina;
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La API tardó demasiado en responder. Recarga la página.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private async Task AbrirFormularioAsync()
+    {
+        Formulario = new NotificacionGuardarDto
+        {
+            FechaLocal = RedondearMinuto(PrivacidadApi.HoraEcuador(DateTime.UtcNow).AddMinutes(10))
+        };
+        PacienteFormulario = FiltroPaciente;
+        CitaFormulario = 0;
+        ErrorFormulario = null;
+        Mensaje = null;
+        Error = null;
+
+        await CargarDatosPacienteAsync();
+    }
+
+    private void CerrarFormulario()
+    {
+        Formulario = null;
+        ErrorFormulario = null;
+    }
+
+    private async Task CargarDatosPacienteAsync()
+    {
+        OpcionesPaciente = new();
+        CitasPaciente = new();
+        CitaFormulario = 0;
+        ErrorFormulario = null;
+
+        if (Formulario == null)
+            return;
+
+        Formulario.OpcionId = 0;
+        Formulario.PlantillaId = 0;
+
+        if (PacienteFormulario == 0)
+            return;
+
+        CargandoPaciente = true;
+
+        try
+        {
+            var opciones = await Api.OpcionesAsync(PacienteFormulario);
+            var ahora = DateTime.UtcNow;
+
+            OpcionesPaciente = opciones
+                .Where(o => o.Estatus && o.Permitido)
+                .OrderBy(o => NombreFinalidad(o.FinalidadId))
+                .ThenBy(o => o.Canal)
+                .ToList();
+
+            CitasPaciente = (await ApiPacientes.CitasAsync(PacienteFormulario))
+                .Where(c => EstadosCitaVigente.Contains(c.Estado) && DateTime.SpecifyKind(c.FechaInicio, DateTimeKind.Utc) > ahora)
+                .OrderBy(c => c.FechaInicio)
+                .ToList();
+
+            if (OpcionesPaciente.Count == 1)
+            {
+                Formulario.OpcionId = OpcionesPaciente[0].Id;
+                AlCambiarOpcion();
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            ErrorFormulario = ex is InvalidOperationException ? ex.Message : "No se pudieron cargar los datos del paciente.";
+        }
+        finally
+        {
+            CargandoPaciente = false;
+        }
+    }
+
+    private void AlCambiarOpcion()
+    {
+        if (Formulario == null)
+            return;
+
+        var plantillas = PlantillasDelCanal;
+
+        Formulario.PlantillaId = plantillas.Count == 1 ? plantillas[0].Id : 0;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando || Formulario == null)
+            return;
+
+        var cita = CitasPaciente.FirstOrDefault(c => c.Id == CitaFormulario);
+
+        Formulario.CitaId = cita?.Id;
+        ErrorFormulario = PacienteFormulario == 0
+            ? "Selecciona un paciente."
+            : Formulario.Validar(
+                PrivacidadApi.HoraEcuador(DateTime.UtcNow),
+                cita == null ? null : PrivacidadApi.HoraEcuador(cita.FechaInicio));
+
+        if (ErrorFormulario != null)
+            return;
+
+        Procesando = true;
+
+        try
+        {
+            await Api.CrearNotificacionAsync(Formulario);
+
+            var paciente = NombrePaciente(PacienteFormulario);
+
+            CerrarFormulario();
+            await RecargarAsync();
+            Mensaje = $"Mensaje para {paciente} programado.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorFormulario = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorFormulario = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorFormulario = "La operación tardó demasiado. Recarga la página para ver si se programó.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private async Task VerEnviosAsync(NotificacionDto notificacion)
+    {
+        if (Abierta == notificacion.Id)
+        {
+            Abierta = null;
+            return;
+        }
+
+        Error = null;
+
+        try
+        {
+            Envios = await Api.EnviosAsync(notificacion.Id);
+            Abierta = notificacion.Id;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudieron cargar los intentos de envío.";
+        }
+    }
+
+    private async Task CambiarEstadoAsync(NotificacionDto notificacion, string estado)
+    {
+        if (Procesando)
+            return;
+
+        Procesando = true;
+        Mensaje = null;
+        Error = null;
+
+        try
+        {
+            await Api.CambiarEstadoNotificacionAsync(notificacion.Id, estado, notificacion.Version);
+            await RecargarAsync();
+            Mensaje = estado == EstadosNotificacion.Cancelada
+                ? "Notificación cancelada."
+                : "Notificación devuelta a la cola: se enviará en la próxima vuelta del proceso de envío.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+            await RecargarAsync();
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La operación tardó demasiado. Recarga la página para ver su estado.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private async Task ProgramarRecordatoriosAsync()
+    {
+        if (Procesando)
+            return;
+
+        Procesando = true;
+        Mensaje = null;
+        Error = null;
+
+        try
+        {
+            var resultado = await Api.ProgramarRecordatoriosAsync(HorasAntes);
+
+            Mensaje = resultado.Programadas == 0 && resultado.Omitidas == 0
+                ? "No hay recordatorios nuevos por programar."
+                : $"Recordatorios programados: {resultado.Programadas}." +
+                  (resultado.Omitidas > 0
+                      ? $" Omitidos: {resultado.Omitidas} (falta plantilla RECORDATORIO_CITA activa o el consentimiento no está aceptado)."
+                      : "");
+
+            await RecargarAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La operación tardó demasiado. Recarga la página.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private string NombrePaciente(long id) =>
+        Pacientes.FirstOrDefault(p => p.Id == id)?.NombreCompleto ?? $"Paciente {id}";
+
+    private string NombrePlantilla(int id)
+    {
+        var plantilla = Plantillas.FirstOrDefault(p => p.Id == id);
+
+        return plantilla == null ? $"Plantilla {id}" : $"{plantilla.Nombre} · v{plantilla.Version}";
+    }
+
+    private static string DetalleMensaje(NotificacionDto notificacion)
+    {
+        var partes = new List<string> { notificacion.Tipo };
+
+        if (notificacion.CitaId.HasValue)
+            partes.Add("ligada a una cita");
+
+        if (!notificacion.UsuarioId.HasValue)
+            partes.Add("automático");
+
+        return string.Join(" · ", partes);
+    }
+
+    private string NombreFinalidad(int id) =>
+        Finalidades.FirstOrDefault(f => f.Id == id)?.Nombre ?? $"Finalidad {id}";
+
+    private static DateTime RedondearMinuto(DateTime fecha) =>
+        new(fecha.Year, fecha.Month, fecha.Day, fecha.Hour, fecha.Minute, 0);
+}

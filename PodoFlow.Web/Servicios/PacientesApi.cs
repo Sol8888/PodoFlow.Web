@@ -790,7 +790,7 @@ public class PacientesApi : IPacientesApi
         var datos = new
         {
             HistoriaId = historiaId,
-            CitaId = (long?)null,
+            dto.CitaId,
             dto.UsuarioId,
             MotivoConsulta = dto.MotivoConsulta.Trim(),
             ValoracionClinica = dto.ValoracionClinica?.Trim(),

@@ -1,0 +1,52 @@
+﻿.espacio {
+    margin-top: 18px;
+}
+
+.columnas {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+}
+
+.acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.cambio {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--pf-border-soft);
+}
+
+.subtitulo {
+    margin: 16px 0 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--pf-text-strong);
+}
+
+.bitacora {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+    .bitacora li {
+        padding: 10px 0 10px 14px;
+        border-left: 2px solid var(--pf-blue-line);
+        border-bottom: 1px solid var(--pf-border-soft);
+    }
+
+        .bitacora li p {
+            margin: 6px 0 2px;
+            font-size: 13px;
+            color: var(--pf-text);
+        }
+
+.bitacora-cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}

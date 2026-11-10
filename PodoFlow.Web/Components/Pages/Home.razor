@@ -1,5 +1,14 @@
 ﻿@page "/"
+@attribute [StreamRendering]
 @using System.Globalization
+@using PodoFlow.Web.Modelos.Citas
+@using PodoFlow.Web.Modelos.Inventario
+@using PodoFlow.Web.Modelos.Pagos
+
+@inject IAgendaApi Agenda
+@inject IInventarioApi Inventario
+@inject IPagosApi Pagos
+@inject ILogger<Home> Logger
 
 <PageTitle>Dashboard | PodoFlow</PageTitle>
 
@@ -15,9 +24,14 @@
             </p>
 
             <div class="pf-hero-actions">
-                <button class="pf-btn pf-btn-primary">Ver citas de hoy</button>
-                <button class="pf-btn pf-btn-secondary">Registrar nueva cita</button>
+                <a class="pf-btn pf-btn-primary" href="/citas">Ver citas de hoy</a>
+                <a class="pf-btn pf-btn-secondary" href="/citas/listado">Registrar nueva cita</a>
             </div>
+
+            @if (Avisos.Count > 0)
+            {
+                <p class="pf-detail-muted" role="status">No se pudo cargar: @string.Join(", ", Avisos).</p>
+            }
         </div>
 
         <div class="pf-hero-right">
@@ -90,6 +104,14 @@
                             </tr>
                         </thead>
                         <tbody>
+                            @if (Cargando)
+                            {
+                                <tr><td colspan="4">Cargando citas...</td></tr>
+                            }
+                            else if (CitasHoy.Count == 0)
+                            {
+                                <tr><td colspan="4">No hay citas programadas para hoy.</td></tr>
+                            }
                             @foreach (var cita in CitasHoy)
                             {
                                 <tr>
@@ -123,15 +145,25 @@
                     </div>
 
                     <div class="pf-list">
+                        @if (!Cargando && InsumosBajos.Count == 0)
+                        {
+                            <div class="pf-list-item">
+                                <div class="pf-list-bullet green"></div>
+                                <div class="pf-list-content">
+                                    <strong>Todo en orden</strong>
+                                    <span>Ningún insumo está por debajo del mínimo.</span>
+                                </div>
+                            </div>
+                        }
                         @foreach (var insumo in InsumosBajos)
                         {
                             <div class="pf-list-item">
                                 <div class="pf-list-bullet orange"></div>
                                 <div class="pf-list-content">
                                     <strong>@insumo.Nombre</strong>
-                                    <span>Disponible: @insumo.StockActual @insumo.Unidad</span>
+                                    <span>Disponible: @Numero(insumo.StockActual) @insumo.Unidad</span>
                                 </div>
-                                <span class="pf-mini-chip warning">Mínimo @insumo.StockMinimo</span>
+                                <span class="pf-mini-chip warning">Mínimo @Numero(insumo.StockMinimo)</span>
                             </div>
                         }
                     </div>
@@ -182,6 +214,10 @@
                 </div>
 
                 <div class="pf-agenda-list">
+                    @if (!Cargando && CitasHoy.Count == 0)
+                    {
+                        <p class="pf-detail-muted">Sin citas para hoy.</p>
+                    }
                     @foreach (var cita in CitasHoy)
                     {
                         <div class="pf-agenda-item">
@@ -250,39 +286,127 @@
 @code {
     private readonly CultureInfo Cultura = CultureInfo.GetCultureInfo("es-EC");
 
+    private static DateTime Hoy => AgendaFechas.Ahora.Date;
+
     private string FechaActual =>
-        DateTime.Today.ToString("dddd, dd 'de' MMMM 'de' yyyy", Cultura);
+        Hoy.ToString("dddd, dd 'de' MMMM 'de' yyyy", Cultura);
 
-    private readonly List<CitaDemo> CitasHoy =
-    [
-        new("08:30", "María López", "ML", "Consulta podológica", "ATENDIDA"),
-        new("09:30", "Carlos Pérez", "CP", "Control de tratamiento", "CONFIRMADA"),
-        new("11:00", "Ana Torres", "AT", "Podología preventiva", "CONFIRMADA"),
-        new("14:00", "José Herrera", "JH", "Consulta podológica", "PENDIENTE"),
-        new("16:00", "Lucía Morales", "LM", "Control de seguimiento", "PENDIENTE")
-    ];
+    private bool Cargando = true;
+    private readonly List<string> Avisos = [];
 
-    private readonly List<InsumoDemo> InsumosBajos =
-    [
-        new("Guantes de nitrilo", 3, 10, "cajas"),
-        new("Gasas estériles", 5, 15, "paquetes"),
-        new("Solución antiséptica", 2, 6, "frascos")
-    ];
+    private List<CitaHoy> CitasHoy = [];
+    private List<InsumoDto> InsumosBajos = [];
 
-    private decimal CobradoHoy = 125.50m;
-    private int PrestacionesPendientes = 3;
-    private int PrestacionesPagadasHoy = 4;
-    private decimal SaldoPendiente = 75.00m;
+    private decimal CobradoHoy;
+    private int PrestacionesPendientes;
+    private int PrestacionesPagadasHoy;
+    private decimal SaldoPendiente;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Task.WhenAll(CargarCitasAsync(), CargarInventarioAsync(), CargarPagosAsync());
+        Cargando = false;
+    }
+
+    private async Task CargarCitasAsync()
+    {
+        try
+        {
+            var catalogos = Agenda.CargarCatalogosAsync();
+            var citas = Agenda.CitasEntreAsync(Hoy, Hoy.AddDays(1));
+
+            await Task.WhenAll(catalogos, citas);
+
+            var nombres = await catalogos;
+
+            CitasHoy = (await citas)
+                .Where(x => x.Estado != "CANCELADA")
+                .OrderBy(x => x.InicioLocal)
+                .Select(x => new CitaHoy(
+                    x.InicioLocal.ToString("HH:mm"),
+                    nombres.NombrePaciente(x.PacienteId),
+                    Iniciales(nombres.NombrePaciente(x.PacienteId)),
+                    nombres.NombreServicio(x.ServicioId),
+                    x.Estado))
+                .ToList();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "No se pudieron cargar las citas del dashboard");
+            Avisos.Add("citas");
+        }
+    }
+
+    private async Task CargarInventarioAsync()
+    {
+        try
+        {
+            InsumosBajos = (await Inventario.ListarInsumosAsync())
+                .Where(x => x.Estatus && x.BajoMinimo)
+                .OrderBy(x => x.StockActual - x.StockMinimo)
+                .Take(6)
+                .ToList();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "No se pudo cargar el inventario del dashboard");
+            Avisos.Add("inventario");
+        }
+    }
+
+    private async Task CargarPagosAsync()
+    {
+        try
+        {
+            var pendientesTarea = Pagos.ListarPrestacionesAsync(null, "PENDIENTE");
+            var cobrosTarea = Pagos.ListarCobrosAsync(null);
+
+            await Task.WhenAll(pendientesTarea, cobrosTarea);
+
+            var pendientes = await pendientesTarea;
+            var cobros = (await cobrosTarea).Where(x => x.Estado == "REGISTRADO").ToList();
+            var cobrosHoy = cobros.Where(x => AgendaFechas.ALocal(x.FechaPago).Date == Hoy).ToList();
+            var idsPendientes = pendientes.Select(x => x.Id).ToHashSet();
+
+            PrestacionesPendientes = pendientes.Count;
+            SaldoPendiente = pendientes.Sum(x => x.Total) -
+                             cobros.Where(x => idsPendientes.Contains(x.PrestacionId)).Sum(x => x.Valor);
+            CobradoHoy = cobrosHoy.Sum(x => x.Valor);
+            PrestacionesPagadasHoy = cobrosHoy
+                .Where(x => x.EstadoPrestacion == "PAGADA")
+                .Select(x => x.PrestacionId)
+                .Distinct()
+                .Count();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "No se pudieron cargar los pagos del dashboard");
+            Avisos.Add("pagos");
+        }
+    }
+
+    private static string Iniciales(string nombre)
+    {
+        var partes = nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        return partes.Length switch
+        {
+            0 => "?",
+            1 => partes[0][..1].ToUpperInvariant(),
+            _ => (partes[0][..1] + partes[^1][..1]).ToUpperInvariant()
+        };
+    }
+
+    private string Numero(decimal valor) => valor.ToString("0.##", Cultura);
 
     private static string GetStatusClass(string estado) => estado switch
     {
         "ATENDIDA" => "success",
         "CONFIRMADA" => "info",
-        "PENDIENTE" => "warning",
-        "CANCELADA" => "danger",
+        "SOLICITADA" or "REPROGRAMADA" => "warning",
+        "CANCELADA" or "NO_ASISTE" => "danger",
         _ => ""
     };
 
-    private record CitaDemo(string Hora, string Paciente, string Iniciales, string Servicio, string Estado);
-    private record InsumoDemo(string Nombre, decimal StockActual, decimal StockMinimo, string Unidad);
+    private sealed record CitaHoy(string Hora, string Paciente, string Iniciales, string Servicio, string Estado);
 }

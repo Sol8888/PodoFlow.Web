@@ -47,6 +47,15 @@
         <a class="pf-link" href="@($"/pacientes/{Cita.PacienteId}")">Ver ficha del paciente →</a>
     </p>
 
+    @if (Cita.Estado == "ATENDIDA")
+    {
+        <p class="enlace-ficha">
+            <a class="pf-btn pf-btn-main" href="@($"/pacientes/{Cita.PacienteId}?seccion=historia&clinica=atenciones&cita={Cita.Id}")">
+                Registrar atención clínica
+            </a>
+        </p>
+    }
+
     @if (!AgendaReglas.EsFinal(Cita.Estado))
     {
         <div class="acciones">

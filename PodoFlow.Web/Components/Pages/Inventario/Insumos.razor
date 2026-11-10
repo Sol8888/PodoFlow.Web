@@ -1,0 +1,360 @@
+@page "/inventario"
+@page "/inventario/insumos"
+@rendermode InteractiveServer
+
+@using System.Globalization
+@using PodoFlow.Web.Modelos.Inventario
+
+@inject IInventarioApi Api
+
+<PageTitle>Insumos | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">INVENTARIO</span>
+            <h1>Insumos</h1>
+            <p>Materiales de la clínica, su stock actual y el mínimo que dispara la alerta de reposición.</p>
+        </div>
+
+        <button type="button" class="pf-btn pf-btn-main" disabled="@(Cargando || Procesando)" @onclick="Nuevo">
+            + Nuevo insumo
+        </button>
+    </div>
+
+    <InventarioPestanas Activa="insumos" />
+
+    @if (Cargando)
+    {
+        <div class="pf-empty">Cargando insumos...</div>
+    }
+    else
+    {
+        <div class="pf-module-toolbar">
+            <input type="search" class="pf-field buscar" placeholder="Buscar por nombre o categoría"
+                   aria-label="Buscar insumo" @bind="Busqueda" @bind:event="oninput" />
+
+            <label class="pf-checkbox">
+                <input type="checkbox" @bind="SoloBajoMinimo" />
+                Solo bajo el mínimo
+            </label>
+
+            <label class="pf-checkbox">
+                <input type="checkbox" @bind="IncluirInactivos" />
+                Incluir inactivos
+            </label>
+        </div>
+
+        @if (BajoMinimo > 0)
+        {
+            <div class="pf-detail-error" role="status">
+                @(BajoMinimo == 1 ? "1 insumo está" : $"{BajoMinimo} insumos están") en o por debajo del stock mínimo.
+            </div>
+        }
+
+        @if (Mensaje != null)
+        {
+            <div class="pf-contact-success" aria-live="polite">@Mensaje</div>
+        }
+
+        @if (Error != null && !FormularioAbierto)
+        {
+            <div class="pf-detail-error" role="alert">@Error</div>
+        }
+
+        @if (FormularioAbierto)
+        {
+            <section class="pf-card pf-info-card">
+                <h2>@(Editando == null ? "Nuevo insumo" : "Editar insumo")</h2>
+
+                <form novalidate @onsubmit="GuardarAsync">
+                    <div class="pf-patient-form-grid">
+                        <div class="pf-form-group">
+                            <label for="insumo-nombre">Nombre *</label>
+                            <input id="insumo-nombre" class="pf-field" maxlength="150" @bind="Nombre" />
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="insumo-categoria">Categoría *</label>
+                            <input id="insumo-categoria" class="pf-field" maxlength="80" list="insumo-categorias" @bind="Categoria" />
+                            <datalist id="insumo-categorias">
+                                @foreach (var categoria in Categorias)
+                                {
+                                    <option value="@categoria"></option>
+                                }
+                            </datalist>
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="insumo-unidad">Unidad *</label>
+                            <input id="insumo-unidad" class="pf-field" maxlength="30" placeholder="unidad, caja, ml..." @bind="Unidad" />
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="insumo-minimo">Stock mínimo *</label>
+                            <input id="insumo-minimo" type="number" min="0" step="0.01" class="pf-field" @bind="StockMinimo" />
+                        </div>
+                    </div>
+
+                    @if (Editando == null)
+                    {
+                        <p class="pf-detail-muted">El stock inicial es 0. Registra un ingreso en Movimientos para cargar existencias.</p>
+                    }
+
+                    @if (Error != null)
+                    {
+                        <div class="pf-detail-error" role="alert">@Error</div>
+                    }
+
+                    <div class="pf-form-actions">
+                        <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="CerrarFormulario">Cancelar</button>
+                        <button type="submit" class="pf-btn pf-btn-main" disabled="@Procesando">
+                            @(Procesando ? "Guardando..." : "Guardar insumo")
+                        </button>
+                    </div>
+                </form>
+            </section>
+        }
+
+        <section class="pf-card pf-directory">
+            <div class="pf-card-header">
+                <div>
+                    <h2>Catálogo de insumos</h2>
+                    <p>El stock solo cambia registrando movimientos.</p>
+                </div>
+
+                <span class="pf-soft-chip">@(Visibles.Count == 1 ? "1 visible" : $"{Visibles.Count} visibles")</span>
+            </div>
+
+            @if (Visibles.Count == 0)
+            {
+                <div class="pf-empty">No hay insumos que coincidan con el filtro.</div>
+            }
+            else
+            {
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th>Insumo</th>
+                                <th>Categoría</th>
+                                <th>Stock actual</th>
+                                <th>Mínimo</th>
+                                <th>Estado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var insumo in Visibles)
+                            {
+                                <tr @key="insumo.Id">
+                                    <td><strong class="nombre">@insumo.Nombre</strong></td>
+                                    <td>@insumo.Categoria</td>
+                                    <td>
+                                        <span class="@(insumo.BajoMinimo && insumo.Estatus ? "alerta" : "")">
+                                            @Cantidad(insumo.StockActual) @insumo.Unidad
+                                        </span>
+                                        @if (insumo.BajoMinimo && insumo.Estatus)
+                                        {
+                                            <span class="pf-status bajo">Reponer</span>
+                                        }
+                                    </td>
+                                    <td>@Cantidad(insumo.StockMinimo) @insumo.Unidad</td>
+                                    <td>
+                                        <span class="pf-status @(insumo.Estatus ? "success" : "")">@(insumo.Estatus ? "Activo" : "Inactivo")</span>
+                                    </td>
+                                    <td>
+                                        <div class="acciones">
+                                            @if (insumo.Estatus)
+                                            {
+                                                <a class="pf-action-link boton-tabla" href="@($"/inventario/movimientos?insumo={insumo.Id}")">Movimiento</a>
+                                                <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => Editar(insumo)">Editar</button>
+                                                <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => CambiarEstadoAsync(insumo)">Desactivar</button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => CambiarEstadoAsync(insumo)">Reactivar</button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private List<InsumoDto> InsumosLista = [];
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private bool FormularioAbierto;
+    private bool IncluirInactivos;
+    private bool SoloBajoMinimo;
+    private string Busqueda = "";
+    private InsumoDto? Editando;
+    private string Nombre = "";
+    private string Categoria = "";
+    private string Unidad = "";
+    private decimal StockMinimo;
+    private string? Mensaje;
+    private string? Error;
+
+    private int BajoMinimo => InsumosLista.Count(x => x.Estatus && x.BajoMinimo);
+
+    private IEnumerable<string> Categorias => InsumosLista
+        .Select(x => x.Categoria)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(x => x);
+
+    private List<InsumoDto> Visibles => InsumosLista
+        .Where(x => IncluirInactivos || x.Estatus)
+        .Where(x => !SoloBajoMinimo || x.BajoMinimo)
+        .Where(x => string.IsNullOrWhiteSpace(Busqueda) ||
+                    x.Nombre.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                    x.Categoria.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(x => x.Estatus && x.BajoMinimo)
+        .ThenBy(x => x.Nombre)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        Cargando = false;
+    }
+
+    private async Task CargarAsync()
+    {
+        try
+        {
+            InsumosLista = await Api.ListarInsumosAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+    }
+
+    private void Nuevo()
+    {
+        Editando = null;
+        Nombre = "";
+        Categoria = "";
+        Unidad = "";
+        StockMinimo = 0;
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void Editar(InsumoDto insumo)
+    {
+        Editando = insumo;
+        Nombre = insumo.Nombre;
+        Categoria = insumo.Categoria;
+        Unidad = insumo.Unidad;
+        StockMinimo = insumo.StockMinimo;
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void CerrarFormulario()
+    {
+        FormularioAbierto = false;
+        Error = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando)
+            return;
+
+        Error = null;
+        Mensaje = null;
+
+        if (string.IsNullOrWhiteSpace(Nombre) || string.IsNullOrWhiteSpace(Categoria) || string.IsNullOrWhiteSpace(Unidad))
+        {
+            Error = "El nombre, la categoría y la unidad son obligatorios.";
+            return;
+        }
+
+        if (StockMinimo < 0)
+        {
+            Error = "El stock mínimo no puede ser negativo.";
+            return;
+        }
+
+        var dto = new InsumoGuardarDto
+        {
+            Nombre = Nombre.Trim(),
+            Categoria = Categoria.Trim(),
+            Unidad = Unidad.Trim(),
+            StockMinimo = Math.Round(StockMinimo, 2),
+            Version = Editando?.Version
+        };
+
+        await EjecutarAsync(async () =>
+        {
+            if (Editando == null)
+                await Api.CrearInsumoAsync(dto);
+            else
+                await Api.ActualizarInsumoAsync(Editando.Id, dto);
+
+            FormularioAbierto = false;
+            Mensaje = "Insumo guardado.";
+        });
+    }
+
+    private Task CambiarEstadoAsync(InsumoDto insumo)
+    {
+        Error = null;
+        Mensaje = null;
+
+        return EjecutarAsync(async () =>
+        {
+            if (insumo.Estatus)
+                await Api.DesactivarInsumoAsync(insumo.Id, insumo.Version);
+            else
+                await Api.ReactivarInsumoAsync(insumo.Id, insumo.Version);
+
+            Mensaje = insumo.Estatus ? "Insumo desactivado." : "Insumo reactivado.";
+        });
+    }
+
+    private async Task EjecutarAsync(Func<Task> accion)
+    {
+        Procesando = true;
+
+        try
+        {
+            await accion();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        finally
+        {
+            await CargarAsync();
+            Procesando = false;
+        }
+    }
+
+    private static string Cantidad(decimal valor) =>
+        valor.ToString("0.##", CultureInfo.GetCultureInfo("es-EC"));
+}

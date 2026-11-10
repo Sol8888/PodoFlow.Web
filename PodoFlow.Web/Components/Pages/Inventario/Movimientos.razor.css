@@ -1,0 +1,27 @@
+.filtro {
+    max-width: 260px;
+}
+
+.nombre {
+    color: var(--pf-navy);
+    font-size: 13px;
+}
+
+.completo {
+    grid-column: 1 / -1;
+}
+
+.suma {
+    font-weight: 700;
+    color: #067647;
+}
+
+.resta {
+    font-weight: 700;
+    color: #b42318;
+}
+
+.detalle {
+    font-size: 12px;
+    opacity: .7;
+}

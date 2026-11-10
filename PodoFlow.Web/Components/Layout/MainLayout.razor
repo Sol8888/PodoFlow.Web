@@ -2,35 +2,23 @@
 
 <div class="pf-shell">
 
+    <input type="checkbox" id="pf-menu" class="pf-menu-toggle" aria-label="Mostrar menú" />
+
     <aside class="pf-sidebar">
         <NavMenu />
     </aside>
+
+    <label for="pf-menu" class="pf-menu-fondo" aria-hidden="true"></label>
 
     <div class="pf-main-area">
 
         <header class="pf-topbar">
             <div class="pf-topbar-left">
-                <div class="pf-search">
-                    <span class="pf-search-icon">⌕</span>
-                    <input type="text" placeholder="Buscar paciente, cita, pago..." />
-                </div>
+                <label for="pf-menu" class="pf-menu-boton" title="Menú"></label>
             </div>
 
             <div class="pf-topbar-right">
-                <button class="pf-top-icon-btn">◐</button>
-                <button class="pf-top-icon-btn">◌</button>
-
-                <div class="pf-date-chip">
-                    15 Oct, 2026
-                </div>
-
-                <div class="pf-user-chip">
-                    <div class="pf-user-avatar">PF</div>
-                    <div>
-                        <strong>PodoFlow</strong>
-                        <span>Modo demostración</span>
-                    </div>
-                </div>
+                <a class="pf-btn pf-btn-primary pf-top-cta" href="/citas/listado">Nueva cita</a>
             </div>
         </header>
 

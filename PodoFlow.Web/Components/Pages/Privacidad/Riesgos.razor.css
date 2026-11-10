@@ -1,0 +1,44 @@
+﻿.boton-derecha {
+    margin-left: auto;
+}
+
+.filtro {
+    width: auto;
+    min-width: 200px;
+}
+
+.detalle {
+    display: block;
+    margin-top: 2px;
+    max-width: 56ch;
+}
+
+.etiqueta {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--pf-text-soft);
+}
+
+.nivel-calculado {
+    display: flex;
+    align-items: center;
+    min-height: 38px;
+}
+
+.acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+    .acciones button {
+        white-space: nowrap;
+    }
+
+.col-riesgo {
+    min-width: 260px;
+}
+
+.sin-corte {
+    white-space: nowrap;
+}

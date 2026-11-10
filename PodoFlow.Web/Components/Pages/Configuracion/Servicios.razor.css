@@ -1,0 +1,44 @@
+.nombre {
+    color: var(--pf-navy);
+    font-size: 13px;
+}
+
+.descripcion {
+    max-width: 420px;
+    font-size: 12px;
+    opacity: .7;
+}
+
+.completo {
+    grid-column: 1 / -1;
+}
+
+.acciones {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.boton-tabla {
+    border: 0;
+    cursor: pointer;
+}
+
+.boton-enlace {
+    padding: 6px 4px;
+    font-family: inherit;
+    white-space: nowrap;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+    .boton-enlace:hover:not(:disabled) {
+        text-decoration: underline;
+    }
+
+.boton-tabla:disabled,
+.boton-enlace:disabled {
+    cursor: not-allowed;
+    opacity: .6;
+}
