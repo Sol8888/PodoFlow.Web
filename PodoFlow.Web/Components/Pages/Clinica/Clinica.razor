@@ -56,33 +56,33 @@
                 </div>
             </div>
 
-            <div class="pf-module-toolbar">
-                <input type="search" class="pf-field buscar" placeholder="Nombre o identificación"
+            <div class="busqueda">
+                <input type="search" class="pf-field buscar" placeholder="Buscar por nombre o identificación..."
                        aria-label="Buscar paciente" @bind="Busqueda" @bind:event="oninput" />
-            </div>
 
-            @if (!string.IsNullOrWhiteSpace(Busqueda))
-            {
-                @if (Encontrados.Count == 0)
+                @if (!string.IsNullOrWhiteSpace(Busqueda))
                 {
-                    <div class="pf-empty">Ningún paciente con historia coincide con la búsqueda.</div>
+                    @if (Encontrados.Count == 0)
+                    {
+                        <p class="sin-resultados">Ningún paciente con historia coincide con «@Busqueda.Trim()».</p>
+                    }
+                    else
+                    {
+                        <ul class="resultados">
+                            @foreach (var (paciente, historia) in Encontrados)
+                            {
+                                <li @key="historia.Id">
+                                    <a href="@RutaHistoria(paciente.Id)">
+                                        <strong>@paciente.NombreCompleto</strong>
+                                        <span>@paciente.TipoIdentificacion @paciente.Identificacion</span>
+                                    </a>
+                                    <span class="pf-status @ClaseEstado(historia.Estado)">@historia.Estado</span>
+                                </li>
+                            }
+                        </ul>
+                    }
                 }
-                else
-                {
-                    <ul class="resultados">
-                        @foreach (var (paciente, historia) in Encontrados)
-                        {
-                            <li @key="historia.Id">
-                                <a href="@RutaHistoria(paciente.Id)">
-                                    <strong>@paciente.NombreCompleto</strong>
-                                    <span>@paciente.TipoIdentificacion @paciente.Identificacion</span>
-                                </a>
-                                <span class="pf-status @ClaseEstado(historia.Estado)">@historia.Estado</span>
-                            </li>
-                        }
-                    </ul>
-                }
-            }
+            </div>
         </section>
 
         <section class="pf-card pf-directory">
