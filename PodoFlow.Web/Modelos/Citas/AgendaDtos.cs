@@ -227,6 +227,40 @@ namespace PodoFlow.Web.Modelos.Citas
             _ => []
         };
 
+        public const int MinutosAntesDeAtender = 10;
+
+        public static bool PuedeAtenderse(string estado, DateTime inicioLocal, DateTime finLocal)
+        {
+            var ahora = AgendaFechas.Ahora;
+
+            return !EsFinal(estado) &&
+                   ahora >= inicioLocal.AddMinutes(-MinutosAntesDeAtender) &&
+                   ahora <= finLocal;
+        }
+
+        public static bool PuedeAtenderse(CitaDto cita) =>
+            PuedeAtenderse(cita.Estado, cita.InicioLocal, cita.FinLocal);
+
+        public static bool EsVencida(CitaDto cita) =>
+            !EsFinal(cita.Estado) && AgendaFechas.Ahora > cita.FinLocal;
+
+        public static bool PuedeModificarse(CitaDto cita) =>
+            !EsFinal(cita.Estado) &&
+            AgendaFechas.Ahora < cita.InicioLocal.AddMinutes(-MinutosAntesDeAtender);
+
+        public static string[] Acciones(CitaDto cita)
+        {
+            if (PuedeAtenderse(cita))
+                return ["NO_ASISTE", "CANCELADA"];
+
+            if (!PuedeModificarse(cita))
+                return [];
+
+            return cita.Estado == "CONFIRMADA"
+                ? ["CANCELADA"]
+                : ["CONFIRMADA", "CANCELADA"];
+        }
+
         public static IEnumerable<HorarioDto> HorariosDelDia(
             IEnumerable<HorarioDto> horarios, DateTime fecha, Func<HorarioDto, bool> aplica)
         {

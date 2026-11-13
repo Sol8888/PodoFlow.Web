@@ -66,6 +66,48 @@
     margin: 14px 0 0;
 }
 
+.aviso {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 18px;
+    padding: 14px 16px;
+    border-radius: var(--pf-radius-md);
+    font-size: 13px;
+}
+
+    .aviso div {
+        display: flex;
+        flex: 1 1 220px;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .aviso span {
+        color: var(--pf-text-soft);
+        font-size: 12px;
+    }
+
+.aviso-turno {
+    background: var(--pf-blue-soft);
+    border: 1px solid var(--pf-blue-line);
+}
+
+    .aviso-turno strong {
+        color: var(--pf-blue-dark);
+    }
+
+.aviso-vencida {
+    background: var(--pf-surface-soft);
+    border: 1px solid var(--pf-border);
+}
+
+    .aviso-vencida strong {
+        color: var(--pf-text);
+    }
+
 .acciones {
     display: flex;
     flex-wrap: wrap;

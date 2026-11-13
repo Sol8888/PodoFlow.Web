@@ -47,19 +47,39 @@
         <a class="pf-link" href="@($"/pacientes/{Cita.PacienteId}")">Ver ficha del paciente →</a>
     </p>
 
+    @if (AgendaReglas.PuedeAtenderse(Cita))
+    {
+        <div class="aviso aviso-turno">
+            <div>
+                <strong>Es la hora de esta cita</strong>
+                <span>Si el paciente necesita otro horario, cancélala y agenda una nueva.</span>
+            </div>
+            <a class="pf-btn pf-btn-main" href="@($"/citas/{Cita.Id}/atender")">Atender cita</a>
+        </div>
+    }
+    else if (AgendaReglas.EsVencida(Cita))
+    {
+        <div class="aviso aviso-vencida">
+            <div>
+                <strong>La hora de esta cita ya pasó</strong>
+                <span>No se registró la atención, así que ya no se puede modificar. Si el paciente la necesita, agenda una cita nueva.</span>
+            </div>
+        </div>
+    }
+
     @if (Cita.Estado == "ATENDIDA")
     {
         <p class="enlace-ficha">
-            <a class="pf-btn pf-btn-main" href="@($"/pacientes/{Cita.PacienteId}?seccion=historia&clinica=atenciones&cita={Cita.Id}")">
-                Registrar atención clínica
+            <a class="pf-btn pf-btn-neutral" href="@($"/pacientes/{Cita.PacienteId}?seccion=historia&clinica=atenciones&cita={Cita.Id}")">
+                Ver atención en la historia clínica
             </a>
         </p>
     }
 
-    @if (!AgendaReglas.EsFinal(Cita.Estado))
+    @if (AgendaReglas.Acciones(Cita).Length > 0)
     {
         <div class="acciones">
-            @foreach (var estado in AgendaReglas.Siguientes(Cita.Estado))
+            @foreach (var estado in AgendaReglas.Acciones(Cita))
             {
                 <button type="button"
                         class="pf-btn @ClaseBoton(estado)"
@@ -70,9 +90,12 @@
                 </button>
             }
 
-            <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="() => Editar.InvokeAsync()">
-                Editar o reprogramar
-            </button>
+            @if (AgendaReglas.PuedeModificarse(Cita))
+            {
+                <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="() => Editar.InvokeAsync()">
+                    Editar o reprogramar
+                </button>
+            }
         </div>
     }
 

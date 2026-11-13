@@ -18,3 +18,17 @@
         outline: 3px solid rgba(0, 152, 218, .25);
         outline-offset: 2px;
     }
+
+.acciones-fila {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.boton-atender {
+    height: var(--pf-control-alto-sm);
+    min-height: var(--pf-control-alto-sm);
+    padding: 0 14px;
+    font-size: 12px;
+}
