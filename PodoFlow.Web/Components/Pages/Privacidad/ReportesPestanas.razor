@@ -1,0 +1,30 @@
+<nav class="pf-profile-tabs" aria-label="Secciones de reportes">
+    <a href="/reportes/riesgos"
+       class="@(Activa == "riesgos" ? "active" : "")"
+       aria-current="@(Activa == "riesgos" ? "page" : null)">
+        Riesgos
+    </a>
+
+    <a href="/reportes/eipd"
+       class="@(Activa == "eipd" ? "active" : "")"
+       aria-current="@(Activa == "eipd" ? "page" : null)">
+        EIPD
+    </a>
+
+    <a href="/reportes/documentos"
+       class="@(Activa == "documentos" ? "active" : "")"
+       aria-current="@(Activa == "documentos" ? "page" : null)">
+        Documentos
+    </a>
+
+    <a href="/reportes/incidentes"
+       class="@(Activa == "incidentes" ? "active" : "")"
+       aria-current="@(Activa == "incidentes" ? "page" : null)">
+        Incidentes
+    </a>
+</nav>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Activa { get; set; } = "";
+}

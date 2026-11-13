@@ -1,0 +1,308 @@
+@using System.Globalization
+@using PodoFlow.Web.Modelos.Citas
+
+@inject IAgendaApi Api
+
+<div class="pf-module-toolbar">
+    <label class="pf-checkbox">
+        <input type="checkbox" @bind="IncluirInactivos" />
+        Incluir inactivos
+    </label>
+
+    <button type="button" class="pf-btn pf-btn-neutral agregar" disabled="@Procesando" @onclick="Nuevo">
+        + Agregar horario
+    </button>
+</div>
+
+@if (Mensaje != null)
+{
+    <div class="pf-contact-success" aria-live="polite">@Mensaje</div>
+}
+
+@if (Error != null && !FormularioAbierto)
+{
+    <div class="pf-detail-error" role="alert">@Error</div>
+}
+
+@if (FormularioAbierto)
+{
+    <section class="pf-card pf-info-card">
+        <h2>@(EditandoId == null ? "Nuevo horario" : "Editar horario")</h2>
+
+        <form novalidate @onsubmit="GuardarAsync">
+            <div class="pf-patient-form-grid">
+                <div class="pf-form-group">
+                    <label for="horario-dia">Día *</label>
+                    <select id="horario-dia" class="pf-field" @bind="Dia">
+                        @for (var i = 0; i < AgendaReglas.Dias.Length; i++)
+                        {
+                            <option value="@(i + 1)">@AgendaReglas.Dias[i]</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="horario-usuario">Se aplica a</label>
+                    <select id="horario-usuario" class="pf-field" @bind="UsuarioTexto">
+                        <option value="">Toda la clínica</option>
+                        @foreach (var usuario in Catalogos.Usuarios.Where(x => x.Estatus))
+                        {
+                            <option value="@usuario.Id">@usuario.Nombre</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="horario-inicio">Desde las *</label>
+                    <input id="horario-inicio" type="time" class="pf-field"
+                           value="@InicioTexto"
+                           @onchange="e => InicioTexto = e.Value?.ToString() ?? string.Empty" />
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="horario-fin">Hasta las *</label>
+                    <input id="horario-fin" type="time" class="pf-field"
+                           value="@FinTexto"
+                           @onchange="e => FinTexto = e.Value?.ToString() ?? string.Empty" />
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="horario-desde">Vigente desde</label>
+                    <input id="horario-desde" type="date" class="pf-field" @bind="FechaDesde" />
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="horario-hasta">Vigente hasta</label>
+                    <input id="horario-hasta" type="date" class="pf-field" @bind="FechaHasta" />
+                </div>
+            </div>
+
+            @if (Error != null)
+            {
+                <div class="pf-detail-error" role="alert">@Error</div>
+            }
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="CerrarFormulario">Cancelar</button>
+                <button type="submit" class="pf-btn pf-btn-main" disabled="@Procesando">
+                    @(Procesando ? "Guardando..." : "Guardar horario")
+                </button>
+            </div>
+        </form>
+    </section>
+}
+
+<section class="pf-card pf-directory">
+    <div class="pf-card-header">
+        <div>
+            <h2>Horarios de atención</h2>
+            <p>Las citas solo se pueden agendar dentro de estos horarios.</p>
+        </div>
+
+        <span class="pf-soft-chip">@(Visibles.Count == 1 ? "1 visible" : $"{Visibles.Count} visibles")</span>
+    </div>
+
+    @if (Visibles.Count == 0)
+    {
+        <div class="pf-empty">No hay horarios registrados. Agrega uno para poder agendar citas.</div>
+    }
+    else
+    {
+        <div class="pf-table-wrap">
+            <table class="pf-table">
+                <thead>
+                    <tr>
+                        <th>Día</th>
+                        <th>Horario</th>
+                        <th>Se aplica a</th>
+                        <th>Vigencia</th>
+                        <th>Estado</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var horario in Visibles)
+                    {
+                        <tr @key="horario.Id">
+                            <td><strong class="dia">@AgendaReglas.Dias[horario.DiaSemana - 1]</strong></td>
+                            <td>@horario.HoraInicio.ToString(@"hh\:mm") – @horario.HoraFin.ToString(@"hh\:mm")</td>
+                            <td>@(horario.UsuarioId == null ? "Toda la clínica" : Catalogos.NombreUsuario(horario.UsuarioId))</td>
+                            <td>@Vigencia(horario)</td>
+                            <td>
+                                <span class="pf-status @(horario.Estatus ? "success" : "")">@(horario.Estatus ? "Activo" : "Inactivo")</span>
+                            </td>
+                            <td>
+                                <div class="acciones">
+                                    @if (horario.Estatus)
+                                    {
+                                        <button type="button" class="pf-action-link boton-tabla" disabled="@Procesando" @onclick="() => Editar(horario)">Editar</button>
+                                        <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => CambiarEstadoAsync(horario)">Desactivar</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => CambiarEstadoAsync(horario)">Reactivar</button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public CatalogosAgenda Catalogos { get; set; } = new();
+
+    [Parameter]
+    public EventCallback Cambio { get; set; }
+
+    private bool IncluirInactivos;
+    private bool FormularioAbierto;
+    private bool Procesando;
+    private int? EditandoId;
+    private byte Dia = 1;
+    private string UsuarioTexto = "";
+    private string InicioTexto = "08:00";
+    private string FinTexto = "17:00";
+    private DateTime? FechaDesde;
+    private DateTime? FechaHasta;
+    private string? Mensaje;
+    private string? Error;
+
+    private List<HorarioDto> Visibles => Catalogos.Horarios
+        .Where(x => IncluirInactivos || x.Estatus)
+        .OrderBy(x => x.DiaSemana)
+        .ThenBy(x => x.HoraInicio)
+        .ToList();
+
+    private void Nuevo()
+    {
+        EditandoId = null;
+        Dia = 1;
+        UsuarioTexto = "";
+        InicioTexto = "08:00";
+        FinTexto = "17:00";
+        FechaDesde = null;
+        FechaHasta = null;
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void Editar(HorarioDto horario)
+    {
+        EditandoId = horario.Id;
+        Dia = horario.DiaSemana;
+        UsuarioTexto = horario.UsuarioId?.ToString() ?? "";
+        InicioTexto = horario.HoraInicio.ToString(@"hh\:mm");
+        FinTexto = horario.HoraFin.ToString(@"hh\:mm");
+        FechaDesde = horario.FechaDesde;
+        FechaHasta = horario.FechaHasta;
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void CerrarFormulario()
+    {
+        FormularioAbierto = false;
+        Error = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando)
+            return;
+
+        Error = null;
+        Mensaje = null;
+
+        if (!TimeSpan.TryParse(InicioTexto, CultureInfo.InvariantCulture, out var inicio) ||
+            !TimeSpan.TryParse(FinTexto, CultureInfo.InvariantCulture, out var fin))
+        {
+            Error = "Indica la hora de inicio y la de fin.";
+            return;
+        }
+
+        if (fin <= inicio)
+        {
+            Error = "La hora final debe ser posterior a la inicial.";
+            return;
+        }
+
+        var dto = new HorarioGuardarDto
+        {
+            UsuarioId = long.TryParse(UsuarioTexto, out var id) ? id : null,
+            DiaSemana = Dia,
+            HoraInicio = inicio,
+            HoraFin = fin,
+            FechaDesde = FechaDesde,
+            FechaHasta = FechaHasta
+        };
+
+        await EjecutarAsync(async () =>
+        {
+            if (EditandoId.HasValue)
+                await Api.ActualizarHorarioAsync(EditandoId.Value, dto);
+            else
+                await Api.CrearHorarioAsync(dto);
+
+            FormularioAbierto = false;
+            Mensaje = "Horario guardado.";
+        });
+    }
+
+    private Task CambiarEstadoAsync(HorarioDto horario)
+    {
+        Error = null;
+        Mensaje = null;
+
+        return EjecutarAsync(async () =>
+        {
+            if (horario.Estatus)
+                await Api.DesactivarHorarioAsync(horario.Id);
+            else
+                await Api.ReactivarHorarioAsync(horario.Id);
+
+            Mensaje = horario.Estatus ? "Horario desactivado." : "Horario reactivado.";
+        });
+    }
+
+    private async Task EjecutarAsync(Func<Task> accion)
+    {
+        Procesando = true;
+
+        try
+        {
+            await accion();
+            await Cambio.InvokeAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private static string Vigencia(HorarioDto horario)
+    {
+        if (horario.FechaDesde == null && horario.FechaHasta == null)
+            return "Sin límite";
+
+        var desde = horario.FechaDesde?.ToString("dd/MM/yyyy") ?? "…";
+        var hasta = horario.FechaHasta?.ToString("dd/MM/yyyy") ?? "…";
+
+        return $"{desde} – {hasta}";
+    }
+}

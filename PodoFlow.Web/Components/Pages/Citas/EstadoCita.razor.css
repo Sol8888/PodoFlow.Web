@@ -1,0 +1,42 @@
+.estado {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #475569;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+    .estado::before {
+        content: "";
+        flex-shrink: 0;
+        width: 10px;
+        height: 10px;
+        background: var(--color);
+        border-radius: 50%;
+    }
+
+.solicitada {
+    --color: var(--pf-blue);
+}
+
+.confirmada {
+    --color: var(--pf-green);
+}
+
+.reprogramada {
+    --color: var(--pf-orange);
+}
+
+.atendida {
+    --color: var(--pf-navy);
+}
+
+.cancelada {
+    --color: var(--pf-red);
+}
+
+.no-asiste {
+    --color: var(--pf-text-muted);
+}

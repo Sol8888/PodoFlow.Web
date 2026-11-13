@@ -1,0 +1,299 @@
+@page "/clinica"
+@rendermode InteractiveServer
+
+@using PodoFlow.Web.Modelos.Atenciones
+@using PodoFlow.Web.Modelos.Pacientes
+
+@inject IClinicaApi Api
+@inject IPacientesApi PacientesApi
+
+<PageTitle>Historia clínica | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">GESTIÓN CLÍNICA</span>
+            <h1>Historia clínica</h1>
+            <p>Atenciones pendientes de cerrar, historias bloqueadas y acceso rápido al expediente de cada paciente.</p>
+        </div>
+    </div>
+
+    @if (Cargando)
+    {
+        <div class="pf-empty">Cargando información clínica...</div>
+    }
+    else if (Error != null)
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+    else
+    {
+        <div class="cifras">
+            <div>
+                <span>Historias activas</span>
+                <strong>@Historias.Count(x => x.Estado == "ACTIVA")</strong>
+            </div>
+            <div>
+                <span>Atenciones abiertas</span>
+                <strong class="@(Abiertas.Count > 0 ? "aviso" : "")">@Abiertas.Count</strong>
+            </div>
+            <div>
+                <span>Historias bloqueadas</span>
+                <strong class="@(Bloqueadas.Count > 0 ? "alerta" : "")">@Bloqueadas.Count</strong>
+            </div>
+            <div>
+                <span>Atenciones en los últimos 30 días</span>
+                <strong>@Atenciones.Count(x => x.Fecha >= DateTime.UtcNow.AddDays(-30))</strong>
+            </div>
+        </div>
+
+        <section class="pf-card pf-directory">
+            <div class="pf-card-header">
+                <div>
+                    <h2>Buscar expediente</h2>
+                    <p>Pacientes con historia clínica abierta.</p>
+                </div>
+            </div>
+
+            <div class="busqueda">
+                <input type="search" class="pf-field buscar" placeholder="Buscar por nombre o identificación..."
+                       aria-label="Buscar paciente" @bind="Busqueda" @bind:event="oninput" />
+
+                @if (!string.IsNullOrWhiteSpace(Busqueda))
+                {
+                    @if (Encontrados.Count == 0)
+                    {
+                        <p class="sin-resultados">Ningún paciente con historia coincide con «@Busqueda.Trim()».</p>
+                    }
+                    else
+                    {
+                        <ul class="resultados">
+                            @foreach (var (paciente, historia) in Encontrados)
+                            {
+                                <li @key="historia.Id">
+                                    <a href="@RutaHistoria(paciente.Id)">
+                                        <strong>@paciente.NombreCompleto</strong>
+                                        <span>@paciente.TipoIdentificacion @paciente.Identificacion</span>
+                                    </a>
+                                    <span class="pf-status @ClaseEstado(historia.Estado)">@historia.Estado</span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                }
+            </div>
+        </section>
+
+        <section class="pf-card pf-directory">
+            <div class="pf-card-header">
+                <div>
+                    <h2>Atenciones abiertas</h2>
+                    <p>Ciérralas cuando la consulta esté completa para que queden protegidas contra cambios.</p>
+                </div>
+
+                <span class="pf-soft-chip">@Abiertas.Count</span>
+            </div>
+
+            @if (Abiertas.Count == 0)
+            {
+                <div class="pf-empty">No hay atenciones abiertas.</div>
+            }
+            else
+            {
+                @TablaAtenciones(Abiertas)
+            }
+        </section>
+
+        @if (Bloqueadas.Count > 0)
+        {
+            <section class="pf-card pf-directory">
+                <div class="pf-card-header">
+                    <div>
+                        <h2>Historias bloqueadas</h2>
+                        <p>Están en solo lectura hasta que se reactiven.</p>
+                    </div>
+                </div>
+
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th>Paciente</th>
+                                <th>Bloqueada el</th>
+                                <th>Motivo</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var historia in Bloqueadas)
+                            {
+                                <tr @key="historia.Id">
+                                    <td><strong class="nombre">@NombrePaciente(historia.PacienteId)</strong></td>
+                                    <td>@(historia.FechaBloqueo?.ToLocalTime().ToString("dd/MM/yyyy") ?? "—")</td>
+                                    <td>@(historia.MotivoBloqueo ?? "—")</td>
+                                    <td><a class="pf-action-link enlace" href="@RutaHistoria(historia.PacienteId)">Abrir</a></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
+
+        <section class="pf-card pf-directory">
+            <div class="pf-card-header">
+                <div>
+                    <h2>Atenciones recientes</h2>
+                    <p>Las últimas 15 registradas.</p>
+                </div>
+            </div>
+
+            @if (Recientes.Count == 0)
+            {
+                <div class="pf-empty">Todavía no hay atenciones registradas.</div>
+            }
+            else
+            {
+                @TablaAtenciones(Recientes)
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private List<AtencionDto> Atenciones = [];
+    private List<HistoriaResumenDto> Historias = [];
+    private List<PacienteDto> Pacientes = [];
+
+    private bool Cargando = true;
+    private string Busqueda = "";
+    private string? Error;
+
+    private List<AtencionDto> Abiertas => Atenciones
+        .Where(x => x.Estado == "ABIERTA")
+        .OrderBy(x => x.Fecha)
+        .ToList();
+
+    private List<AtencionDto> Recientes => Atenciones
+        .OrderByDescending(x => x.Fecha)
+        .ThenByDescending(x => x.Id)
+        .Take(15)
+        .ToList();
+
+    private List<HistoriaResumenDto> Bloqueadas => Historias
+        .Where(x => x.Estado == "BLOQUEADA")
+        .OrderByDescending(x => x.FechaBloqueo)
+        .ToList();
+
+    private List<(PacienteDto Paciente, HistoriaResumenDto Historia)> Encontrados
+    {
+        get
+        {
+            var texto = Busqueda.Trim();
+
+            return Historias
+                .Select(h => (Paciente: Pacientes.FirstOrDefault(p => p.Id == h.PacienteId), Historia: h))
+                .Where(x => x.Paciente != null &&
+                            (x.Paciente.NombreCompleto.Contains(texto, StringComparison.OrdinalIgnoreCase) ||
+                             x.Paciente.Identificacion.Contains(texto, StringComparison.OrdinalIgnoreCase)))
+                .Select(x => (x.Paciente!, x.Historia))
+                .OrderBy(x => x.Item1.NombreCompleto)
+                .Take(20)
+                .ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var atenciones = Api.ListarAtencionesAsync(null);
+            var historias = Api.ListarHistoriasAsync();
+            var pacientes = ListarPacientesAsync();
+
+            await Task.WhenAll(atenciones, historias, pacientes);
+
+            Atenciones = await atenciones;
+            Historias = await historias;
+            Pacientes = await pacientes;
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+
+        Cargando = false;
+    }
+
+    private async Task<List<PacienteDto>> ListarPacientesAsync()
+    {
+        var resultado = new List<PacienteDto>();
+
+        for (var pagina = 1; pagina <= 20; pagina++)
+        {
+            var lote = await PacientesApi.ListarAsync(true, pagina, 100);
+            resultado.AddRange(lote);
+
+            if (lote.Count < 100)
+                break;
+        }
+
+        return resultado;
+    }
+
+    private RenderFragment TablaAtenciones(List<AtencionDto> lista) =>
+        @<div class="pf-table-wrap">
+            <table class="pf-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Paciente</th>
+                        <th>Motivo de consulta</th>
+                        <th>Estado</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var atencion in lista)
+                    {
+                        var pacienteId = PacienteDeHistoria(atencion.HistoriaId);
+
+                        <tr @key="atencion.Id">
+                            <td>@atencion.Fecha.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                            <td><strong class="nombre">@(pacienteId.HasValue ? NombrePaciente(pacienteId.Value) : "—")</strong></td>
+                            <td class="motivo">@(atencion.MotivoConsulta ?? "—")</td>
+                            <td><span class="pf-status @ClaseEstado(atencion.Estado)">@atencion.Estado</span></td>
+                            <td>
+                                @if (pacienteId.HasValue)
+                                {
+                                    <a class="pf-action-link enlace" href="@RutaHistoria(pacienteId.Value)">Abrir</a>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>;
+
+    private long? PacienteDeHistoria(long historiaId) =>
+        Historias.FirstOrDefault(x => x.Id == historiaId)?.PacienteId;
+
+    private string NombrePaciente(long id) =>
+        Pacientes.FirstOrDefault(x => x.Id == id)?.NombreCompleto ?? $"Paciente {id}";
+
+    private static string RutaHistoria(long pacienteId) =>
+        $"/pacientes/{pacienteId}?seccion=historia&clinica=atenciones";
+
+    private static string ClaseEstado(string estado) => estado switch
+    {
+        "ACTIVA" or "CERRADA" => "success",
+        "ABIERTA" => "warning",
+        "BLOQUEADA" => "danger",
+        _ => ""
+    };
+}

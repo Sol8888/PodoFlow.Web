@@ -1,0 +1,406 @@
+@using System.Globalization
+@using PodoFlow.Web.Modelos.Citas
+
+@inject IAgendaApi Api
+
+<div class="pf-module-toolbar">
+    <div class="navegacion">
+        <button type="button" class="pf-btn pf-btn-neutral flecha" aria-label="Semana anterior" @onclick="() => CambiarSemana(-7)">‹</button>
+        <button type="button" class="pf-btn pf-btn-neutral" @onclick="IrAHoy">Hoy</button>
+        <button type="button" class="pf-btn pf-btn-neutral flecha" aria-label="Semana siguiente" @onclick="() => CambiarSemana(7)">›</button>
+    </div>
+
+    <strong class="titulo-semana" aria-live="polite">@TituloSemana</strong>
+
+    <select class="pf-field filtro" aria-label="Filtrar por profesional" @bind="FiltroUsuario">
+        <option value="">Todos los profesionales</option>
+        @foreach (var usuario in Catalogos.Usuarios.Where(x => x.Estatus))
+        {
+            <option value="@usuario.Id">@usuario.Nombre</option>
+        }
+    </select>
+
+    <label class="pf-checkbox">
+        <input type="checkbox" @bind="MostrarInactivas" />
+        Mostrar canceladas
+    </label>
+</div>
+
+@if (Error != null)
+{
+    <div class="pf-detail-error" role="alert">@Error</div>
+}
+
+<section class="pf-card pf-directory">
+    <div class="pf-card-header">
+        <div>
+            <h2>Semana</h2>
+            <p>Pulsa un espacio libre para agendar o una cita para ver el detalle.</p>
+        </div>
+
+        <span class="pf-soft-chip">@(CitasVisibles.Count() == 1 ? "1 cita" : $"{CitasVisibles.Count()} citas")</span>
+    </div>
+
+    <div class="leyenda pf-detail-muted">
+        @foreach (var estado in AgendaReglas.Estados.Where(x => MostrarInactivas || AgendaReglas.OcupaHorario(x)))
+        {
+            <EstadoCita Estado="@estado" />
+        }
+        <span class="leyenda-bloqueo">Bloqueo</span>
+    </div>
+
+    <div class="calendario-marco">
+        <div class="calendario @(Cargando ? "cargando" : "")" aria-busy="@(Cargando ? "true" : "false")">
+
+            <div class="esquina"></div>
+            @foreach (var dia in Dias)
+            {
+                <div class="dia-cabecera @(dia.Date == Hoy ? "hoy" : "")">
+                    <span>@dia.ToString("ddd", Cultura).TrimEnd('.')</span>
+                    <strong>@dia.Day</strong>
+                </div>
+            }
+
+            <div class="horas" style="height: @Numero(AltoTotal)px;">
+                @for (var hora = HoraMinima; hora < HoraMaxima; hora++)
+                {
+                    <span style="top: @Numero((hora - HoraMinima) * PixelesHora)px;">@($"{hora:00}:00")</span>
+                }
+            </div>
+
+            @foreach (var dia in Dias)
+            {
+                <div @key="dia" class="dia-columna @(dia.Date == Hoy ? "hoy" : "")" style="height: @Numero(AltoTotal)px;">
+
+                    @foreach (var franja in FranjasDe(dia))
+                    {
+                        <div class="franja" style="top: @Top(franja.Inicio)px; height: @Alto(franja.Inicio, franja.Fin)px;"></div>
+
+                        @foreach (var hueco in HuecosDe(dia, franja))
+                        {
+                            <button type="button"
+                                    class="hueco"
+                                    tabindex="-1"
+                                    style="top: @Top(hueco)px; height: @Numero(PixelesHora * AgendaReglas.MinutosHueco / 60.0)px;"
+                                    aria-label="@($"Agendar el {dia.ToString("dddd d", Cultura)} a las {hueco:hh\\:mm}")"
+                                    @onclick="() => ElegirHueco(dia, hueco, franja.UsuarioId)">
+                                <span>+ @hueco.ToString(@"hh\:mm")</span>
+                            </button>
+                        }
+                    }
+
+                    @for (var hora = 1; hora < HoraMaxima - HoraMinima; hora++)
+                    {
+                        <i class="linea" style="top: @Numero(hora * PixelesHora)px;"></i>
+                    }
+
+                    @foreach (var bloqueo in BloqueosDe(dia))
+                    {
+                        <div class="bloqueo" title="@bloqueo.Motivo"
+                             style="top: @Top(bloqueo.Inicio)px; height: @Alto(bloqueo.Inicio, bloqueo.Fin)px;">
+                            <span>@bloqueo.Motivo</span>
+                        </div>
+                    }
+
+                    @foreach (var ubicada in CitasDe(dia))
+                    {
+                        var cita = ubicada.Cita;
+
+                        <button @key="cita.Id"
+                                type="button"
+                                class="cita @AgendaReglas.ClaseEstado(cita.Estado)"
+                                style="top: @Top(cita.InicioLocal.TimeOfDay)px; height: @Alto(cita.InicioLocal.TimeOfDay, cita.FinLocal.TimeOfDay)px; left: @Numero(ubicada.Izquierda)%; width: @Numero(ubicada.Ancho)%;"
+                                aria-label="@($"{Catalogos.NombrePaciente(cita.PacienteId)}, {cita.InicioLocal:HH:mm}, {AgendaReglas.TextoEstado(cita.Estado)}")"
+                                @onclick="() => CitaSeleccionada.InvokeAsync(cita)">
+                            <strong>@Catalogos.NombrePaciente(cita.PacienteId)</strong>
+                            <span>@cita.InicioLocal.ToString("HH:mm") · @Catalogos.NombreServicio(cita.ServicioId)</span>
+                        </button>
+                    }
+
+                    @if (dia.Date == Hoy && LineaActual is { } actual)
+                    {
+                        <div class="ahora" style="top: @Top(actual)px;" aria-hidden="true"></div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    private const int PixelesHora = 64;
+
+    private static readonly CultureInfo Cultura = CultureInfo.GetCultureInfo("es-EC");
+
+    private sealed record Franja(TimeSpan Inicio, TimeSpan Fin, long? UsuarioId);
+    private sealed record Tramo(TimeSpan Inicio, TimeSpan Fin, string Motivo);
+    private sealed record CitaUbicada(CitaDto Cita, double Izquierda, double Ancho);
+
+    [Parameter, EditorRequired]
+    public CatalogosAgenda Catalogos { get; set; } = new();
+
+    [Parameter]
+    public int Recarga { get; set; }
+
+    [Parameter]
+    public EventCallback<CitaDto> CitaSeleccionada { get; set; }
+
+    [Parameter]
+    public EventCallback<SugerenciaCita?> HuecoSeleccionado { get; set; }
+
+    private List<CitaDto> Citas = new();
+    private DateTime Lunes = AgendaFechas.LunesDe(AgendaFechas.Ahora);
+    private int? RecargaAtendida;
+    private int Consulta;
+    private string FiltroUsuario = "";
+    private bool MostrarInactivas;
+    private bool Cargando = true;
+    private string? Error;
+
+    private DateTime Hoy => AgendaFechas.Ahora.Date;
+
+    private long? UsuarioFiltrado => long.TryParse(FiltroUsuario, out var id) ? id : null;
+
+    private IEnumerable<DateTime> Dias => Enumerable.Range(0, 7).Select(x => Lunes.AddDays(x));
+
+    private string TituloSemana
+    {
+        get
+        {
+            var domingo = Lunes.AddDays(6);
+
+            return Lunes.Month == domingo.Month
+                ? $"{Lunes.Day} – {domingo.ToString("d 'de' MMMM yyyy", Cultura)}"
+                : $"{Lunes.ToString("d MMM", Cultura)} – {domingo.ToString("d MMM yyyy", Cultura)}";
+        }
+    }
+
+    private IEnumerable<CitaDto> CitasVisibles => Citas.Where(x =>
+        (MostrarInactivas || AgendaReglas.OcupaHorario(x.Estado)) &&
+        (UsuarioFiltrado == null || x.UsuarioId == null || x.UsuarioId == UsuarioFiltrado));
+
+    private TimeSpan? LineaActual
+    {
+        get
+        {
+            var hora = AgendaFechas.Ahora.TimeOfDay;
+
+            return hora.TotalHours >= HoraMinima && hora.TotalHours < HoraMaxima ? hora : null;
+        }
+    }
+
+    private int HoraMinima
+    {
+        get
+        {
+            var inicios = Catalogos.Horarios.Where(x => x.Estatus).Select(x => x.HoraInicio.TotalHours)
+                .Concat(CitasVisibles.Select(x => x.InicioLocal.TimeOfDay.TotalHours))
+                .ToList();
+
+            return inicios.Count == 0 ? 8 : (int)Math.Floor(inicios.Min());
+        }
+    }
+
+    private int HoraMaxima
+    {
+        get
+        {
+            var fines = Catalogos.Horarios.Where(x => x.Estatus).Select(x => x.HoraFin.TotalHours)
+                .Concat(CitasVisibles.Select(x => x.FinLocal.TimeOfDay.TotalHours))
+                .ToList();
+
+            return fines.Count == 0 ? 18 : Math.Max((int)Math.Ceiling(fines.Max()), HoraMinima + 1);
+        }
+    }
+
+    private int AltoTotal => (HoraMaxima - HoraMinima) * PixelesHora;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (RecargaAtendida == Recarga)
+            return;
+
+        RecargaAtendida = Recarga;
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        var consulta = ++Consulta;
+
+        Cargando = true;
+        Error = null;
+
+        try
+        {
+            var citas = await Api.CitasEntreAsync(Lunes, Lunes.AddDays(7));
+
+            if (consulta == Consulta)
+                Citas = citas;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            if (consulta == Consulta)
+                Error = ex is InvalidOperationException ? ex.Message : "No se pudieron cargar las citas de la semana.";
+        }
+        finally
+        {
+            if (consulta == Consulta)
+                Cargando = false;
+        }
+    }
+
+    private Task CambiarSemana(int dias)
+    {
+        Lunes = Lunes.AddDays(dias);
+        return CargarAsync();
+    }
+
+    private Task IrAHoy()
+    {
+        Lunes = AgendaFechas.LunesDe(AgendaFechas.Ahora);
+        return CargarAsync();
+    }
+
+    // Une los horarios que se tocan para pintarlos como un solo bloque.
+    private List<Franja> FranjasDe(DateTime dia)
+    {
+        var horarios = AgendaReglas
+            .HorariosDelDia(Catalogos.Horarios, dia, x =>
+                UsuarioFiltrado == null || x.UsuarioId == null || x.UsuarioId == UsuarioFiltrado)
+            .OrderBy(x => x.HoraInicio);
+
+        var franjas = new List<Franja>();
+
+        foreach (var horario in horarios)
+        {
+            var ultima = franjas.LastOrDefault();
+
+            if (ultima != null && horario.HoraInicio <= ultima.Fin)
+            {
+                franjas[^1] = ultima with
+                {
+                    Fin = horario.HoraFin > ultima.Fin ? horario.HoraFin : ultima.Fin,
+                    UsuarioId = ultima.UsuarioId == horario.UsuarioId ? ultima.UsuarioId : null
+                };
+            }
+            else
+            {
+                franjas.Add(new Franja(horario.HoraInicio, horario.HoraFin, horario.UsuarioId));
+            }
+        }
+
+        return franjas;
+    }
+
+    private IEnumerable<TimeSpan> HuecosDe(DateTime dia, Franja franja)
+    {
+        var ahora = AgendaFechas.Ahora;
+        var paso = TimeSpan.FromMinutes(AgendaReglas.MinutosHueco);
+
+        for (var hora = franja.Inicio; hora + paso <= franja.Fin; hora += paso)
+        {
+            if (dia.Date + hora > ahora)
+                yield return hora;
+        }
+    }
+
+    private IEnumerable<Tramo> BloqueosDe(DateTime dia)
+    {
+        var inicioDia = dia.Date;
+        var finDia = inicioDia.AddDays(1);
+        var minima = TimeSpan.FromHours(HoraMinima);
+        var maxima = TimeSpan.FromHours(HoraMaxima);
+
+        foreach (var bloqueo in Catalogos.Bloqueos.Where(x =>
+            x.Estatus &&
+            (UsuarioFiltrado == null || x.UsuarioId == null || x.UsuarioId == UsuarioFiltrado) &&
+            x.InicioLocal < finDia && inicioDia < x.FinLocal))
+        {
+            var inicio = bloqueo.InicioLocal > inicioDia ? bloqueo.InicioLocal.TimeOfDay : minima;
+            var fin = bloqueo.FinLocal < finDia ? bloqueo.FinLocal.TimeOfDay : maxima;
+
+            if (inicio < minima)
+                inicio = minima;
+
+            if (fin > maxima)
+                fin = maxima;
+
+            if (inicio < fin)
+                yield return new Tramo(inicio, fin, bloqueo.Motivo);
+        }
+    }
+
+    // Las citas que se cruzan se reparten a lo ancho de la columna.
+    private List<CitaUbicada> CitasDe(DateTime dia)
+    {
+        var citas = CitasVisibles
+            .Where(x => x.InicioLocal.Date == dia.Date)
+            .OrderBy(x => x.InicioLocal)
+            .ThenBy(x => x.Id)
+            .ToList();
+
+        var ubicadas = new List<CitaUbicada>();
+        var grupo = new List<CitaDto>();
+        var finGrupo = DateTime.MinValue;
+
+        foreach (var cita in citas)
+        {
+            if (grupo.Count > 0 && cita.InicioLocal >= finGrupo)
+            {
+                UbicarGrupo(grupo, ubicadas);
+                grupo.Clear();
+            }
+
+            grupo.Add(cita);
+            finGrupo = grupo.Count == 1 || cita.FinLocal > finGrupo ? cita.FinLocal : finGrupo;
+        }
+
+        UbicarGrupo(grupo, ubicadas);
+
+        return ubicadas;
+    }
+
+    private static void UbicarGrupo(List<CitaDto> grupo, List<CitaUbicada> ubicadas)
+    {
+        if (grupo.Count == 0)
+            return;
+
+        var finesPorCarril = new List<DateTime>();
+        var carriles = new List<(CitaDto Cita, int Carril)>();
+
+        foreach (var cita in grupo)
+        {
+            var carril = finesPorCarril.FindIndex(fin => fin <= cita.InicioLocal);
+
+            if (carril < 0)
+            {
+                carril = finesPorCarril.Count;
+                finesPorCarril.Add(cita.FinLocal);
+            }
+            else
+            {
+                finesPorCarril[carril] = cita.FinLocal;
+            }
+
+            carriles.Add((cita, carril));
+        }
+
+        var ancho = 100.0 / finesPorCarril.Count;
+
+        ubicadas.AddRange(carriles.Select(x => new CitaUbicada(x.Cita, x.Carril * ancho, ancho)));
+    }
+
+    private Task ElegirHueco(DateTime dia, TimeSpan hora, long? usuarioDeFranja)
+    {
+        return HuecoSeleccionado.InvokeAsync(
+            new SugerenciaCita(dia.Date, hora, UsuarioFiltrado ?? usuarioDeFranja));
+    }
+
+    private string Top(TimeSpan hora) => Numero((hora.TotalHours - HoraMinima) * PixelesHora);
+
+    private static string Alto(TimeSpan inicio, TimeSpan fin) => Numero((fin - inicio).TotalHours * PixelesHora);
+
+    // En estilos el decimal siempre va con punto, sin importar el idioma del servidor.
+    private static string Numero(double valor) => valor.ToString("0.##", CultureInfo.InvariantCulture);
+}

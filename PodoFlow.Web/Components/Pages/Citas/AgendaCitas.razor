@@ -1,0 +1,235 @@
+@page "/citas"
+@page "/citas/{Seccion}"
+@rendermode InteractiveServer
+
+@using PodoFlow.Web.Modelos.Citas
+
+@inject IAgendaApi Api
+
+<PageTitle>Agenda y citas | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">GESTIÓN CLÍNICA</span>
+            <h1>Agenda y citas</h1>
+            <p>Organiza las citas, los horarios de atención y los bloqueos de la agenda.</p>
+        </div>
+
+        <button type="button" class="pf-btn pf-btn-main" disabled="@(Catalogos == null)" @onclick="() => AbrirNueva(null)">
+            + Nueva cita
+        </button>
+    </div>
+
+    <nav class="pf-profile-tabs" aria-label="Secciones de la agenda">
+        @foreach (var (codigo, ruta, texto) in Secciones)
+        {
+            <a href="@ruta"
+               class="@(SeccionActual == codigo ? "active" : "")"
+               aria-current="@(SeccionActual == codigo ? "page" : null)">
+                @texto
+            </a>
+        }
+    </nav>
+
+    <div class="zona-mensajes" aria-live="polite">
+        @if (Mensaje != null)
+        {
+            <div class="pf-contact-success">@Mensaje</div>
+        }
+    </div>
+
+    @if (Error != null)
+    {
+        <div class="pf-detail-error" role="alert">
+            @Error
+            <button type="button" class="pf-link boton-enlace" @onclick="CargarCatalogosAsync">Reintentar</button>
+        </div>
+    }
+    else if (Catalogos == null)
+    {
+        <section class="pf-card pf-directory">
+            <div class="pf-empty" role="status">Cargando agenda...</div>
+        </section>
+    }
+    else if (SeccionActual == "listado")
+    {
+        <CitasLista Catalogos="Catalogos" Recarga="Recarga" CitaSeleccionada="AbrirCita" />
+    }
+    else if (SeccionActual == "horarios")
+    {
+        <HorariosPanel Catalogos="Catalogos" Cambio="CatalogosCambiadosAsync" />
+    }
+    else if (SeccionActual == "bloqueos")
+    {
+        <BloqueosPanel Catalogos="Catalogos" Cambio="CatalogosCambiadosAsync" />
+    }
+    else
+    {
+        <AgendaSemana Catalogos="Catalogos"
+                      Recarga="Recarga"
+                      CitaSeleccionada="AbrirCita"
+                      HuecoSeleccionado="AbrirNueva" />
+    }
+
+</div>
+
+@if (PanelAbierto && Catalogos != null)
+{
+    <div class="lateral-fondo" @onclick="CerrarPanel"></div>
+
+    <aside class="lateral"
+           role="dialog"
+           aria-modal="true"
+           aria-label="@(CitaAbierta == null || Editando ? "Datos de la cita" : "Detalle de la cita")"
+           tabindex="-1"
+           @ref="Lateral"
+           @onkeydown="TeclaPanel">
+
+        @if (CitaAbierta != null && !Editando)
+        {
+            <CitaDetalle @key="CitaAbierta.Id"
+                         Cita="CitaAbierta"
+                         Catalogos="Catalogos"
+                         Cerrar="CerrarPanel"
+                         Editar="() => Editando = true"
+                         Cambio="CitaCambiadaAsync" />
+        }
+        else
+        {
+            <CitaFormulario Catalogos="Catalogos"
+                            Cita="CitaAbierta"
+                            Sugerencia="Sugerencia"
+                            Cancelar="CancelarFormulario"
+                            Guardado="CitaGuardadaAsync" />
+        }
+    </aside>
+}
+
+@code {
+    private static readonly (string Codigo, string Ruta, string Texto)[] Secciones =
+    [
+        ("agenda", "/citas", "Agenda"),
+        ("listado", "/citas/listado", "Citas"),
+        ("horarios", "/citas/horarios", "Horarios de atención"),
+        ("bloqueos", "/citas/bloqueos", "Bloqueos")
+    ];
+
+    [Parameter]
+    public string? Seccion { get; set; }
+
+    private CatalogosAgenda? Catalogos;
+    private CitaDto? CitaAbierta;
+    private SugerenciaCita? Sugerencia;
+    private ElementReference Lateral;
+
+    private bool PanelAbierto;
+    private bool EnfocarPanel;
+    private bool Editando;
+    private int Recarga;
+    private string? Mensaje;
+    private string? Error;
+
+    private string SeccionActual =>
+        Secciones.Any(x => x.Codigo == Seccion) ? Seccion! : "agenda";
+
+    protected override Task OnInitializedAsync() => CargarCatalogosAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!EnfocarPanel || !PanelAbierto)
+            return;
+
+        EnfocarPanel = false;
+        await Lateral.FocusAsync();
+    }
+
+    private async Task CargarCatalogosAsync()
+    {
+        Error = null;
+
+        try
+        {
+            Catalogos = await Api.CargarCatalogosAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api. Verifica que el backend esté ejecutándose.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La API tardó demasiado en responder.";
+        }
+    }
+
+    private void AbrirCita(CitaDto cita)
+    {
+        Mensaje = null;
+        CitaAbierta = cita;
+        Sugerencia = null;
+        Editando = false;
+        PanelAbierto = true;
+        EnfocarPanel = true;
+    }
+
+    private void AbrirNueva(SugerenciaCita? sugerencia)
+    {
+        Mensaje = null;
+        CitaAbierta = null;
+        Sugerencia = sugerencia;
+        Editando = false;
+        PanelAbierto = true;
+        EnfocarPanel = true;
+    }
+
+    private void CerrarPanel()
+    {
+        PanelAbierto = false;
+        CitaAbierta = null;
+        Sugerencia = null;
+        Editando = false;
+    }
+
+    private void CancelarFormulario()
+    {
+        if (CitaAbierta != null)
+            Editando = false;
+        else
+            CerrarPanel();
+    }
+
+    private void TeclaPanel(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            CerrarPanel();
+    }
+
+    private async Task CitaGuardadaAsync(CitaDto cita)
+    {
+        Mensaje = CitaAbierta == null
+            ? $"Cita registrada para {Catalogos?.NombrePaciente(cita.PacienteId)}."
+            : "Cita actualizada.";
+
+        CerrarPanel();
+        Recarga++;
+
+        await Task.CompletedTask;
+    }
+
+    private void CitaCambiadaAsync(CitaDto cita)
+    {
+        CitaAbierta = cita;
+        Recarga++;
+    }
+
+    private async Task CatalogosCambiadosAsync()
+    {
+        await CargarCatalogosAsync();
+        Recarga++;
+    }
+}

@@ -1,0 +1,1062 @@
+﻿@page "/citas/{CitaId:long}/atender"
+@rendermode InteractiveServer
+
+@using PodoFlow.Web.Modelos.Atenciones
+@using PodoFlow.Web.Modelos.Citas
+@using PodoFlow.Web.Modelos.Configuracion
+@using PodoFlow.Web.Modelos.Inventario
+@using PodoFlow.Web.Modelos.Pagos
+
+@inject IAgendaApi Agenda
+@inject IPacientesApi Pacientes
+@inject IClinicaApi Clinica
+@inject IInventarioApi Inventario
+@inject IPagosApi Pagos
+@inject IConfiguracionApi Configuracion
+@inject IAdjuntosApi Adjuntos
+@inject IConfiguration Ajustes
+
+<PageTitle>Atender cita | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <a href="/citas" class="pf-back-link">← Volver a la agenda</a>
+
+    @if (Cargando)
+    {
+        <section class="pf-card pf-info-card">
+            <div class="pf-empty" role="status">Preparando la atención...</div>
+        </section>
+    }
+    else if (ErrorCarga != null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>No se pudo abrir la atención</h2>
+            <p class="pf-detail-error" role="alert">@ErrorCarga</p>
+        </section>
+    }
+    else
+    {
+        <section class="pf-profile-hero">
+            <div class="pf-profile-avatar">@Iniciales</div>
+
+            <div class="pf-profile-info">
+                <span class="pf-profile-label">ATENCIÓN · CITA #@Cita!.Id</span>
+                <h1>@(Paciente?.NombreCompleto ?? Catalogos?.NombrePaciente(Cita.PacienteId))</h1>
+
+                <div class="pf-profile-meta">
+                    <span>@Catalogos?.NombreServicio(Cita.ServicioId)</span>
+                    <span>@Cita.InicioLocal.ToString("dd/MM/yyyy · HH:mm") – @Cita.FinLocal.ToString("HH:mm")</span>
+                    <span>@Catalogos?.NombreUsuario(Cita.UsuarioId)</span>
+                    @if (Edad != null)
+                    {
+                        <span class="pf-profile-state">@Edad años</span>
+                    }
+                </div>
+
+                @if (Alertas.Any() || (Historia == null && Bloqueo == null && !Finalizado))
+                {
+                    <div class="alertas">
+                        @foreach (var antecedente in Alertas)
+                        {
+                            <span class="alerta" title="@antecedente.Descripcion">⚠ @Texto(antecedente.Tipo): @Corto(antecedente.Descripcion, 40)</span>
+                        }
+
+                        @if (Historia == null && Bloqueo == null && !Finalizado)
+                        {
+                            <span class="nota-hero">Primera atención: se abrirá su historia clínica</span>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="pf-profile-actions">
+                <a class="pf-profile-button" href="@($"/pacientes/{Cita.PacienteId}")">Ver ficha</a>
+            </div>
+        </section>
+
+        @if (Finalizado)
+        {
+            <section class="pf-card pf-info-card">
+                <div class="pf-form-heading">
+                    <div class="pf-form-mark marca-ok">✓</div>
+                    <div>
+                        <h2>Atención registrada</h2>
+                        <p>Todo quedó guardado y enlazado a la cita.</p>
+                    </div>
+                </div>
+
+                <ul class="pasos">
+                    @foreach (var paso in Pasos.Where(p => p.Estado != EstadoPaso.Omitido))
+                    {
+                        <li class="hecho">✓ @paso.Texto</li>
+                    }
+                </ul>
+
+                @if (SaldoPendiente > 0)
+                {
+                    <p class="pf-detail-muted">Queda un saldo pendiente de @Dinero(SaldoPendiente). Se puede cobrar después desde Pagos internos.</p>
+                }
+
+                @if (CitaSeguimiento != null)
+                {
+                    <p class="pf-detail-muted">Próxima cita: @CitaSeguimiento.InicioLocal.ToString("dddd dd/MM/yyyy 'a las' HH:mm", Cultura).</p>
+                }
+
+                <div class="pf-form-actions">
+                    <a class="pf-btn pf-btn-neutral" href="@($"/pacientes/{Cita.PacienteId}?seccion=historia&clinica=atenciones")">Ver historia clínica</a>
+                    <a class="pf-btn pf-btn-main" href="/citas">Volver a la agenda</a>
+                </div>
+            </section>
+        }
+        else if (Bloqueo != null)
+        {
+            <section class="pf-card pf-info-card">
+                <div class="pf-form-heading">
+                    <div class="pf-form-mark">!</div>
+                    <div>
+                        <h2>@Bloqueo.Titulo</h2>
+                        <p>@Bloqueo.Detalle</p>
+                    </div>
+                </div>
+
+                <div class="pf-form-actions">
+                    <a class="pf-btn pf-btn-neutral" href="@($"/pacientes/{Cita.PacienteId}")">Ver ficha del paciente</a>
+                    <a class="pf-btn pf-btn-main" href="/citas">Volver a la agenda</a>
+                </div>
+            </section>
+        }
+        else
+        {
+            <div class="pf-detail-grid">
+                <div class="secciones">
+
+                    <section class="pf-card pf-info-card">
+                        <div class="pf-form-heading">
+                            <div class="pf-form-mark">1</div>
+                            <div>
+                                <h2>Nota clínica</h2>
+                                <p>Se guarda en la historia clínica del paciente.</p>
+                            </div>
+                        </div>
+
+                        <div class="pf-patient-form-grid">
+                            <div class="pf-form-group pf-form-full">
+                                <label for="nota-motivo">Motivo de consulta *</label>
+                                <input id="nota-motivo" class="pf-field" maxlength="1000" disabled="@NotaGuardada" @bind="Nota.MotivoConsulta" />
+                            </div>
+                            <div class="pf-form-group pf-form-full">
+                                <label for="nota-valoracion">Valoración clínica</label>
+                                <textarea id="nota-valoracion" class="pf-field" rows="3" maxlength="3000" disabled="@NotaGuardada" @bind="Nota.ValoracionClinica"></textarea>
+                            </div>
+                            <div class="pf-form-group">
+                                <label for="nota-diagnostico">Diagnóstico</label>
+                                <textarea id="nota-diagnostico" class="pf-field" rows="3" maxlength="2000" disabled="@NotaGuardada" @bind="Nota.Diagnostico"></textarea>
+                            </div>
+                            <div class="pf-form-group">
+                                <label for="nota-tratamiento">Tratamiento</label>
+                                <textarea id="nota-tratamiento" class="pf-field" rows="3" maxlength="3000" disabled="@NotaGuardada" @bind="Nota.Tratamiento"></textarea>
+                            </div>
+                            <div class="pf-form-group pf-form-full">
+                                <label for="nota-observaciones">Observaciones</label>
+                                <textarea id="nota-observaciones" class="pf-field" rows="2" maxlength="3000" disabled="@NotaGuardada" @bind="Nota.Observaciones"></textarea>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="pf-card pf-info-card">
+                        <div class="pf-form-heading">
+                            <div class="pf-form-mark">2</div>
+                            <div>
+                                <h2>Insumos usados</h2>
+                                <p>Se descuentan del inventario al finalizar.</p>
+                            </div>
+                        </div>
+
+                        @if (Frecuentes.Count > 0)
+                        {
+                            <div class="chips">
+                                <span class="chips-titulo">Frecuentes</span>
+                                @foreach (var insumo in Frecuentes)
+                                {
+                                    <button type="button" class="chip" disabled="@(insumo.StockActual <= 0)" @onclick="() => SumarInsumo(insumo, 1)">
+                                        + @insumo.Nombre
+                                    </button>
+                                }
+                            </div>
+                        }
+
+                        <div class="agregar-insumo">
+                            <select class="pf-field" aria-label="Insumo" @bind="InsumoElegido">
+                                <option value="0">Buscar insumo...</option>
+                                @foreach (var insumo in InsumosActivos)
+                                {
+                                    <option value="@insumo.Id" disabled="@(insumo.StockActual <= 0)">
+                                        @insumo.Nombre (stock: @Numero(insumo.StockActual) @insumo.Unidad)
+                                    </option>
+                                }
+                            </select>
+                            <input type="number" class="pf-field cantidad" min="0.01" step="0.01" aria-label="Cantidad" @bind="CantidadElegida" />
+                            <button type="button" class="pf-btn pf-btn-neutral" @onclick="AgregarElegido">Agregar</button>
+                        </div>
+
+                        @if (Usados.Count > 0)
+                        {
+                            <div class="pf-table-wrap">
+                                <table class="pf-table">
+                                    <thead>
+                                        <tr><th>Insumo</th><th>Cantidad</th><th>Stock</th><th></th></tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var usado in Usados)
+                                        {
+                                            <tr @key="usado.Insumo.Id">
+                                                <td>@usado.Insumo.Nombre</td>
+                                                <td>
+                                                    @if (usado.Guardado)
+                                                    {
+                                                        <span>✓ @Numero(usado.Cantidad) @usado.Insumo.Unidad</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <div class="cantidad-fila">
+                                                            <input type="number" class="pf-field cantidad" min="0.01" step="0.01" aria-label="Cantidad de @usado.Insumo.Nombre" @bind="usado.Cantidad" />
+                                                            <span class="pf-detail-muted">@usado.Insumo.Unidad</span>
+                                                        </div>
+                                                    }
+                                                </td>
+                                                <td class="@(usado.Cantidad > usado.Insumo.StockActual && !usado.Guardado ? "sin-stock" : "")">
+                                                    @Numero(usado.Insumo.StockActual)
+                                                </td>
+                                                <td>
+                                                    @if (!usado.Guardado)
+                                                    {
+                                                        <button type="button" class="pf-contact-action" @onclick="() => Usados.Remove(usado)">Quitar</button>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </section>
+
+                    <section class="pf-card pf-info-card">
+                        <div class="pf-form-heading">
+                            <div class="pf-form-mark">3</div>
+                            <div>
+                                <h2>Fotos y archivos</h2>
+                                <p>JPG, PNG o PDF de hasta 10 MB, máximo @MaximoFotos. Se guardan en la atención al finalizar.</p>
+                            </div>
+                        </div>
+
+                        <InputFile class="pf-field" multiple accept=".jpg,.jpeg,.png,.pdf" disabled="@AdjuntosGuardados" OnChange="ElegirFotos" />
+
+                        @if (Fotos.Count > 0)
+                        {
+                            <ul class="archivos">
+                                @foreach (var foto in Fotos)
+                                {
+                                    <li>@(FotosSubidas.Contains(foto.Name) ? "✓ " : "")@foto.Name <span class="pf-detail-muted">@Numero(foto.Size / 1024m) KB</span></li>
+                                }
+                            </ul>
+                        }
+                    </section>
+
+                    <section class="pf-card pf-info-card">
+                        <div class="pf-form-heading">
+                            <div class="pf-form-mark">4</div>
+                            <div>
+                                <h2>Cobro</h2>
+                                <p>@Catalogos?.NombreServicio(Cita.ServicioId). Puede cobrarse completo, como abono o dejarse pendiente.</p>
+                            </div>
+                        </div>
+
+                        <div class="pf-patient-form-grid">
+                            <div class="pf-form-group">
+                                <label for="cobro-precio">Precio</label>
+                                <input id="cobro-precio" type="number" class="pf-field" min="0" step="0.01" disabled="@(PrestacionId != null)" @bind="Precio" />
+                            </div>
+                            <div class="pf-form-group">
+                                <label for="cobro-cantidad">Cantidad</label>
+                                <input id="cobro-cantidad" type="number" class="pf-field" min="0.01" step="0.01" disabled="@(PrestacionId != null)" @bind="CantidadServicio" />
+                            </div>
+                        </div>
+
+                        <div class="selector" role="radiogroup" aria-label="Forma de cobro">
+                            <button type="button" role="radio" aria-checked="@(CobrarAhora ? "true" : "false")"
+                                    class="opcion @(CobrarAhora ? "activa" : "")" disabled="@CobroGuardado" @onclick="() => CobrarAhora = true">
+                                Cobrar ahora
+                            </button>
+                            <button type="button" role="radio" aria-checked="@(!CobrarAhora ? "true" : "false")"
+                                    class="opcion @(!CobrarAhora ? "activa" : "")" disabled="@CobroGuardado" @onclick="() => CobrarAhora = false">
+                                Dejar pendiente (fiado)
+                            </button>
+                        </div>
+
+                        @if (CobrarAhora)
+                        {
+                            <div class="pf-patient-form-grid">
+                                <div class="pf-form-group">
+                                    <label for="cobro-forma">Forma de pago *</label>
+                                    <select id="cobro-forma" class="pf-field" disabled="@CobroGuardado" @bind="FormaPagoId">
+                                        <option value="0">Selecciona</option>
+                                        @foreach (var forma in FormasPago)
+                                        {
+                                            <option value="@forma.Id">@forma.Nombre</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="pf-form-group">
+                                    <label for="cobro-valor">Valor recibido *</label>
+                                    <input id="cobro-valor" type="number" class="pf-field" min="0.01" step="0.01" disabled="@CobroGuardado" @bind="ValorCobro" />
+                                </div>
+                            </div>
+                        }
+
+                        <div class="resumen-cobro">
+                            <span>Total <strong>@Dinero(Total)</strong></span>
+                            @if (SaldoPendiente > 0)
+                            {
+                                <span class="pendiente">Pendiente <strong>@Dinero(SaldoPendiente)</strong></span>
+                            }
+                        </div>
+                    </section>
+
+                    <section class="pf-card pf-info-card">
+                        <div class="pf-form-heading">
+                            <div class="pf-form-mark">5</div>
+                            <div>
+                                <h2>Seguimiento</h2>
+                                <p>Agenda la próxima cita con los horarios libres de la profesional.</p>
+                            </div>
+                        </div>
+
+                        <label class="pf-checkbox">
+                            <input type="checkbox" disabled="@(CitaSeguimiento != null)" @bind="AgendarSeguimiento" @bind:after="CargarHuecosAsync" />
+                            Agendar una cita de seguimiento
+                        </label>
+
+                        @if (AgendarSeguimiento)
+                        {
+                            <div class="chips">
+                                <span class="chips-titulo">En</span>
+                                <button type="button" class="chip" @onclick="() => ElegirPlazoAsync(7)">1 semana</button>
+                                <button type="button" class="chip" @onclick="() => ElegirPlazoAsync(14)">2 semanas</button>
+                                <button type="button" class="chip" @onclick="() => ElegirPlazoAsync(30)">1 mes</button>
+                            </div>
+
+                            <div class="pf-patient-form-grid">
+                                <div class="pf-form-group">
+                                    <label for="seg-fecha">Fecha</label>
+                                    <input id="seg-fecha" type="date" class="pf-field" @bind="FechaSeguimiento" @bind:after="CargarHuecosAsync" />
+                                </div>
+                                <div class="pf-form-group">
+                                    <label for="seg-servicio">Servicio</label>
+                                    <select id="seg-servicio" class="pf-field" @bind="ServicioSeguimiento" @bind:after="CargarHuecosAsync">
+                                        @foreach (var servicio in Catalogos!.Servicios.Where(s => s.Estatus))
+                                        {
+                                            <option value="@servicio.Id">@servicio.Nombre (@servicio.DuracionMinutos min)</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+
+                            @if (CargandoHuecos)
+                            {
+                                <p class="pf-detail-muted">Buscando horarios libres...</p>
+                            }
+                            else if (Huecos.Count == 0)
+                            {
+                                <p class="pf-detail-muted">No hay horarios libres ese día. Prueba con otra fecha.</p>
+                            }
+                            else
+                            {
+                                <div class="horas">
+                                    @foreach (var hueco in Huecos)
+                                    {
+                                        <button type="button" class="chip @(HoraSeguimiento == hueco ? "elegido" : "")" @onclick="() => HoraSeguimiento = hueco">
+                                            @hueco.ToString(@"hh\:mm")
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        }
+                    </section>
+
+                    <section class="pf-card pf-info-card barra-final">
+                        @if (Pasos.Any(p => p.Estado != EstadoPaso.Pendiente))
+                        {
+                            <ul class="pasos">
+                                @foreach (var paso in Pasos.Where(p => p.Estado != EstadoPaso.Omitido))
+                                {
+                                    <li class="@paso.Estado.ToString().ToLowerInvariant()">
+                                        @(paso.Estado switch { EstadoPaso.Hecho => "✓", EstadoPaso.Error => "✗", _ => "○" }) @paso.Texto
+                                    </li>
+                                }
+                            </ul>
+                        }
+
+                        @if (Error != null)
+                        {
+                            <div class="pf-detail-error" role="alert">@Error</div>
+                        }
+
+                        @if (AtencionCreada != null)
+                        {
+                            <p class="pf-detail-muted">La cita ya quedó atendida y la nota guardada. Corrige lo indicado y pulsa de nuevo para completar lo que falta.</p>
+                        }
+
+                        <div class="barra-contenido">
+                            <div class="barra-resumen">
+                                <span><strong>@Dinero(Total)</strong> @TextoCobro</span>
+                                <span>@Usados.Count insumo(s) · @Fotos.Count archivo(s)@(AgendarSeguimiento && HoraSeguimiento != null ? $" · seguimiento {FechaSeguimiento:dd/MM} {HoraSeguimiento:hh\\:mm}" : "")</span>
+                                <label class="pf-checkbox">
+                                    <input type="checkbox" disabled="@(AtencionCreada != null)" @bind="CerrarAtencion" />
+                                    Cerrar la atención al terminar
+                                </label>
+                            </div>
+
+                            <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="FinalizarAsync">
+                                @(Procesando ? "Guardando..." : AtencionCreada == null ? "Finalizar atención" : "Completar lo pendiente")
+                            </button>
+                        </div>
+                    </section>
+                </div>
+
+                <aside class="lateral">
+                    <section class="pf-card pf-info-card">
+                        <div class="pf-detail-heading">
+                            <h2>Antecedentes</h2>
+                        </div>
+
+                        @if (Antecedentes.Count == 0)
+                        {
+                            <p class="pf-detail-muted">Sin antecedentes registrados.</p>
+                        }
+                        else
+                        {
+                            <ul class="lista-lateral">
+                                @foreach (var antecedente in Antecedentes)
+                                {
+                                    <li>
+                                        <span class="etiqueta">@Texto(antecedente.Tipo)</span>
+                                        <span>@antecedente.Descripcion</span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </section>
+
+                    <section class="pf-card pf-info-card">
+                        <div class="pf-detail-heading">
+                            <h2>Atenciones anteriores</h2>
+                        </div>
+
+                        @if (Anteriores.Count == 0)
+                        {
+                            <p class="pf-detail-muted">No hay atenciones anteriores.</p>
+                        }
+                        else
+                        {
+                            <ul class="lista-lateral">
+                                @foreach (var anterior in Anteriores)
+                                {
+                                    <li>
+                                        <span class="etiqueta">@AgendaFechas.ALocal(anterior.Fecha).ToString("dd/MM/yyyy")</span>
+                                        @if (!string.IsNullOrWhiteSpace(anterior.Diagnostico))
+                                        {
+                                            <span><b>Diagnóstico:</b> @Corto(anterior.Diagnostico, 140)</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(anterior.Tratamiento))
+                                        {
+                                            <span><b>Tratamiento:</b> @Corto(anterior.Tratamiento, 140)</span>
+                                        }
+                                    </li>
+                                }
+                            </ul>
+
+                            <button type="button" class="pf-btn pf-btn-neutral copiar" disabled="@NotaGuardada" @onclick="CopiarAnterior">
+                                Copiar diagnóstico y tratamiento
+                            </button>
+                        }
+                    </section>
+                </aside>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private const int MaximoFotos = 5;
+
+    private static readonly System.Globalization.CultureInfo Cultura = new("es-EC");
+
+    [Parameter]
+    public long CitaId { get; set; }
+
+    private CitaDto? Cita;
+    private CatalogosAgenda? Catalogos;
+    private PacienteDto? Paciente;
+    private HistoriaPacienteDto? Historia;
+    private List<AntecedenteDto> Antecedentes = [];
+    private List<AtencionDto> Anteriores = [];
+    private List<InsumoDto> InsumosActivos = [];
+    private List<InsumoDto> Frecuentes = [];
+    private List<FormaPagoDto> FormasPago = [];
+    private long UsuarioId;
+
+    private readonly AtencionCrearDto Nota = new();
+    private readonly List<InsumoUsado> Usados = [];
+    private int InsumoElegido;
+    private decimal CantidadElegida = 1;
+    private List<IBrowserFile> Fotos = [];
+    private readonly HashSet<string> FotosSubidas = [];
+
+    private decimal Precio;
+    private decimal CantidadServicio = 1;
+    private bool CobrarAhora = true;
+    private int FormaPagoId;
+    private decimal ValorCobro;
+
+    private bool AgendarSeguimiento;
+    private DateTime FechaSeguimiento = AgendaFechas.Ahora.Date.AddDays(14);
+    private int ServicioSeguimiento;
+    private TimeSpan? HoraSeguimiento;
+    private List<TimeSpan> Huecos = [];
+    private bool CargandoHuecos;
+
+    private bool CerrarAtencion = true;
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private bool Finalizado;
+    private string? ErrorCarga;
+    private Aviso? Bloqueo;
+    private string? Error;
+
+    private bool CitaAtendida;
+    private AtencionDto? AtencionCreada;
+    private long? PrestacionId;
+    private bool CobroGuardado;
+    private CitaDto? CitaSeguimiento;
+    private bool AtencionCerrada;
+    private List<Paso> Pasos = [];
+
+    private bool NotaGuardada => AtencionCreada != null;
+    private bool AdjuntosGuardados => Fotos.Count > 0 && Fotos.All(f => FotosSubidas.Contains(f.Name));
+    private decimal Total => Math.Round(Math.Max(0, Precio) * Math.Max(0, CantidadServicio), 2);
+    private decimal SaldoPendiente => CobrarAhora ? Math.Max(0, Total - ValorCobro) : Total;
+
+    private string TextoCobro =>
+        !CobrarAhora ? "· queda pendiente"
+        : SaldoPendiente > 0 ? $"· abono {Dinero(ValorCobro)}, pendiente {Dinero(SaldoPendiente)}"
+        : "· se cobra completo";
+
+    private string Iniciales
+    {
+        get
+        {
+            var partes = (Paciente?.NombreCompleto ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            return partes.Length == 0
+                ? "PF"
+                : string.Concat(partes.Take(2).Select(p => char.ToUpperInvariant(p[0])));
+        }
+    }
+
+    private int? Edad
+    {
+        get
+        {
+            if (Paciente?.FechaNacimiento is not DateTime nacimiento)
+                return null;
+
+            var hoy = AgendaFechas.Ahora.Date;
+            var edad = hoy.Year - nacimiento.Year;
+
+            return nacimiento.Date > hoy.AddYears(-edad) ? edad - 1 : edad;
+        }
+    }
+
+    private IEnumerable<AntecedenteDto> Alertas => Antecedentes
+        .Where(a => a.Tipo.Contains("ALERG") || a.Tipo.Contains("PATOL") || a.Tipo.Contains("MEDIC"))
+        .Take(4);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Cita = await Agenda.ObtenerCitaAsync(CitaId);
+
+            if (Cita == null)
+            {
+                ErrorCarga = "No se encontró la cita.";
+                return;
+            }
+
+            Catalogos = await Agenda.CargarCatalogosAsync();
+            Paciente = await Pacientes.ObtenerAsync(Cita.PacienteId);
+            Historia = await Pacientes.ObtenerHistoriaPacienteAsync(Cita.PacienteId);
+
+            UsuarioId = Cita.UsuarioId
+                ?? (long.TryParse(Ajustes["AutenticacionDesarrollo:UsuarioId"], out var configurado) ? configurado : 0);
+
+            Bloqueo = MotivoBloqueo(Cita);
+
+            if (Bloqueo != null)
+                return;
+
+            if (Historia != null)
+            {
+                Antecedentes = await Pacientes.ListarAntecedentesAsync(Historia.Id, false, 1, 50);
+                Anteriores = (await Pacientes.ListarAtencionesAsync(Historia.Id, 1, 20))
+                    .OrderByDescending(a => a.Fecha)
+                    .Take(3)
+                    .ToList();
+            }
+
+            var insumos = await Inventario.ListarInsumosAsync();
+            InsumosActivos = insumos.Where(i => i.Estatus).OrderBy(i => i.Nombre).ToList();
+
+            var consumos = await Inventario.ListarMovimientosAsync(null, "CONSUMO");
+            Frecuentes = consumos
+                .Where(m => m.AtencionId != null)
+                .GroupBy(m => m.InsumoId)
+                .OrderByDescending(g => g.Count())
+                .Select(g => InsumosActivos.FirstOrDefault(i => i.Id == g.Key))
+                .OfType<InsumoDto>()
+                .Take(6)
+                .ToList();
+
+            var servicios = await Configuracion.ListarServiciosAsync();
+            Precio = servicios.FirstOrDefault(s => s.Id == Cita.ServicioId)?.Precio ?? 0;
+            ValorCobro = Precio;
+            ServicioSeguimiento = Cita.ServicioId;
+
+            FormasPago = (await Pagos.ListarFormasPagoAsync()).Where(f => f.Estatus).ToList();
+            FormaPagoId = FormasPago.FirstOrDefault(f => f.Codigo == "EFECTIVO")?.Id ?? 0;
+
+            Nota.MotivoConsulta = Cita.Observaciones?.Trim() ?? "";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorCarga = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorCarga = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorCarga = "La API tardó demasiado en responder. Recarga la página.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private Aviso? MotivoBloqueo(CitaDto cita)
+    {
+        if (cita.Estado == "ATENDIDA")
+            return new("Esta cita ya fue atendida", "Su atención está en la historia clínica del paciente.");
+
+        if (cita.Estado == "CANCELADA")
+            return new("Esta cita fue cancelada", "Una cita cancelada no se puede atender.");
+
+        if (cita.Estado == "NO_ASISTE")
+            return new("El paciente no asistió", "La cita está marcada como «No asistió» y no se puede atender.");
+
+        if (AgendaReglas.EsVencida(cita))
+            return new("La hora de esta cita ya pasó",
+                $"Terminaba a las {cita.FinLocal:HH:mm} y no se registró la atención. Si el paciente la necesita, agenda una cita nueva.");
+
+        if (!AgendaReglas.PuedeAtenderse(cita))
+            return new("Todavía no es la hora de esta cita",
+                $"Es el {cita.InicioLocal:dd/MM/yyyy} a las {cita.InicioLocal:HH:mm}. Podrás atenderla desde las {cita.InicioLocal.AddMinutes(-AgendaReglas.MinutosAntesDeAtender):HH:mm}.");
+
+        if (Historia?.Estado == "BLOQUEADA")
+            return new("La historia clínica está bloqueada", "Revísala desde la ficha del paciente antes de atender.");
+
+        if (UsuarioId <= 0)
+            return new("La cita no tiene profesional asignado", "Asigna la profesional a la cita antes de atenderla.");
+
+        return null;
+    }
+
+    private void CopiarAnterior()
+    {
+        var ultima = Anteriores.FirstOrDefault();
+
+        if (ultima == null)
+            return;
+
+        Nota.Diagnostico = ultima.Diagnostico;
+        Nota.Tratamiento = ultima.Tratamiento;
+    }
+
+    private void SumarInsumo(InsumoDto insumo, decimal cantidad)
+    {
+        var usado = Usados.FirstOrDefault(u => u.Insumo.Id == insumo.Id && !u.Guardado);
+
+        if (usado == null)
+            Usados.Add(new InsumoUsado(insumo) { Cantidad = cantidad });
+        else
+            usado.Cantidad += cantidad;
+    }
+
+    private void AgregarElegido()
+    {
+        var insumo = InsumosActivos.FirstOrDefault(i => i.Id == InsumoElegido);
+
+        if (insumo == null || CantidadElegida <= 0)
+            return;
+
+        SumarInsumo(insumo, Math.Round(CantidadElegida, 2));
+        InsumoElegido = 0;
+        CantidadElegida = 1;
+    }
+
+    private void ElegirFotos(InputFileChangeEventArgs e)
+    {
+        Error = null;
+
+        if (e.FileCount > MaximoFotos)
+        {
+            Error = $"Puedes adjuntar como máximo {MaximoFotos} archivos.";
+            return;
+        }
+
+        var archivos = e.GetMultipleFiles(MaximoFotos).ToList();
+        var invalido = archivos.FirstOrDefault(f =>
+            AdjuntosApi.TipoPorExtension(f.Name) == null || f.Size <= 0 || f.Size > AdjuntosApi.MaximoBytes);
+
+        if (invalido != null)
+        {
+            Error = $"«{invalido.Name}» no se puede adjuntar: solo JPG, PNG o PDF de hasta 10 MB.";
+            return;
+        }
+
+        Fotos = archivos;
+        FotosSubidas.Clear();
+    }
+
+    private async Task ElegirPlazoAsync(int dias)
+    {
+        FechaSeguimiento = AgendaFechas.Ahora.Date.AddDays(dias);
+        await CargarHuecosAsync();
+    }
+
+    private async Task CargarHuecosAsync()
+    {
+        HoraSeguimiento = null;
+        Huecos = [];
+
+        if (!AgendarSeguimiento || Catalogos == null)
+            return;
+
+        CargandoHuecos = true;
+
+        try
+        {
+            var duracion = Catalogos.Servicios.FirstOrDefault(s => s.Id == ServicioSeguimiento)?.DuracionMinutos ?? 30;
+            var citas = await Agenda.CitasEntreAsync(FechaSeguimiento.Date, FechaSeguimiento.Date.AddDays(1));
+
+            Huecos = AgendaReglas.HuecosLibres(FechaSeguimiento, duracion, Cita!.UsuarioId, Catalogos, citas, null);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudieron consultar los horarios libres.";
+        }
+        finally
+        {
+            CargandoHuecos = false;
+        }
+    }
+
+    private string? Validar()
+    {
+        if (string.IsNullOrWhiteSpace(Nota.MotivoConsulta))
+            return "Escribe el motivo de consulta.";
+
+        var excedido = Usados.FirstOrDefault(u => !u.Guardado && (u.Cantidad <= 0 || u.Cantidad > u.Insumo.StockActual));
+        if (excedido != null)
+            return $"Revisa la cantidad de «{excedido.Insumo.Nombre}»: debe ser mayor a 0 y no superar el stock ({Numero(excedido.Insumo.StockActual)}).";
+
+        if (Precio < 0 || CantidadServicio <= 0)
+            return "Revisa el precio y la cantidad del servicio.";
+
+        if (CobrarAhora && !CobroGuardado)
+        {
+            if (FormaPagoId <= 0)
+                return "Selecciona la forma de pago.";
+
+            if (ValorCobro <= 0 || ValorCobro > Total)
+                return $"El valor recibido debe ser mayor a 0 y no superar el total ({Dinero(Total)}).";
+        }
+
+        if (AgendarSeguimiento && CitaSeguimiento == null && HoraSeguimiento == null)
+            return "Elige la hora de la cita de seguimiento o desmarca «Agendar una cita de seguimiento».";
+
+        return null;
+    }
+
+    private async Task FinalizarAsync()
+    {
+        if (Procesando || Cita == null)
+            return;
+
+        Error = Validar();
+
+        if (Error != null)
+            return;
+
+        Procesando = true;
+        PrepararPasos();
+
+        try
+        {
+            await EjecutarAsync("cita", MarcarCitaAtendidaAsync);
+            await EjecutarAsync("nota", GuardarNotaAsync);
+            await EjecutarAsync("insumos", DescontarInsumosAsync);
+            await EjecutarAsync("fotos", SubirFotosAsync);
+            await EjecutarAsync("prestacion", RegistrarPrestacionAsync);
+            await EjecutarAsync("cobro", RegistrarCobroAsync);
+            await EjecutarAsync("seguimiento", AgendarAsync);
+            await EjecutarAsync("cierre", CerrarAsync);
+
+            Finalizado = true;
+        }
+        catch (PasoFallido)
+        {
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private void PrepararPasos()
+    {
+        var anteriores = Pasos.ToDictionary(p => p.Clave, p => p.Estado);
+
+        Pasos =
+        [
+            new("cita", "Cita marcada como atendida"),
+            new("nota", "Nota guardada en la historia clínica"),
+            new("insumos", Usados.Count == 0 ? "Sin insumos" : $"{Usados.Count} insumo(s) descontado(s) del inventario", Usados.Count == 0),
+            new("fotos", $"{Fotos.Count} archivo(s) adjuntado(s)", Fotos.Count == 0),
+            new("prestacion", $"Servicio registrado por {Dinero(Total)}"),
+            new("cobro", CobrarAhora ? $"Cobro de {Dinero(ValorCobro)} registrado" : "Cobro pendiente", !CobrarAhora),
+            new("seguimiento", "Cita de seguimiento agendada", !AgendarSeguimiento),
+            new("cierre", "Atención cerrada", !CerrarAtencion)
+        ];
+
+        foreach (var paso in Pasos)
+        {
+            if (anteriores.TryGetValue(paso.Clave, out var estado) && estado == EstadoPaso.Hecho)
+                paso.Estado = EstadoPaso.Hecho;
+        }
+    }
+
+    private async Task EjecutarAsync(string clave, Func<Task> accion)
+    {
+        var paso = Pasos.First(p => p.Clave == clave);
+
+        if (paso.Estado is EstadoPaso.Hecho or EstadoPaso.Omitido)
+            return;
+
+        try
+        {
+            await accion();
+            paso.Estado = EstadoPaso.Hecho;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException or IOException)
+        {
+            paso.Estado = EstadoPaso.Error;
+            Error = ex switch
+            {
+                HttpRequestException => "No fue posible conectar con PodoFlow.Api.",
+                TaskCanceledException => "La API tardó demasiado en responder.",
+                _ => ex.Message
+            };
+
+            throw new PasoFallido();
+        }
+    }
+
+    private async Task MarcarCitaAtendidaAsync()
+    {
+        if (CitaAtendida)
+            return;
+
+        var cita = await Agenda.ObtenerCitaAsync(Cita!.Id) ?? throw new InvalidOperationException("La cita ya no existe.");
+
+        if (cita.Estado is "SOLICITADA" or "REPROGRAMADA")
+        {
+            await Agenda.CambiarEstadoCitaAsync(cita.Id, "CONFIRMADA", "Paciente presente en consulta.", cita.Version);
+            cita = await Agenda.ObtenerCitaAsync(cita.Id) ?? throw new InvalidOperationException("La cita ya no existe.");
+        }
+
+        if (cita.Estado != "ATENDIDA")
+            await Agenda.CambiarEstadoCitaAsync(cita.Id, "ATENDIDA", "Atención registrada desde la agenda.", cita.Version);
+
+        CitaAtendida = true;
+    }
+
+    private async Task GuardarNotaAsync()
+    {
+        if (AtencionCreada != null)
+            return;
+
+        Historia ??= await Pacientes.ObtenerHistoriaPacienteAsync(Cita!.PacienteId)
+            ?? await Pacientes.CrearHistoriaPacienteAsync(Cita.PacienteId);
+
+        AtencionCreada = await Pacientes.CrearAtencionAsync(Historia.Id, new AtencionCrearDto
+        {
+            CitaId = Cita!.Id,
+            UsuarioId = UsuarioId,
+            MotivoConsulta = Nota.MotivoConsulta.Trim(),
+            ValoracionClinica = Limpiar(Nota.ValoracionClinica),
+            Diagnostico = Limpiar(Nota.Diagnostico),
+            Tratamiento = Limpiar(Nota.Tratamiento),
+            Observaciones = Limpiar(Nota.Observaciones)
+        });
+    }
+
+    private async Task DescontarInsumosAsync()
+    {
+        foreach (var usado in Usados.Where(u => !u.Guardado))
+        {
+            await Inventario.CrearMovimientoAsync(new MovimientoCrearDto
+            {
+                InsumoId = usado.Insumo.Id,
+                AtencionId = AtencionCreada!.Id,
+                UsuarioId = UsuarioId,
+                Tipo = "CONSUMO",
+                Cantidad = Math.Round(usado.Cantidad, 2),
+                Motivo = $"Atención #{AtencionCreada.Id}"
+            });
+
+            usado.Guardado = true;
+        }
+    }
+
+    private async Task SubirFotosAsync()
+    {
+        foreach (var foto in Fotos.Where(f => !FotosSubidas.Contains(f.Name)))
+        {
+            await Adjuntos.SubirAsync(AtencionCreada!.Id, UsuarioId, foto, null);
+            FotosSubidas.Add(foto.Name);
+        }
+    }
+
+    private async Task RegistrarPrestacionAsync()
+    {
+        if (PrestacionId != null)
+            return;
+
+        await Pagos.CrearPrestacionAsync(new PrestacionCrearDto
+        {
+            PacienteId = Cita!.PacienteId,
+            CitaId = Cita.Id,
+            AtencionId = AtencionCreada!.Id,
+            ServicioId = Cita.ServicioId,
+            UsuarioId = UsuarioId,
+            PrecioAplicado = Math.Round(Precio, 2),
+            Cantidad = Math.Round(CantidadServicio, 2)
+        });
+
+        PrestacionId = (await Pagos.ListarPrestacionesAsync(Cita.PacienteId, null))
+            .FirstOrDefault(p => p.AtencionId == AtencionCreada.Id && p.Estado != "ANULADA")?.Id
+            ?? throw new InvalidOperationException("El servicio se registró, pero no se pudo recuperar para cobrarlo. Cóbralo desde Pagos internos.");
+    }
+
+    private async Task RegistrarCobroAsync()
+    {
+        if (CobroGuardado)
+            return;
+
+        await Pagos.RegistrarCobroAsync(new CobroCrearDto
+        {
+            PrestacionId = PrestacionId!.Value,
+            FormaPagoId = FormaPagoId,
+            UsuarioId = UsuarioId,
+            Valor = Math.Round(ValorCobro, 2)
+        });
+
+        CobroGuardado = true;
+    }
+
+    private async Task AgendarAsync()
+    {
+        if (CitaSeguimiento != null)
+            return;
+
+        var duracion = Catalogos!.Servicios.FirstOrDefault(s => s.Id == ServicioSeguimiento)?.DuracionMinutos ?? 30;
+        var inicio = FechaSeguimiento.Date + HoraSeguimiento!.Value;
+
+        CitaSeguimiento = await Agenda.CrearCitaAsync(new CitaGuardarDto
+        {
+            PacienteId = Cita!.PacienteId,
+            ServicioId = ServicioSeguimiento,
+            UsuarioId = Cita.UsuarioId,
+            FechaInicio = AgendaFechas.AUtc(inicio),
+            FechaFin = AgendaFechas.AUtc(inicio.AddMinutes(duracion)),
+            Canal = "PRESENCIAL",
+            Observaciones = $"Seguimiento de la atención del {Cita.InicioLocal:dd/MM/yyyy}."
+        });
+    }
+
+    private async Task CerrarAsync()
+    {
+        if (AtencionCerrada)
+            return;
+
+        await Clinica.CambiarEstadoAtencionAsync(AtencionCreada!.Id, "CERRADA", "Atención finalizada desde la agenda.", AtencionCreada.Version);
+        AtencionCerrada = true;
+    }
+
+    private static string? Limpiar(string? valor) =>
+        string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+
+    private static string Corto(string texto, int maximo) =>
+        texto.Length <= maximo ? texto : texto[..maximo].TrimEnd() + "…";
+
+    private static string Texto(string codigo) =>
+        Cultura.TextInfo.ToTitleCase(codigo.Replace('_', ' ').ToLowerInvariant());
+
+    private static string Numero(decimal valor) => valor.ToString("0.##", Cultura);
+
+    private static string Dinero(decimal valor) => valor.ToString("C2", Cultura);
+
+    private sealed class InsumoUsado(InsumoDto insumo)
+    {
+        public InsumoDto Insumo { get; } = insumo;
+        public decimal Cantidad { get; set; }
+        public bool Guardado { get; set; }
+    }
+
+    private enum EstadoPaso
+    {
+        Pendiente,
+        Hecho,
+        Error,
+        Omitido
+    }
+
+    private sealed class Paso(string clave, string texto, bool omitido = false)
+    {
+        public string Clave { get; } = clave;
+        public string Texto { get; } = texto;
+        public EstadoPaso Estado { get; set; } = omitido ? EstadoPaso.Omitido : EstadoPaso.Pendiente;
+    }
+
+    private sealed record Aviso(string Titulo, string Detalle);
+
+    private sealed class PasoFallido : Exception
+    {
+    }
+}

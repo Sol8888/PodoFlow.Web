@@ -1,0 +1,743 @@
+@page "/privacidad/consentimientos"
+@rendermode InteractiveServer
+
+@using Microsoft.AspNetCore.WebUtilities
+
+@inject IPrivacidadApi Api
+@inject NavigationManager Navegacion
+
+@if (PacienteFijo is null)
+{
+    <PageTitle>Consentimientos | PodoFlow</PageTitle>
+}
+
+<div class="pf-pacientes">
+
+    @if (PacienteFijo is null)
+    {
+        <div class="pf-module-header">
+            <div>
+                <span class="pf-module-eyebrow">PRIVACIDAD Y LOPDP</span>
+                <h1>Consentimientos</h1>
+                <p>Consulta, revoca o vuelve a activar lo que autorizó cada paciente.</p>
+            </div>
+        </div>
+
+        <PrivacidadPestanas Activa="consentimientos" />
+    }
+    else
+    {
+        <div class="pf-detail-heading">
+            <div>
+                <h2>Consentimientos</h2>
+                <p class="pf-detail-muted">Consulta y registra lo que autorizó el paciente para cada finalidad.</p>
+            </div>
+        </div>
+    }
+
+    <div class="zona-mensajes" aria-live="polite">
+        @if (Mensaje != null)
+        {
+            <div class="pf-contact-success">@Mensaje</div>
+            <AvisoTemporal @bind-Mensaje="Mensaje" />
+        }
+    </div>
+
+    @if (Error != null)
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+
+    @if (Cargando)
+    {
+        <section class="pf-card pf-directory">
+            <div class="pf-empty" role="status">Cargando información...</div>
+        </section>
+    }
+    else if (Paciente == null)
+    {
+        <div class="pf-module-toolbar">
+            <input class="pf-field pf-search-field"
+                   placeholder="Buscar paciente por nombre o identificación..."
+                   aria-label="Buscar paciente"
+                   autocomplete="off"
+                   @bind="Busqueda"
+                   @bind:event="oninput" />
+        </div>
+
+        <section class="pf-card pf-directory">
+            <div class="pf-card-header">
+                <div>
+                    <h2>Pacientes</h2>
+                    <p>Selecciona un paciente para ver sus consentimientos.</p>
+                </div>
+
+                <span class="pf-soft-chip">@TextoVisibles(Coincidencias.Count())</span>
+            </div>
+
+            @if (!Coincidencias.Any())
+            {
+                <div class="pf-empty">
+                    @(string.IsNullOrWhiteSpace(Busqueda)
+                        ? "No hay pacientes activos registrados."
+                        : $"No hay pacientes activos que coincidan con «{Busqueda.Trim()}».")
+                </div>
+            }
+            else
+            {
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th>Paciente</th>
+                                <th>Identificación</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var paciente in Coincidencias)
+                            {
+                                <tr @key="paciente.Id">
+                                    <td>
+                                        <div class="pf-patient">
+                                            <div class="pf-patient-avatar">@Iniciales(paciente)</div>
+                                            <strong>@paciente.NombreCompleto</strong>
+                                        </div>
+                                    </td>
+
+                                    <td>@paciente.TipoIdentificacion · @paciente.Identificacion</td>
+
+                                    <td>
+                                        <button type="button" class="pf-action-link boton-tabla"
+                                                @onclick="() => SeleccionarAsync(paciente)">
+                                            Ver consentimientos →
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+    else
+    {
+        <div class="pf-module-toolbar">
+            <select class="pf-field filtro-estado"
+                    aria-label="Filtrar por estado"
+                    @bind="Filtro"
+                    @bind:after="LimpiarAlFiltrar">
+                <option value="">Todos los estados</option>
+                @foreach (var estado in Estados)
+                {
+                    <option value="@estado">@EstadoPunto.TextoDe(estado)</option>
+                }
+            </select>
+
+            @if (PacienteFijo is null)
+            {
+                <div class="toolbar-acciones">
+                    <a class="pf-btn pf-btn-neutral" href="@($"/pacientes/{Paciente.Id}")">Ver ficha</a>
+
+                    <button type="button" class="pf-btn pf-btn-neutral" @onclick="CambiarPacienteAsync">
+                        Cambiar paciente
+                    </button>
+                </div>
+            }
+        </div>
+
+        @if (Pendiente && Filas.Any(f => f.Registro == null))
+        {
+            <div class="pf-detail-error">
+                El paciente se creó, pero faltan consentimientos. Regístralos en las filas “Sin registrar”.
+            </div>
+        }
+
+        @if (AvisoVigente == null)
+        {
+            <div class="pf-detail-error">
+                No hay un aviso de privacidad vigente. Puedes revocar, pero para aceptar o registrar hay que publicar uno.
+            </div>
+        }
+
+        <section class="pf-card pf-directory">
+            <div class="pf-card-header">
+                <div class="pf-patient">
+                    <div class="pf-patient-avatar">@Iniciales(Paciente)</div>
+
+                    <div>
+                        <h2>
+                            @Paciente.NombreCompleto
+                            @if (EsMenor)
+                            {
+                                <span class="pf-status warning etiqueta-titulo">MENOR DE EDAD</span>
+                            }
+                            @if (!Paciente.Estatus)
+                            {
+                                <span class="pf-status danger etiqueta-titulo">INACTIVO</span>
+                            }
+                        </h2>
+                        <p>
+                            @Paciente.TipoIdentificacion · @Paciente.Identificacion
+                            @if (AvisoVigente != null)
+                            {
+                                <span> · Aviso de privacidad vigente: versión @AvisoVigente.Version</span>
+                            }
+                        </p>
+                    </div>
+                </div>
+
+                <span class="pf-soft-chip">@TextoVisibles(FilasVisibles.Count())</span>
+            </div>
+
+            <div class="leyenda pf-detail-muted">
+                @foreach (var estado in Estados)
+                {
+                    <span>
+                        <EstadoPunto Estado="@estado" />
+                        @EstadoPunto.TextoDe(estado)
+                    </span>
+                }
+            </div>
+
+            @if (!FilasVisibles.Any())
+            {
+                <div class="pf-empty">
+                    @(Filas.Any()
+                        ? "No hay consentimientos en este estado."
+                        : "No hay finalidades que requieran consentimiento.")
+                </div>
+            }
+            else
+            {
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th>Finalidad</th>
+                                <th>Fecha</th>
+                                <th>Medio</th>
+                                <th>Aviso</th>
+                                <th>Estado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var fila in FilasVisibles)
+                            {
+                                var estado = EstadoDe(fila);
+                                var accionAbierta = FilaAccion?.Finalidad.Id == fila.Finalidad.Id;
+                                var historialAbierto = FilaHistorial?.Finalidad.Id == fila.Finalidad.Id;
+
+                                <tr @key="fila.Finalidad.Id"
+                                    class="@(UltimaActualizada == fila.Finalidad.Id ? "actualizada" : "")">
+                                    <td class="celda-finalidad">
+                                        <strong>@fila.Finalidad.Nombre</strong>
+
+                                        @if (!fila.Finalidad.Estatus)
+                                        {
+                                            <span class="pf-status">INACTIVA</span>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(fila.Finalidad.Descripcion))
+                                        {
+                                            <small>@fila.Finalidad.Descripcion</small>
+                                        }
+                                    </td>
+
+                                    <td>@FechaDe(fila.Registro)</td>
+
+                                    <td>@(fila.Registro == null ? "—" : OpcionesConsentimiento.NombreMedio(fila.Registro.Medio))</td>
+
+                                    <td>@VersionDe(fila.Registro)</td>
+
+                                    <td class="celda-estado">
+                                        <EstadoPunto Estado="@estado" />
+                                    </td>
+
+                                    <td>
+                                        <div class="acciones">
+                                            @foreach (var (nuevoEstado, texto) in AccionesDe(fila))
+                                            {
+                                                <button type="button"
+                                                        class="@(nuevoEstado == "RECHAZADO" ? "pf-link boton-enlace" : "pf-action-link boton-tabla")"
+                                                        aria-expanded="@(accionAbierta && EstadoAccion == nuevoEstado ? "true" : "false")"
+                                                        disabled="@Procesando"
+                                                        @onclick="() => Preparar(fila, nuevoEstado)">
+                                                    @texto
+                                                </button>
+                                            }
+
+                                            @if (fila.Registro != null)
+                                            {
+                                                <button type="button"
+                                                        class="pf-link boton-enlace"
+                                                        aria-expanded="@(historialAbierto ? "true" : "false")"
+                                                        disabled="@Procesando"
+                                                        @onclick="() => VerHistorialAsync(fila)">
+                                                    Historial
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                @if (accionAbierta && EstadoAccion != null)
+                                {
+                                    <tr class="fila-detalle">
+                                        <td colspan="6">
+                                            <div class="panel">
+                                                <h3>@TituloAccion</h3>
+                                                <p class="panel-explicacion">@ExplicacionAccion</p>
+
+                                                <fieldset class="panel-campos" disabled="@Procesando">
+                                                    <AutorizacionCampos @ref="Campos"
+                                                                        Modelo="Autorizacion"
+                                                                        FechaNacimiento="Paciente.FechaNacimiento"
+                                                                        Cambio="StateHasChanged" />
+
+                                                    @if (MostrarNota)
+                                                    {
+                                                        <div class="pf-form-group">
+                                                            <label for="nota-accion">Observación (opcional)</label>
+                                                            <textarea id="nota-accion" class="pf-field" rows="2" maxlength="500" @bind="Nota"></textarea>
+                                                        </div>
+                                                    }
+                                                    else
+                                                    {
+                                                        <button type="button" class="pf-link boton-enlace" @onclick="() => MostrarNota = true">
+                                                            + Agregar observación
+                                                        </button>
+                                                    }
+                                                </fieldset>
+
+                                                @if (ErrorAccion != null)
+                                                {
+                                                    <div class="pf-detail-error" role="alert">@ErrorAccion</div>
+                                                }
+
+                                                <div class="pf-form-actions">
+                                                    <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="CancelarAccion">
+                                                        Cancelar
+                                                    </button>
+
+                                                    <button type="button"
+                                                            class="pf-btn @(EstadoAccion == "ACEPTADO" ? "pf-btn-main" : "pf-btn-danger-confirm")"
+                                                            disabled="@Procesando"
+                                                            @onclick="ConfirmarAsync">
+                                                        @(Procesando ? "Guardando..." : TextoConfirmar)
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+
+                                @if (historialAbierto)
+                                {
+                                    <tr class="fila-detalle">
+                                        <td colspan="6">
+                                            <div class="panel">
+                                                <h3>Historial de decisiones</h3>
+
+                                                <ol class="linea-tiempo">
+                                                    @foreach (var evento in Eventos.OrderByDescending(e => e.Id))
+                                                    {
+                                                        <li @key="evento.Id">
+                                                            <EstadoPunto Estado="@evento.Estado" />
+
+                                                            <div>
+                                                                <div class="evento-cabecera">
+                                                                    <strong>@EstadoPunto.TextoDe(evento.Estado)</strong>
+                                                                    <time>@PrivacidadApi.HoraEcuador(evento.FechaHora).ToString("dd/MM/yyyy HH:mm")</time>
+                                                                </div>
+
+                                                                <span>@OpcionesConsentimiento.NombreMedio(evento.Medio)</span>
+
+                                                                @if (!string.IsNullOrWhiteSpace(evento.Observacion))
+                                                                {
+                                                                    <p>@evento.Observacion</p>
+                                                                }
+                                                            </div>
+                                                        </li>
+                                                    }
+                                                </ol>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+
+</div>
+
+@code {
+    private sealed record Fila(FinalidadDto Finalidad, ConsentimientoDto? Registro);
+
+    private static readonly string[] Estados = ["ACEPTADO", "RECHAZADO", "REVOCADO", "SIN_REGISTRAR"];
+
+    [Parameter]
+    public long? PacienteFijo { get; set; }
+
+    private long? PacienteId;
+    private bool Pendiente;
+
+    private List<PacienteDto> Pacientes = new();
+    private List<FinalidadDto> Finalidades = new();
+    private List<AvisoDto> Avisos = new();
+    private List<ConsentimientoDto> Registros = new();
+    private List<EventoConsentimientoDto> Eventos = new();
+
+    private PacienteDto? Paciente;
+    private Fila? FilaAccion;
+    private Fila? FilaHistorial;
+    private string? EstadoAccion;
+    private int? UltimaActualizada;
+
+    private AutorizacionCampos? Campos;
+    private AutorizacionModelo Autorizacion = new();
+    private string? Nota;
+    private bool MostrarNota;
+    private string Filtro = "";
+
+    private string Busqueda = "";
+    private bool Cargando = true;
+    private bool Procesando;
+    private string? Mensaje;
+    private string? Error;
+    private string? ErrorAccion;
+
+    private bool EsMenor => OpcionesConsentimiento.EsMenorDeEdad(Paciente?.FechaNacimiento);
+
+    private AvisoDto? AvisoVigente
+    {
+        get
+        {
+            var hoy = PrivacidadApi.HoyEcuador();
+
+            return Avisos
+                .Where(a => a.EsVigente(hoy))
+                .OrderByDescending(a => a.FechaDesde)
+                .ThenByDescending(a => a.Id)
+                .FirstOrDefault();
+        }
+    }
+
+    private string TituloAccion => EstadoAccion switch
+    {
+        "ACEPTADO" => "Aceptar este consentimiento",
+        "REVOCADO" => "Revocar este consentimiento",
+        _ => "Rechazar este consentimiento"
+    };
+
+    private string ExplicacionAccion => EstadoAccion switch
+    {
+        "ACEPTADO" => $"Se registrará con el aviso de privacidad versión {AvisoVigente?.Version}.",
+        "REVOCADO" => "Los datos dejarán de usarse para esta finalidad desde ahora. Podrá volver a aceptarlo más adelante.",
+        _ => "Quedará registrado que no lo autorizó. Podrá aceptarlo más adelante."
+    };
+
+    private string TextoConfirmar => EstadoAccion switch
+    {
+        "ACEPTADO" => "Confirmar aceptación",
+        "REVOCADO" => "Confirmar revocación",
+        _ => "Confirmar rechazo"
+    };
+
+    private IEnumerable<Fila> Filas => Finalidades
+        .Where(f => (f.Estatus && f.RequiereConsentimiento) || Registros.Any(r => r.FinalidadId == f.Id))
+        .Select(f => new Fila(f, Registros.FirstOrDefault(r => r.FinalidadId == f.Id)));
+
+    private IEnumerable<Fila> FilasVisibles => Filas
+        .Where(f => Filtro == "" || EstadoDe(f) == Filtro);
+
+    private IEnumerable<PacienteDto> Coincidencias => Pacientes
+        .Where(p => string.IsNullOrWhiteSpace(Busqueda)
+            || p.NombreCompleto.Contains(Busqueda, StringComparison.OrdinalIgnoreCase)
+            || p.Identificacion.Contains(Busqueda, StringComparison.OrdinalIgnoreCase))
+        .Take(8);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (PacienteFijo is null)
+            LeerConsulta();
+
+        await EjecutarCargaAsync(async () =>
+        {
+            Finalidades = await Api.ListarFinalidadesAsync();
+            Avisos = await Api.ListarAvisosAsync();
+
+            if ((PacienteFijo ?? PacienteId) is { } pacienteId)
+            {
+                Paciente = await Api.ObtenerPacienteAsync(pacienteId);
+
+                if (Paciente != null)
+                {
+                    Registros = await Api.ConsentimientosAsync(Paciente.Id);
+                    return;
+                }
+            }
+
+            Pacientes = await Api.ListarPacientesActivosAsync();
+        });
+    }
+
+    private void LeerConsulta()
+    {
+        var consulta = QueryHelpers.ParseQuery(Navegacion.ToAbsoluteUri(Navegacion.Uri).Query);
+
+        if (consulta.TryGetValue("pacienteId", out var id) && long.TryParse(id, out var valor) && valor > 0)
+            PacienteId = valor;
+
+        Pendiente = consulta.TryGetValue("pendiente", out var pendiente)
+            && bool.TryParse(pendiente, out var esPendiente)
+            && esPendiente;
+    }
+
+    private async Task EjecutarCargaAsync(Func<Task> carga)
+    {
+        Cargando = true;
+        Error = null;
+
+        try
+        {
+            await carga();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private async Task SeleccionarAsync(PacienteDto paciente)
+    {
+        LimpiarPaneles();
+        Paciente = paciente;
+        Filtro = "";
+
+        await EjecutarCargaAsync(async () =>
+        {
+            Registros = await Api.ConsentimientosAsync(paciente.Id);
+        });
+    }
+
+    private async Task CambiarPacienteAsync()
+    {
+        LimpiarPaneles();
+        Paciente = null;
+        Registros = new();
+        Pendiente = false;
+        UltimaActualizada = null;
+        Filtro = "";
+
+        if (Pacientes.Count == 0)
+        {
+            await EjecutarCargaAsync(async () =>
+            {
+                Pacientes = await Api.ListarPacientesActivosAsync();
+            });
+        }
+    }
+
+    private void LimpiarPaneles()
+    {
+        FilaAccion = null;
+        FilaHistorial = null;
+        EstadoAccion = null;
+        Eventos = new();
+        Mensaje = null;
+        Error = null;
+        ErrorAccion = null;
+    }
+
+    private (string Estado, string Texto)[] AccionesDe(Fila fila)
+    {
+        var puedeAceptar = Paciente is { Estatus: true } && fila.Finalidad.Estatus && AvisoVigente != null;
+
+        return fila.Registro?.Estado switch
+        {
+            "ACEPTADO" => [("REVOCADO", "Revocar")],
+            null when puedeAceptar => [("ACEPTADO", "Aceptar"), ("RECHAZADO", "Rechazar")],
+            not null when puedeAceptar => [("ACEPTADO", "Aceptar")],
+            _ => []
+        };
+    }
+
+    private void Preparar(Fila fila, string estado)
+    {
+        var yaAbierta = FilaAccion?.Finalidad.Id == fila.Finalidad.Id && EstadoAccion == estado;
+
+        LimpiarPaneles();
+        UltimaActualizada = null;
+
+        if (yaAbierta)
+            return;
+
+        FilaAccion = fila;
+        EstadoAccion = estado;
+        Autorizacion = new AutorizacionModelo { EsRepresentante = EsMenor };
+        Nota = null;
+        MostrarNota = false;
+    }
+
+    private void LimpiarAlFiltrar()
+    {
+        LimpiarPaneles();
+        UltimaActualizada = null;
+    }
+
+    private void CancelarAccion()
+    {
+        FilaAccion = null;
+        EstadoAccion = null;
+        ErrorAccion = null;
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (Procesando || FilaAccion == null || EstadoAccion == null || Paciente == null)
+            return;
+
+        Mensaje = null;
+        ErrorAccion = null;
+
+        if (Campos != null && !await Campos.ValidarAsync())
+            return;
+
+        if ((EstadoAccion == "ACEPTADO" || FilaAccion.Registro == null) && AvisoVigente == null)
+        {
+            ErrorAccion = "No hay un aviso de privacidad vigente. Publícalo antes de continuar.";
+            return;
+        }
+
+        var finalidadId = FilaAccion.Finalidad.Id;
+        var nombre = FilaAccion.Finalidad.Nombre;
+        var estado = EstadoAccion;
+
+        Procesando = true;
+
+        try
+        {
+            if (FilaAccion.Registro == null)
+            {
+                await Api.CrearConsentimientoAsync(new ConsentimientoCrearDto
+                {
+                    PacienteId = Paciente.Id,
+                    FinalidadId = finalidadId,
+                    AvisoId = AvisoVigente!.Id,
+                    Estado = estado,
+                    Medio = Autorizacion.Medio,
+                    Observacion = Nota,
+                    RepresentanteNombre = Autorizacion.NombreParaEnviar,
+                    RepresentanteRelacion = Autorizacion.RelacionParaEnviar
+                });
+            }
+            else
+            {
+                await Api.CambiarEstadoConsentimientoAsync(
+                    FilaAccion.Registro.Id,
+                    new ConsentimientoCambiarEstadoDto
+                    {
+                        Estado = estado,
+                        Medio = Autorizacion.Medio,
+                        AvisoId = estado == "ACEPTADO" ? AvisoVigente!.Id : null,
+                        Observacion = Nota,
+                        RepresentanteNombre = Autorizacion.NombreParaEnviar,
+                        RepresentanteRelacion = Autorizacion.RelacionParaEnviar,
+                        Version = FilaAccion.Registro.Version
+                    });
+            }
+
+            Registros = await Api.ConsentimientosAsync(Paciente.Id);
+            FilaAccion = null;
+            EstadoAccion = null;
+            Filtro = "";
+            UltimaActualizada = finalidadId;
+            Mensaje = $"{nombre}: {EstadoPunto.TextoDe(estado).ToLowerInvariant()}.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorAccion = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorAccion = "No se pudo conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorAccion = "La operación tardó demasiado. Recarga la página para ver su estado.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private async Task VerHistorialAsync(Fila fila)
+    {
+        if (fila.Registro == null)
+            return;
+
+        var yaAbierto = FilaHistorial?.Finalidad.Id == fila.Finalidad.Id;
+
+        LimpiarPaneles();
+        UltimaActualizada = null;
+
+        if (yaAbierto)
+            return;
+
+        try
+        {
+            Eventos = await Api.EventosConsentimientoAsync(fila.Registro.Id);
+            FilaHistorial = fila;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo cargar el historial.";
+        }
+    }
+
+    private static string EstadoDe(Fila fila) => fila.Registro?.Estado ?? "SIN_REGISTRAR";
+
+    private static string TextoVisibles(int cantidad) => cantidad == 1 ? "1 visible" : $"{cantidad} visibles";
+
+    private static string FechaDe(ConsentimientoDto? registro)
+    {
+        if (registro == null)
+            return "—";
+
+        var fecha = registro.Estado == "REVOCADO" && registro.FechaRevocacion.HasValue
+            ? registro.FechaRevocacion.Value
+            : registro.FechaObtencion;
+
+        return PrivacidadApi.HoraEcuador(fecha).ToString("dd/MM/yyyy");
+    }
+
+    private string VersionDe(ConsentimientoDto? registro)
+    {
+        return registro == null
+            ? "—"
+            : Avisos.FirstOrDefault(a => a.Id == registro.AvisoId)?.Version ?? "—";
+    }
+
+    private static string Iniciales(PacienteDto paciente)
+    {
+        return $"{paciente.Nombres.FirstOrDefault()}{paciente.Apellidos.FirstOrDefault()}".ToUpperInvariant();
+    }
+}

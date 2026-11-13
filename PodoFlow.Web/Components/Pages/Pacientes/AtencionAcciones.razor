@@ -1,0 +1,207 @@
+@using PodoFlow.Web.Modelos.Atenciones
+@using PodoFlow.Web.Servicios
+
+@inject IClinicaApi Api
+
+<div class="acciones-atencion">
+
+    @if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+
+    @if (Modo == "editar")
+    {
+        <form class="pf-evo-editor" novalidate @onsubmit="GuardarAsync">
+            <div class="pf-clinic-form-grid">
+                <div class="pf-form-group pf-clinic-full">
+                    <label for="@($"editar-motivo-{Atencion.Id}")">Motivo de consulta *</label>
+                    <textarea id="@($"editar-motivo-{Atencion.Id}")" class="pf-field" rows="2" maxlength="1000" @bind="Edicion.MotivoConsulta"></textarea>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="@($"editar-valoracion-{Atencion.Id}")">Valoración clínica</label>
+                    <textarea id="@($"editar-valoracion-{Atencion.Id}")" class="pf-field" rows="3" maxlength="3000" @bind="Edicion.ValoracionClinica"></textarea>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="@($"editar-diagnostico-{Atencion.Id}")">Diagnóstico</label>
+                    <textarea id="@($"editar-diagnostico-{Atencion.Id}")" class="pf-field" rows="3" maxlength="2000" @bind="Edicion.Diagnostico"></textarea>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="@($"editar-tratamiento-{Atencion.Id}")">Tratamiento realizado</label>
+                    <textarea id="@($"editar-tratamiento-{Atencion.Id}")" class="pf-field" rows="3" maxlength="3000" @bind="Edicion.Tratamiento"></textarea>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="@($"editar-observaciones-{Atencion.Id}")">Observaciones y recomendaciones</label>
+                    <textarea id="@($"editar-observaciones-{Atencion.Id}")" class="pf-field" rows="3" maxlength="3000" @bind="Edicion.Observaciones"></textarea>
+                </div>
+            </div>
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" disabled="@Ocupado" @onclick="Cancelar">Cancelar</button>
+                <button type="submit" class="pf-btn pf-btn-main" disabled="@Ocupado">
+                    @(Ocupado ? "Guardando..." : "Guardar cambios")
+                </button>
+            </div>
+        </form>
+    }
+    else if (Modo is "CERRADA" or "BLOQUEADA")
+    {
+        <div class="confirmacion">
+            <p>
+                @if (Modo == "CERRADA")
+                {
+                    <strong>Cerrar la atención.</strong>
+                    <text> Después ya no se podrán editar sus datos, evoluciones ni adjuntos.</text>
+                }
+                else
+                {
+                    <strong>Bloquear la atención.</strong>
+                    <text> Úsalo si hay un error o un problema legal; queda en solo lectura.</text>
+                }
+            </p>
+
+            <label for="@($"motivo-estado-{Atencion.Id}")">Motivo *</label>
+            <textarea id="@($"motivo-estado-{Atencion.Id}")" class="pf-field" rows="2" maxlength="500" @bind="Motivo"></textarea>
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" disabled="@Ocupado" @onclick="Cancelar">Volver</button>
+                <button type="button" class="pf-btn pf-btn-main" disabled="@Ocupado" @onclick="CambiarEstadoAsync">
+                    @(Ocupado ? "Guardando..." : Modo == "CERRADA" ? "Cerrar atención" : "Bloquear atención")
+                </button>
+            </div>
+        </div>
+    }
+    else if (PuedeEditar)
+    {
+        <div class="botones">
+            <button type="button" class="pf-btn pf-btn-neutral boton-peligro" @onclick='() => Iniciar("BLOQUEADA")'>Bloquear</button>
+            <span class="separador"></span>
+            <button type="button" class="pf-btn pf-btn-neutral" @onclick="Editar">Editar atención</button>
+            <button type="button" class="pf-btn pf-btn-main" @onclick='() => Iniciar("CERRADA")'>Cerrar atención</button>
+        </div>
+    }
+
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public AtencionDto Atencion { get; set; } = new();
+
+    [Parameter]
+    public bool PuedeEditar { get; set; }
+
+    [Parameter]
+    public EventCallback<string> Cambio { get; set; }
+
+    private AtencionEditarDto Edicion = new();
+    private string? Modo;
+    private string Motivo = "";
+    private bool Ocupado;
+    private string? Error;
+
+    private void Editar()
+    {
+        Edicion = new AtencionEditarDto
+        {
+            MotivoConsulta = Atencion.MotivoConsulta,
+            ValoracionClinica = Atencion.ValoracionClinica,
+            Diagnostico = Atencion.Diagnostico,
+            Tratamiento = Atencion.Tratamiento,
+            Observaciones = Atencion.Observaciones,
+            Version = Atencion.Version
+        };
+
+        Error = null;
+        Modo = "editar";
+    }
+
+    private void Iniciar(string estado)
+    {
+        Motivo = "";
+        Error = null;
+        Modo = estado;
+    }
+
+    private void Cancelar()
+    {
+        Modo = null;
+        Error = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Ocupado)
+            return;
+
+        if (string.IsNullOrWhiteSpace(Edicion.MotivoConsulta))
+        {
+            Error = "El motivo de consulta es obligatorio.";
+            return;
+        }
+
+        var dto = new AtencionEditarDto
+        {
+            MotivoConsulta = Edicion.MotivoConsulta.Trim(),
+            ValoracionClinica = Limpiar(Edicion.ValoracionClinica),
+            Diagnostico = Limpiar(Edicion.Diagnostico),
+            Tratamiento = Limpiar(Edicion.Tratamiento),
+            Observaciones = Limpiar(Edicion.Observaciones),
+            Version = Edicion.Version
+        };
+
+        await EjecutarAsync(
+            () => Api.ActualizarAtencionAsync(Atencion.Id, dto),
+            "Atención actualizada.");
+    }
+
+    private async Task CambiarEstadoAsync()
+    {
+        if (Ocupado || Modo == null)
+            return;
+
+        if (string.IsNullOrWhiteSpace(Motivo))
+        {
+            Error = "Indica el motivo.";
+            return;
+        }
+
+        var estado = Modo;
+        var motivo = Motivo.Trim();
+
+        await EjecutarAsync(
+            () => Api.CambiarEstadoAtencionAsync(Atencion.Id, estado, motivo, Atencion.Version),
+            estado == "CERRADA" ? "Atención cerrada." : "Atención bloqueada.");
+    }
+
+    private async Task EjecutarAsync(Func<Task> accion, string mensaje)
+    {
+        Ocupado = true;
+        Error = null;
+
+        try
+        {
+            await accion();
+            Modo = null;
+            await Cambio.InvokeAsync(mensaje);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        finally
+        {
+            Ocupado = false;
+        }
+    }
+
+    private static string? Limpiar(string? valor) =>
+        string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+}

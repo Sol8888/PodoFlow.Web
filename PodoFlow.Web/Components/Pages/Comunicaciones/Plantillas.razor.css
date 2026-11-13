@@ -1,0 +1,45 @@
+﻿.filtro {
+    max-width: 220px;
+}
+
+.boton-derecha {
+    margin-left: auto;
+}
+
+.detalle {
+    display: block;
+    margin-top: 2px;
+}
+
+.acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+    .acciones button {
+        white-space: nowrap;
+    }
+
+.aviso-meta {
+    padding: 12px 14px;
+    border-left: 3px solid currentColor;
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.5;
+    opacity: .85;
+}
+
+.vista-previa {
+    padding: 12px 14px;
+    border: 1px dashed currentColor;
+    border-radius: 8px;
+    font-size: 14px;
+    opacity: .9;
+}
+
+    .vista-previa p {
+        margin: 6px 0 0;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }

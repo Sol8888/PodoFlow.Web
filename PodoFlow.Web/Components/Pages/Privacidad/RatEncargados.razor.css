@@ -1,0 +1,19 @@
+﻿.boton-derecha {
+    margin-left: auto;
+}
+
+.detalle {
+    display: block;
+    margin-top: 2px;
+    max-width: 48ch;
+}
+
+.acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+    .acciones button {
+        white-space: nowrap;
+    }

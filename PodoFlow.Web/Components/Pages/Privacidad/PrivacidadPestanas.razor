@@ -1,0 +1,36 @@
+<nav class="pf-profile-tabs" aria-label="Secciones de privacidad">
+    <a href="/privacidad/solicitudes"
+       class="@(Activa == "solicitudes" ? "active" : "")"
+       aria-current="@(Activa == "solicitudes" ? "page" : null)">
+        Solicitudes de derechos
+    </a>
+
+    <a href="/privacidad/consentimientos"
+       class="@(Activa == "consentimientos" ? "active" : "")"
+       aria-current="@(Activa == "consentimientos" ? "page" : null)">
+        Consentimientos
+    </a>
+
+    <a href="/privacidad/finalidades"
+       class="@(Activa == "finalidades" ? "active" : "")"
+       aria-current="@(Activa == "finalidades" ? "page" : null)">
+        Finalidades
+    </a>
+
+    <a href="/privacidad/avisos"
+       class="@(Activa == "avisos" ? "active" : "")"
+       aria-current="@(Activa == "avisos" ? "page" : null)">
+        Avisos de privacidad
+    </a>
+
+    <a href="/privacidad/rat"
+       class="@(Activa == "rat" ? "active" : "")"
+       aria-current="@(Activa == "rat" ? "page" : null)">
+        Registro de tratamientos
+    </a>
+</nav>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Activa { get; set; } = "";
+}

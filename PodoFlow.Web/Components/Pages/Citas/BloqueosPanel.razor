@@ -1,0 +1,288 @@
+@using PodoFlow.Web.Modelos.Citas
+
+@inject IAgendaApi Api
+
+<div class="pf-module-toolbar">
+    <label class="pf-checkbox">
+        <input type="checkbox" @bind="IncluirAnteriores" />
+        Incluir pasados e inactivos
+    </label>
+
+    <button type="button" class="pf-btn pf-btn-neutral agregar" disabled="@Procesando" @onclick="Nuevo">
+        + Agregar bloqueo
+    </button>
+</div>
+
+@if (Mensaje != null)
+{
+    <div class="pf-contact-success" aria-live="polite">@Mensaje</div>
+}
+
+@if (Error != null && !FormularioAbierto)
+{
+    <div class="pf-detail-error" role="alert">@Error</div>
+}
+
+@if (FormularioAbierto)
+{
+    <section class="pf-card pf-info-card">
+        <h2>@(EditandoId == null ? "Nuevo bloqueo" : "Editar bloqueo")</h2>
+
+        <form novalidate @onsubmit="GuardarAsync">
+            <div class="pf-patient-form-grid">
+                <div class="pf-form-group">
+                    <label for="bloqueo-inicio">Desde *</label>
+                    <input id="bloqueo-inicio" type="datetime-local" class="pf-field"
+                           @bind="Inicio" @bind:format="yyyy-MM-ddTHH:mm" />
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="bloqueo-fin">Hasta *</label>
+                    <input id="bloqueo-fin" type="datetime-local" class="pf-field"
+                           @bind="Fin" @bind:format="yyyy-MM-ddTHH:mm" />
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="bloqueo-usuario">Se aplica a</label>
+                    <select id="bloqueo-usuario" class="pf-field" @bind="UsuarioTexto">
+                        <option value="">Toda la clínica</option>
+                        @foreach (var usuario in Catalogos.Usuarios.Where(x => x.Estatus))
+                        {
+                            <option value="@usuario.Id">@usuario.Nombre</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="bloqueo-motivo">Motivo *</label>
+                    <input id="bloqueo-motivo" class="pf-field" maxlength="300"
+                           placeholder="Por ejemplo: feriado o capacitación"
+                           @bind="Motivo" />
+                </div>
+            </div>
+
+            @if (Error != null)
+            {
+                <div class="pf-detail-error" role="alert">@Error</div>
+            }
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="CerrarFormulario">Cancelar</button>
+                <button type="submit" class="pf-btn pf-btn-main" disabled="@Procesando">
+                    @(Procesando ? "Guardando..." : "Guardar bloqueo")
+                </button>
+            </div>
+        </form>
+    </section>
+}
+
+<section class="pf-card pf-directory">
+    <div class="pf-card-header">
+        <div>
+            <h2>Bloqueos de la agenda</h2>
+            <p>Durante un bloqueo activo no se pueden agendar citas.</p>
+        </div>
+
+        <span class="pf-soft-chip">@(Visibles.Count == 1 ? "1 visible" : $"{Visibles.Count} visibles")</span>
+    </div>
+
+    @if (Visibles.Count == 0)
+    {
+        <div class="pf-empty">No hay bloqueos vigentes ni próximos.</div>
+    }
+    else
+    {
+        <div class="pf-table-wrap">
+            <table class="pf-table">
+                <thead>
+                    <tr>
+                        <th>Desde</th>
+                        <th>Hasta</th>
+                        <th>Se aplica a</th>
+                        <th>Motivo</th>
+                        <th>Estado</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var bloqueo in Visibles)
+                    {
+                        <tr @key="bloqueo.Id">
+                            <td>@bloqueo.InicioLocal.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@bloqueo.FinLocal.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>@(bloqueo.UsuarioId == null ? "Toda la clínica" : Catalogos.NombreUsuario(bloqueo.UsuarioId))</td>
+                            <td>@bloqueo.Motivo</td>
+                            <td>
+                                <span class="pf-status @(bloqueo.Estatus ? "warning" : "")">@(bloqueo.Estatus ? "Activo" : "Inactivo")</span>
+                            </td>
+                            <td>
+                                <div class="acciones">
+                                    @if (bloqueo.Estatus)
+                                    {
+                                        <button type="button" class="pf-action-link boton-tabla" disabled="@Procesando" @onclick="() => Editar(bloqueo)">Editar</button>
+                                        <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => CambiarEstadoAsync(bloqueo)">Desactivar</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => CambiarEstadoAsync(bloqueo)">Reactivar</button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public CatalogosAgenda Catalogos { get; set; } = new();
+
+    [Parameter]
+    public EventCallback Cambio { get; set; }
+
+    private bool IncluirAnteriores;
+    private bool FormularioAbierto;
+    private bool Procesando;
+    private long? EditandoId;
+    private DateTime? Inicio;
+    private DateTime? Fin;
+    private string UsuarioTexto = "";
+    private string Motivo = "";
+    private string? Mensaje;
+    private string? Error;
+
+    private List<BloqueoDto> Visibles
+    {
+        get
+        {
+            var ahora = AgendaFechas.Ahora;
+
+            return Catalogos.Bloqueos
+                .Where(x => IncluirAnteriores || (x.Estatus && x.FinLocal >= ahora))
+                .OrderByDescending(x => x.Estatus)
+                .ThenBy(x => x.InicioLocal)
+                .ToList();
+        }
+    }
+
+    private void Nuevo()
+    {
+        var manana = AgendaFechas.Ahora.Date.AddDays(1);
+
+        EditandoId = null;
+        Inicio = manana.AddHours(8);
+        Fin = manana.AddHours(17);
+        UsuarioTexto = "";
+        Motivo = "";
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void Editar(BloqueoDto bloqueo)
+    {
+        EditandoId = bloqueo.Id;
+        Inicio = bloqueo.InicioLocal;
+        Fin = bloqueo.FinLocal;
+        UsuarioTexto = bloqueo.UsuarioId?.ToString() ?? "";
+        Motivo = bloqueo.Motivo;
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void CerrarFormulario()
+    {
+        FormularioAbierto = false;
+        Error = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando)
+            return;
+
+        Error = null;
+        Mensaje = null;
+
+        if (!Inicio.HasValue || !Fin.HasValue)
+        {
+            Error = "Indica el inicio y el fin del bloqueo.";
+            return;
+        }
+
+        if (Fin <= Inicio)
+        {
+            Error = "La fecha final debe ser posterior a la inicial.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Motivo))
+        {
+            Error = "Indica el motivo del bloqueo.";
+            return;
+        }
+
+        var dto = new BloqueoGuardarDto
+        {
+            UsuarioId = long.TryParse(UsuarioTexto, out var id) ? id : null,
+            FechaInicio = AgendaFechas.AUtc(Inicio.Value),
+            FechaFin = AgendaFechas.AUtc(Fin.Value),
+            Motivo = Motivo.Trim()
+        };
+
+        await EjecutarAsync(async () =>
+        {
+            if (EditandoId.HasValue)
+                await Api.ActualizarBloqueoAsync(EditandoId.Value, dto);
+            else
+                await Api.CrearBloqueoAsync(dto);
+
+            FormularioAbierto = false;
+            Mensaje = "Bloqueo guardado.";
+        });
+    }
+
+    private Task CambiarEstadoAsync(BloqueoDto bloqueo)
+    {
+        Error = null;
+        Mensaje = null;
+
+        return EjecutarAsync(async () =>
+        {
+            if (bloqueo.Estatus)
+                await Api.DesactivarBloqueoAsync(bloqueo.Id);
+            else
+                await Api.ReactivarBloqueoAsync(bloqueo.Id);
+
+            Mensaje = bloqueo.Estatus ? "Bloqueo desactivado." : "Bloqueo reactivado.";
+        });
+    }
+
+    private async Task EjecutarAsync(Func<Task> accion)
+    {
+        Procesando = true;
+
+        try
+        {
+            await accion();
+            await Cambio.InvokeAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}

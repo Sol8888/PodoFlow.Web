@@ -1,0 +1,194 @@
+@using PodoFlow.Web.Modelos.Citas
+
+@inject IAgendaApi Api
+
+<div class="pf-module-toolbar">
+    <input class="pf-field pf-search-field"
+           placeholder="Buscar en esta página por paciente o servicio..."
+           aria-label="Buscar cita"
+           @bind="Busqueda"
+           @bind:event="oninput" />
+
+    <select class="pf-field filtro" aria-label="Filtrar por estado" @bind="FiltroEstado" @bind:after="ReiniciarAsync">
+        <option value="">Todos los estados</option>
+        @foreach (var estado in AgendaReglas.Estados)
+        {
+            <option value="@estado">@AgendaReglas.TextoEstado(estado)</option>
+        }
+    </select>
+
+    <select class="pf-field filtro" aria-label="Filtrar por profesional" @bind="FiltroUsuario" @bind:after="ReiniciarAsync">
+        <option value="">Todos los profesionales</option>
+        @foreach (var usuario in Catalogos.Usuarios.Where(x => x.Estatus))
+        {
+            <option value="@usuario.Id">@usuario.Nombre</option>
+        }
+    </select>
+</div>
+
+<section class="pf-card pf-directory">
+    <div class="pf-card-header">
+        <div>
+            <h2>Citas registradas</h2>
+            <p>De la más reciente a la más antigua.</p>
+        </div>
+
+        <span class="pf-soft-chip">@(Filtradas.Count == 1 ? "1 visible" : $"{Filtradas.Count} visibles")</span>
+    </div>
+
+    <div class="leyenda pf-detail-muted">
+        @foreach (var estado in AgendaReglas.Estados)
+        {
+            <EstadoCita Estado="@estado" />
+        }
+    </div>
+
+    @if (Cargando)
+    {
+        <div class="pf-empty" role="status">Cargando citas...</div>
+    }
+    else if (Error != null)
+    {
+        <div class="pf-empty" role="alert">@Error</div>
+    }
+    else if (Filtradas.Count == 0)
+    {
+        <div class="pf-empty">No se encontraron citas.</div>
+    }
+    else
+    {
+        <div class="pf-table-wrap">
+            <table class="pf-table">
+                <thead>
+                    <tr>
+                        <th>Paciente</th>
+                        <th>Servicio</th>
+                        <th>Fecha</th>
+                        <th>Hora</th>
+                        <th>Profesional</th>
+                        <th>Estado</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var cita in Filtradas)
+                    {
+                        <tr @key="cita.Id">
+                            <td>
+                                <div class="pf-patient">
+                                    <div class="pf-patient-avatar">@Iniciales(Catalogos.NombrePaciente(cita.PacienteId))</div>
+                                    <strong>@Catalogos.NombrePaciente(cita.PacienteId)</strong>
+                                </div>
+                            </td>
+                            <td>@Catalogos.NombreServicio(cita.ServicioId)</td>
+                            <td>@cita.InicioLocal.ToString("dd/MM/yyyy")</td>
+                            <td>@cita.InicioLocal.ToString("HH:mm") – @cita.FinLocal.ToString("HH:mm")</td>
+                            <td>@Catalogos.NombreUsuario(cita.UsuarioId)</td>
+                            <td><EstadoCita Estado="@cita.Estado" /></td>
+                            <td>
+                                <div class="acciones-fila">
+                                    @if (AgendaReglas.PuedeAtenderse(cita))
+                                    {
+                                        <a class="pf-btn pf-btn-main boton-atender" href="@($"/citas/{cita.Id}/atender")">Atender</a>
+                                    }
+                                    <button type="button" class="pf-action-link boton-tabla"
+                                            @onclick="() => CitaSeleccionada.InvokeAsync(cita)">
+                                        Ver cita →
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+<div class="pf-pagination">
+    <button type="button" disabled="@(Pagina <= 1 || Cargando)" @onclick="() => IrAAsync(Pagina - 1)">Anterior</button>
+    <span>Página @Pagina</span>
+    <button type="button" disabled="@(Lista.Count < Tamano || Cargando)" @onclick="() => IrAAsync(Pagina + 1)">Siguiente</button>
+</div>
+
+@code {
+    private const int Tamano = 20;
+
+    [Parameter, EditorRequired]
+    public CatalogosAgenda Catalogos { get; set; } = new();
+
+    [Parameter]
+    public int Recarga { get; set; }
+
+    [Parameter]
+    public EventCallback<CitaDto> CitaSeleccionada { get; set; }
+
+    private List<CitaDto> Lista = new();
+    private int? RecargaAtendida;
+    private int Pagina = 1;
+    private string Busqueda = "";
+    private string FiltroEstado = "";
+    private string FiltroUsuario = "";
+    private bool Cargando = true;
+    private string? Error;
+
+    private List<CitaDto> Filtradas => Lista
+        .Where(x => string.IsNullOrWhiteSpace(Busqueda)
+            || Catalogos.NombrePaciente(x.PacienteId).Contains(Busqueda, StringComparison.OrdinalIgnoreCase)
+            || Catalogos.NombreServicio(x.ServicioId).Contains(Busqueda, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (RecargaAtendida == Recarga)
+            return;
+
+        RecargaAtendida = Recarga;
+        await CargarAsync();
+    }
+
+    private Task ReiniciarAsync()
+    {
+        Pagina = 1;
+        return CargarAsync();
+    }
+
+    private Task IrAAsync(int pagina)
+    {
+        Pagina = pagina;
+        return CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        Cargando = true;
+        Error = null;
+
+        try
+        {
+            var usuario = long.TryParse(FiltroUsuario, out var id) ? id : (long?)null;
+
+            Lista = await Api.ListarCitasAsync(usuario, FiltroEstado, Pagina, Tamano);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudieron cargar las citas.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private static string Iniciales(string nombre)
+    {
+        var partes = nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        return string.Concat(partes.Take(2).Select(x => x[0])).ToUpperInvariant();
+    }
+}

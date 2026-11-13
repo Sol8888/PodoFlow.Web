@@ -1,0 +1,72 @@
+/* El subrayado de la pestaña sobresalía 1 px y activaba una barra de scroll. */
+.pf-profile-tabs {
+    overflow-y: hidden;
+}
+
+    .pf-profile-tabs a {
+        margin-bottom: 0;
+    }
+
+.zona-mensajes {
+    display: contents;
+}
+
+.boton-enlace {
+    margin-left: 8px;
+    padding: 0;
+    font-family: inherit;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.lateral-fondo {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(15, 23, 42, .35);
+    animation: fondo .18s ease-out;
+}
+
+.lateral {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1001;
+    width: min(520px, 100%);
+    overflow-y: auto;
+    background: white;
+    box-shadow: -8px 0 24px rgba(15, 23, 42, .12);
+    outline: none;
+    animation: entrar .2s ease-out;
+}
+
+@keyframes fondo {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes entrar {
+    from {
+        transform: translateX(24px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .lateral,
+    .lateral-fondo {
+        animation: none;
+    }
+}

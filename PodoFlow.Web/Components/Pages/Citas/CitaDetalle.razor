@@ -1,0 +1,322 @@
+@using PodoFlow.Web.Modelos.Citas
+
+@inject IAgendaApi Api
+
+<header class="cabecera">
+    <div>
+        <span class="pf-module-eyebrow">CITA</span>
+        <h2>@Catalogos.NombrePaciente(Cita.PacienteId)</h2>
+        <EstadoCita Estado="@Cita.Estado" />
+    </div>
+
+    <button type="button" class="cerrar" aria-label="Cerrar" @onclick="() => Cerrar.InvokeAsync()">×</button>
+</header>
+
+<div class="contenido">
+    <dl class="datos">
+        <div>
+            <dt>Fecha</dt>
+            <dd>@Cita.InicioLocal.ToString("dd/MM/yyyy")</dd>
+        </div>
+        <div>
+            <dt>Hora</dt>
+            <dd>@Cita.InicioLocal.ToString("HH:mm") – @Cita.FinLocal.ToString("HH:mm")</dd>
+        </div>
+        <div>
+            <dt>Servicio</dt>
+            <dd>@Catalogos.NombreServicio(Cita.ServicioId)</dd>
+        </div>
+        <div>
+            <dt>Profesional</dt>
+            <dd>@Catalogos.NombreUsuario(Cita.UsuarioId)</dd>
+        </div>
+        <div>
+            <dt>Canal</dt>
+            <dd>@AgendaReglas.TextoCanal(Cita.Canal)</dd>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(Cita.Observaciones))
+        {
+            <div class="ancho">
+                <dt>Observaciones</dt>
+                <dd>@Cita.Observaciones</dd>
+            </div>
+        }
+    </dl>
+
+    <p class="enlace-ficha">
+        <a class="pf-link" href="@($"/pacientes/{Cita.PacienteId}")">Ver ficha del paciente →</a>
+    </p>
+
+    @if (AgendaReglas.PuedeAtenderse(Cita))
+    {
+        <div class="aviso aviso-turno">
+            <div>
+                <strong>Es la hora de esta cita</strong>
+                <span>Si el paciente necesita otro horario, cancélala y agenda una nueva.</span>
+            </div>
+            <a class="pf-btn pf-btn-main" href="@($"/citas/{Cita.Id}/atender")">Atender cita</a>
+        </div>
+    }
+    else if (AgendaReglas.EsVencida(Cita))
+    {
+        <div class="aviso aviso-vencida">
+            <div>
+                <strong>La hora de esta cita ya pasó</strong>
+                <span>No se registró la atención, así que ya no se puede modificar. Si el paciente la necesita, agenda una cita nueva.</span>
+            </div>
+        </div>
+    }
+
+    @if (Cita.Estado == "ATENDIDA")
+    {
+        <p class="enlace-ficha">
+            <a class="pf-btn pf-btn-neutral" href="@($"/pacientes/{Cita.PacienteId}?seccion=historia&clinica=atenciones&cita={Cita.Id}")">
+                Ver atención en la historia clínica
+            </a>
+        </p>
+    }
+
+    @if (AgendaReglas.Acciones(Cita).Length > 0)
+    {
+        <div class="acciones">
+            @foreach (var estado in AgendaReglas.Acciones(Cita))
+            {
+                <button type="button"
+                        class="pf-btn @ClaseBoton(estado)"
+                        aria-expanded="@(EstadoElegido == estado ? "true" : "false")"
+                        disabled="@Procesando"
+                        @onclick="() => Elegir(estado)">
+                    @TextoAccion(estado)
+                </button>
+            }
+
+            @if (AgendaReglas.PuedeModificarse(Cita))
+            {
+                <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="() => Editar.InvokeAsync()">
+                    Editar o reprogramar
+                </button>
+            }
+        </div>
+    }
+
+    @if (EstadoElegido != null)
+    {
+        <div class="confirmacion">
+            <label for="motivo-cita">Motivo *</label>
+            <textarea id="motivo-cita"
+                      class="pf-field @(ErrorMotivo != null ? "invalido" : "")"
+                      rows="2"
+                      maxlength="500"
+                      aria-invalid="@(ErrorMotivo != null ? "true" : "false")"
+                      aria-describedby="motivo-cita-error"
+                      placeholder="@(EstadoElegido == "CANCELADA" ? "Por ejemplo: el paciente pidió cancelar" : "")"
+                      @bind="Motivo"
+                      @bind:event="oninput"></textarea>
+            <span id="motivo-cita-error" class="error-campo">@ErrorMotivo</span>
+
+            @if (Error != null)
+            {
+                <div class="pf-detail-error" role="alert">@Error</div>
+            }
+
+            <div class="confirmacion-botones">
+                <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="CancelarAccion">
+                    Volver
+                </button>
+                <button type="button"
+                        class="pf-btn @(EstadoElegido == "CANCELADA" ? "pf-btn-danger-confirm" : "pf-btn-main")"
+                        disabled="@Procesando"
+                        @onclick="ConfirmarAsync">
+                    @(Procesando ? "Guardando..." : TextoGuardar(EstadoElegido))
+                </button>
+            </div>
+        </div>
+    }
+
+    <section class="historial">
+        <h3>Historial</h3>
+
+        @if (CargandoCambios)
+        {
+            <p class="pf-detail-muted" role="status">Cargando historial...</p>
+        }
+        else if (ErrorCambios != null)
+        {
+            <p class="pf-detail-muted">@ErrorCambios</p>
+        }
+        else if (Cambios.Count == 0)
+        {
+            <p class="pf-detail-muted">Todavía no hay cambios registrados.</p>
+        }
+        else
+        {
+            <ol class="linea-tiempo">
+                @foreach (var cambio in Cambios.OrderByDescending(x => x.Id))
+                {
+                    <li @key="cambio.Id">
+                        <div class="evento-cabecera">
+                            @if (cambio.EstadoNuevo != null)
+                            {
+                                <EstadoCita Estado="@cambio.EstadoNuevo" />
+                            }
+                            <time>@AgendaFechas.ALocal(cambio.FechaCambio).ToString("dd/MM/yyyy HH:mm")</time>
+                        </div>
+
+                        @if (cambio.FechaAnterior.HasValue && cambio.FechaNueva.HasValue && cambio.FechaAnterior != cambio.FechaNueva)
+                        {
+                            <p>De @AgendaFechas.ALocal(cambio.FechaAnterior.Value).ToString("dd/MM HH:mm") a @AgendaFechas.ALocal(cambio.FechaNueva.Value).ToString("dd/MM HH:mm")</p>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(cambio.Motivo))
+                        {
+                            <p>@cambio.Motivo</p>
+                        }
+                    </li>
+                }
+            </ol>
+        }
+    </section>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public CitaDto Cita { get; set; } = new();
+
+    [Parameter, EditorRequired]
+    public CatalogosAgenda Catalogos { get; set; } = new();
+
+    [Parameter]
+    public EventCallback Cerrar { get; set; }
+
+    [Parameter]
+    public EventCallback Editar { get; set; }
+
+    [Parameter]
+    public EventCallback<CitaDto> Cambio { get; set; }
+
+    private List<CambioCitaDto> Cambios = new();
+    private string? EstadoElegido;
+    private string Motivo = "";
+    private string? ErrorMotivo;
+    private string? Error;
+    private string? ErrorCambios;
+    private bool Procesando;
+    private bool CargandoCambios = true;
+
+    protected override Task OnInitializedAsync() => CargarCambiosAsync();
+
+    private async Task CargarCambiosAsync()
+    {
+        CargandoCambios = true;
+        ErrorCambios = null;
+
+        try
+        {
+            Cambios = await Api.CambiosCitaAsync(Cita.Id);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            ErrorCambios = "No se pudo cargar el historial.";
+        }
+        finally
+        {
+            CargandoCambios = false;
+        }
+    }
+
+    private void Elegir(string estado)
+    {
+        ErrorMotivo = null;
+        Error = null;
+
+        if (EstadoElegido == estado)
+        {
+            EstadoElegido = null;
+            return;
+        }
+
+        EstadoElegido = estado;
+        Motivo = estado switch
+        {
+            "CONFIRMADA" => "Cita confirmada",
+            "ATENDIDA" => "Paciente atendido",
+            _ => ""
+        };
+    }
+
+    private void CancelarAccion()
+    {
+        EstadoElegido = null;
+        ErrorMotivo = null;
+        Error = null;
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (Procesando || EstadoElegido == null)
+            return;
+
+        Error = null;
+        ErrorMotivo = string.IsNullOrWhiteSpace(Motivo) ? "Indica el motivo." : null;
+
+        if (ErrorMotivo != null)
+            return;
+
+        Procesando = true;
+
+        try
+        {
+            await Api.CambiarEstadoCitaAsync(Cita.Id, EstadoElegido, Motivo.Trim(), Cita.Version);
+
+            var actualizada = await Api.ObtenerCitaAsync(Cita.Id);
+
+            EstadoElegido = null;
+
+            if (actualizada != null)
+                await Cambio.InvokeAsync(actualizada);
+
+            await CargarCambiosAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La operación tardó demasiado. Vuelve a abrir la cita para ver su estado.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private static string TextoAccion(string estado) => estado switch
+    {
+        "CONFIRMADA" => "Confirmar",
+        "ATENDIDA" => "Marcar atendida",
+        "NO_ASISTE" => "No asistió",
+        "CANCELADA" => "Cancelar cita",
+        _ => estado
+    };
+
+    private static string TextoGuardar(string estado) => estado switch
+    {
+        "CONFIRMADA" => "Confirmar cita",
+        "ATENDIDA" => "Marcar como atendida",
+        "NO_ASISTE" => "Registrar inasistencia",
+        "CANCELADA" => "Sí, cancelar cita",
+        _ => "Guardar"
+    };
+
+    private static string ClaseBoton(string estado) => estado switch
+    {
+        "CONFIRMADA" or "ATENDIDA" => "pf-btn-main",
+        "CANCELADA" => "boton-peligro",
+        _ => "pf-btn-neutral"
+    };
+}

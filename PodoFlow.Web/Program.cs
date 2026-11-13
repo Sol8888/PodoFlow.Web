@@ -45,6 +45,74 @@ builder.Services.AddHttpClient<IPrivacidadApi, PrivacidadApi>(
     .AddHttpMessageHandler<TokenDesarrolloHandler>();
 
 
+// SERVICIO DE AGENDA Y CITAS
+
+
+builder.Services.AddHttpClient<IAgendaApi, AgendaApi>(
+    client =>
+    {
+        client.BaseAddress = new Uri(apiBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(30);
+    })
+    .AddHttpMessageHandler<TokenDesarrolloHandler>();
+
+builder.Services.AddHttpClient<IComunicacionesApi, ComunicacionesApi>(
+    client =>
+    {
+        client.BaseAddress = new Uri(apiBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(30);
+    })
+    .AddHttpMessageHandler<TokenDesarrolloHandler>();
+
+builder.Services.AddHttpClient<ISeguridadApi, SeguridadApi>(
+    client =>
+    {
+        client.BaseAddress = new Uri(apiBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(30);
+    })
+    .AddHttpMessageHandler<TokenDesarrolloHandler>();
+
+builder.Services.AddHttpClient<IConfiguracionApi, ConfiguracionApi>(
+    client =>
+    {
+        client.BaseAddress = new Uri(apiBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(30);
+    })
+    .AddHttpMessageHandler<TokenDesarrolloHandler>();
+
+builder.Services.AddHttpClient<IAdjuntosApi, AdjuntosApi>(
+    client =>
+    {
+        client.BaseAddress = new Uri(apiBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(60);
+    })
+    .AddHttpMessageHandler<TokenDesarrolloHandler>();
+
+builder.Services.AddHttpClient<IInventarioApi, InventarioApi>(
+    client =>
+    {
+        client.BaseAddress = new Uri(apiBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(30);
+    })
+    .AddHttpMessageHandler<TokenDesarrolloHandler>();
+
+builder.Services.AddHttpClient<IClinicaApi, ClinicaApi>(
+    client =>
+    {
+        client.BaseAddress = new Uri(apiBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(30);
+    })
+    .AddHttpMessageHandler<TokenDesarrolloHandler>();
+
+builder.Services.AddHttpClient<IPagosApi, PagosApi>(
+    client =>
+    {
+        client.BaseAddress = new Uri(apiBaseUrl);
+        client.Timeout = TimeSpan.FromSeconds(30);
+    })
+    .AddHttpMessageHandler<TokenDesarrolloHandler>();
+
+
 // COMPONENTES BLAZOR
 
 

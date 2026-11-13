@@ -1,0 +1,350 @@
+@using PodoFlow.Web.Modelos.Atenciones
+@using PodoFlow.Web.Servicios
+
+@inject IAdjuntosApi Api
+@inject IJSRuntime JS
+@inject ILogger<AdjuntosAtencion> Logger
+
+@implements IAsyncDisposable
+
+<section class="pf-evo adjuntos">
+
+    <div class="pf-evo-header">
+        <div>
+            <h5>Adjuntos</h5>
+            <p>Fotos y documentos de esta atención (JPG, PNG o PDF de hasta 10 MB).</p>
+        </div>
+
+        <div class="pf-clinic-actions">
+            @if (PuedeEditar && !MostrarFormulario)
+            {
+                <button type="button" class="pf-btn pf-btn-main" disabled="@Ocupado" @onclick="AbrirFormulario">
+                    + Adjuntar archivo
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Mensaje))
+    {
+        <div class="pf-contact-success" role="status">@Mensaje</div>
+        <AvisoTemporal @bind-Mensaje="Mensaje" />
+    }
+
+    @if (MostrarFormulario && PuedeEditar)
+    {
+        <div class="pf-evo-editor">
+            <div class="campos">
+                <div class="pf-form-group">
+                    <label for="@($"archivo-{AtencionId}")">Archivo *</label>
+                    <InputFile id="@($"archivo-{AtencionId}")" class="pf-field"
+                               accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"
+                               disabled="@Ocupado" OnChange="ElegirArchivo" />
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="@($"nombre-adjunto-{AtencionId}")">Nombre para mostrar</label>
+                    <input id="@($"nombre-adjunto-{AtencionId}")" class="pf-field" maxlength="255"
+                           placeholder="Opcional; por defecto, el nombre del archivo"
+                           disabled="@Ocupado" @bind="NombreAdjunto" />
+                </div>
+            </div>
+
+            @if (Seleccionado != null)
+            {
+                <p class="pf-detail-muted">@Seleccionado.Name · @Tamano(Seleccionado.Size)</p>
+            }
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" disabled="@Ocupado" @onclick="CerrarFormulario">Cancelar</button>
+                <button type="button" class="pf-btn pf-btn-main" disabled="@(Ocupado || Seleccionado == null)" @onclick="SubirAsync">
+                    @(Ocupado ? "Subiendo..." : "Subir archivo")
+                </button>
+            </div>
+        </div>
+    }
+
+    @if (Cargando)
+    {
+        <p class="pf-detail-muted">Cargando adjuntos...</p>
+    }
+    else
+    {
+        @if (Adjuntos.Any(x => !x.Estatus))
+        {
+            <label class="pf-checkbox inactivos">
+                <input type="checkbox" @bind="MostrarInactivos" />
+                Mostrar desactivados
+            </label>
+        }
+
+        @if (Visibles.Count == 0)
+        {
+            <p class="pf-detail-muted">Esta atención no tiene archivos adjuntos.</p>
+        }
+        else
+        {
+            <ul class="lista">
+                @foreach (var adjunto in Visibles)
+                {
+                    <li @key="adjunto.Id" class="@(adjunto.Estatus ? "" : "inactivo")">
+                        <span class="tipo">@Etiqueta(adjunto.TipoMime)</span>
+
+                        <div class="datos">
+                            <strong>@adjunto.Nombre</strong>
+                            <span>
+                                @adjunto.FechaCarga.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                @if (adjunto.TamanoBytes is { } bytes)
+                                {
+                                    <text> · @Tamano(bytes)</text>
+                                }
+                                @if (!adjunto.Estatus)
+                                {
+                                    <text> · Desactivado</text>
+                                }
+                            </span>
+                        </div>
+
+                        <div class="acciones">
+                            @if (adjunto.Estatus)
+                            {
+                                <button type="button" class="pf-action-link boton" disabled="@Ocupado" @onclick="() => DescargarAsync(adjunto)">Descargar</button>
+
+                                @if (PuedeEditar)
+                                {
+                                    <button type="button" class="pf-link boton-enlace" disabled="@Ocupado" @onclick="() => CambiarEstadoAsync(adjunto)">Desactivar</button>
+                                }
+                            }
+                            else if (PuedeEditar)
+                            {
+                                <button type="button" class="pf-link boton-enlace" disabled="@Ocupado" @onclick="() => CambiarEstadoAsync(adjunto)">Reactivar</button>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public long AtencionId { get; set; }
+
+    [Parameter, EditorRequired]
+    public long UsuarioId { get; set; }
+
+    [Parameter]
+    public bool PuedeEditar { get; set; }
+
+    private List<AdjuntoDto> Adjuntos = [];
+    private IBrowserFile? Seleccionado;
+    private IJSObjectReference? Modulo;
+    private string? NombreAdjunto;
+    private bool Cargando = true;
+    private bool Ocupado;
+    private bool MostrarFormulario;
+    private bool MostrarInactivos;
+    private string? Mensaje;
+    private string? Error;
+
+    private List<AdjuntoDto> Visibles => Adjuntos
+        .Where(x => MostrarInactivos || x.Estatus)
+        .OrderByDescending(x => x.FechaCarga)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        Cargando = false;
+    }
+
+    private async Task CargarAsync()
+    {
+        try
+        {
+            Adjuntos = await Api.ListarAsync(AtencionId);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+    }
+
+    private void AbrirFormulario()
+    {
+        Seleccionado = null;
+        NombreAdjunto = null;
+        Mensaje = null;
+        Error = null;
+        MostrarFormulario = true;
+    }
+
+    private void CerrarFormulario()
+    {
+        MostrarFormulario = false;
+        Seleccionado = null;
+        Error = null;
+    }
+
+    private void ElegirArchivo(InputFileChangeEventArgs e)
+    {
+        Error = null;
+        Seleccionado = null;
+
+        var archivo = e.File;
+
+        if (AdjuntosApi.TipoPorExtension(archivo.Name) == null)
+        {
+            Error = "Solo se permiten archivos JPG, PNG y PDF.";
+            return;
+        }
+
+        if (archivo.Size <= 0 || archivo.Size > AdjuntosApi.MaximoBytes)
+        {
+            Error = "El archivo debe tener entre 1 byte y 10 MB.";
+            return;
+        }
+
+        Seleccionado = archivo;
+    }
+
+    private async Task SubirAsync()
+    {
+        if (Ocupado || Seleccionado == null)
+            return;
+
+        Mensaje = null;
+        Error = null;
+
+        var archivo = Seleccionado;
+
+        await EjecutarAsync(async () =>
+        {
+            await Api.SubirAsync(AtencionId, UsuarioId, archivo, NombreAdjunto);
+
+            MostrarFormulario = false;
+            Seleccionado = null;
+            Mensaje = "Archivo adjuntado.";
+        });
+    }
+
+    private Task CambiarEstadoAsync(AdjuntoDto adjunto)
+    {
+        Mensaje = null;
+        Error = null;
+
+        return EjecutarAsync(async () =>
+        {
+            if (adjunto.Estatus)
+                await Api.DesactivarAsync(adjunto.Id);
+            else
+                await Api.ReactivarAsync(adjunto.Id);
+
+            Mensaje = adjunto.Estatus ? "Adjunto desactivado." : "Adjunto reactivado.";
+        });
+    }
+
+    private async Task DescargarAsync(AdjuntoDto adjunto)
+    {
+        if (Ocupado)
+            return;
+
+        Mensaje = null;
+        Error = null;
+        Ocupado = true;
+
+        try
+        {
+            var archivo = await Api.DescargarAsync(adjunto.Id);
+
+            Modulo ??= await JS.InvokeAsync<IJSObjectReference>(
+                "import", "./Components/Pages/Pacientes/AdjuntosAtencion.razor.js");
+
+            using var flujo = new DotNetStreamReference(new MemoryStream(archivo.Contenido));
+            await Modulo.InvokeVoidAsync("descargarArchivo", archivo.Nombre, archivo.TipoMime, flujo);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "El navegador no pudo descargar el adjunto");
+            Error = "El navegador no pudo descargar el archivo.";
+        }
+        finally
+        {
+            Ocupado = false;
+        }
+    }
+
+    private async Task EjecutarAsync(Func<Task> accion)
+    {
+        Ocupado = true;
+
+        try
+        {
+            await accion();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (IOException)
+        {
+            Error = "No se pudo leer el archivo seleccionado. Vuelve a elegirlo.";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        finally
+        {
+            await CargarAsync();
+            Ocupado = false;
+        }
+    }
+
+    private static string Etiqueta(string? tipo) => tipo switch
+    {
+        "application/pdf" => "PDF",
+        "image/png" => "PNG",
+        "image/jpeg" => "JPG",
+        _ => "ARCH"
+    };
+
+    private static string Tamano(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
+        _ => $"{bytes / (1024.0 * 1024.0):0.#} MB"
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (Modulo == null)
+            return;
+
+        try
+        {
+            await Modulo.DisposeAsync();
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}

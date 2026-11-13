@@ -1,0 +1,37 @@
+.historia-estado {
+    margin: 4px 0 12px;
+}
+
+.botones {
+    display: flex;
+    justify-content: flex-end;
+    gap: 16px;
+}
+
+.confirmacion {
+    padding: 12px 14px;
+    background: #fffaeb;
+    border-radius: 10px;
+}
+
+    .confirmacion p {
+        margin: 0 0 8px;
+    }
+
+.boton-enlace {
+    padding: 4px;
+    font-family: inherit;
+    font-size: 13px;
+    white-space: nowrap;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+    .boton-enlace:hover {
+        text-decoration: underline;
+    }
+
+.peligro {
+    color: #b42318;
+}

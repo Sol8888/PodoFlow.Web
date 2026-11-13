@@ -1,0 +1,717 @@
+﻿@page "/reportes/eipd"
+@page "/privacidad/eipd"
+@rendermode InteractiveServer
+
+@inject IPrivacidadApi Api
+
+<PageTitle>Evaluaciones de impacto | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">REPORTES</span>
+            <h1>Evaluaciones de impacto (EIPD)</h1>
+            <p>Cada versión reúne los riesgos evaluados y su conclusión. Solo un borrador se edita; para cambiar una aprobada se crea una versión nueva.</p>
+        </div>
+    </div>
+
+    <ReportesPestanas Activa="eipd" />
+
+    @if (Mensaje != null)
+    {
+        <div class="pf-contact-success" role="status">@Mensaje</div>
+    }
+
+    @if (Error != null)
+    {
+        <div class="pf-detail-error" role="alert">@Error</div>
+    }
+
+    <div class="pf-module-toolbar">
+        <select class="pf-field filtro" aria-label="Filtrar por estado" @bind="FiltroEstado">
+            <option value="">Todos los estados</option>
+            @foreach (var estado in EvaluacionImpactoDto.Transiciones.Keys)
+            {
+                <option value="@estado">@NombreEstado(estado)</option>
+            }
+        </select>
+
+        <button type="button" class="pf-btn pf-btn-main boton-derecha" disabled="@(Procesando || Cargando)" @onclick="Nueva">
+            Nueva evaluación
+        </button>
+    </div>
+
+    @if (Formulario != null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>@(EditandoId == null ? "Nueva evaluación" : $"Editar evaluación #{EditandoId}")</h2>
+
+            @if (EditandoId == null)
+            {
+                <p class="pf-detail-muted">Se crea como borrador. Después podrás agregarle riesgos o copiarlos de una versión anterior.</p>
+            }
+
+            <div class="pf-patient-form-grid">
+                <div class="pf-form-group">
+                    <label for="eipd-version">Versión *</label>
+                    <input id="eipd-version" class="pf-field" maxlength="30" placeholder="1.0" @bind="Formulario.Version" />
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="eipd-fecha">Fecha *</label>
+                    <input id="eipd-fecha" type="date" class="pf-field" @bind="Formulario.Fecha" />
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="eipd-alcance">Alcance *</label>
+                    <textarea id="eipd-alcance" class="pf-field" rows="2" maxlength="2000" placeholder="Tratamientos y procesos que cubre" @bind="Formulario.Alcance"></textarea>
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="eipd-descripcion">Descripción</label>
+                    <textarea id="eipd-descripcion" class="pf-field" rows="3" maxlength="3000" @bind="Formulario.Descripcion"></textarea>
+                </div>
+
+                <div class="pf-form-group pf-form-full">
+                    <label for="eipd-conclusion">Conclusión</label>
+                    <textarea id="eipd-conclusion" class="pf-field" rows="3" maxlength="3000" @bind="Formulario.Conclusion"></textarea>
+                    <small class="pf-detail-muted">Obligatoria para aprobarla.</small>
+                </div>
+
+                <div class="pf-form-group">
+                    <label for="eipd-residual">Nivel de riesgo residual</label>
+                    <input id="eipd-residual" type="number" min="1" max="25" class="pf-field" @bind="Formulario.NivelResidual" />
+                    <small class="pf-detail-muted">De 1 a 25. Obligatorio para aprobarla.</small>
+                </div>
+            </div>
+
+            @if (ErrorFormulario != null)
+            {
+                <div class="pf-detail-error" role="alert">@ErrorFormulario</div>
+            }
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" @onclick="CerrarFormulario">Cancelar</button>
+
+                <button type="button" class="pf-btn pf-btn-main" disabled="@Procesando" @onclick="GuardarAsync">
+                    @(Procesando ? "Guardando..." : "Guardar")
+                </button>
+            </div>
+        </section>
+    }
+
+    @if (Cambio != null)
+    {
+        <section class="pf-card pf-info-card">
+            <h2>@TextoBoton(Cambio.Value.Estado) la evaluación versión @Cambio.Value.Evaluacion.Version</h2>
+            <p class="pf-detail-muted">@AyudaCambio(Cambio.Value.Estado)</p>
+
+            @if (ErrorCambio != null)
+            {
+                <div class="pf-detail-error" role="alert">@ErrorCambio</div>
+            }
+
+            <div class="pf-form-actions">
+                <button type="button" class="pf-btn pf-btn-neutral" @onclick="() => Cambio = null">Cancelar</button>
+
+                <button type="button"
+                        class="@(Cambio.Value.Estado == "CERRADA" ? "pf-btn pf-btn-danger-confirm" : "pf-btn pf-btn-main")"
+                        disabled="@Procesando"
+                        @onclick="ConfirmarCambioAsync">
+                    @(Procesando ? "Guardando..." : "Confirmar")
+                </button>
+            </div>
+        </section>
+    }
+
+    <section class="pf-card pf-directory">
+        <div class="pf-card-header">
+            <div>
+                <h2>Evaluaciones</h2>
+                <p>De la más reciente a la más antigua.</p>
+            </div>
+
+            <span class="pf-soft-chip">@(Visibles.Count() == 1 ? "1 visible" : $"{Visibles.Count()} visibles")</span>
+        </div>
+
+        @if (Cargando)
+        {
+            <div class="pf-empty" role="status">Cargando evaluaciones...</div>
+        }
+        else if (!Visibles.Any())
+        {
+            <div class="pf-empty">No hay evaluaciones con este filtro.</div>
+        }
+        else
+        {
+            <div class="pf-table-wrap">
+                <table class="pf-table">
+                    <thead>
+                        <tr>
+                            <th>Versión</th>
+                            <th>Alcance</th>
+                            <th>Riesgos</th>
+                            <th>Residual</th>
+                            <th>Estado</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (var evaluacion in Visibles)
+                        {
+                            <tr @key="evaluacion.Id" class="@(Seleccionada?.Id == evaluacion.Id ? "seleccionado" : "")">
+                                <td>
+                                    <strong>@evaluacion.Version</strong>
+                                    <small class="pf-detail-muted detalle">#@evaluacion.Id · @evaluacion.Fecha.ToString("dd/MM/yyyy")</small>
+                                </td>
+                                <td><span class="recorte">@evaluacion.Alcance</span></td>
+                                <td>@RiesgosDe(evaluacion.Id).Count()</td>
+                                <td>
+                                    @if (evaluacion.NivelResidual.HasValue)
+                                    {
+                                        <span class="@RiesgoDto.ClaseNivel(evaluacion.NivelResidual.Value)">@evaluacion.NivelResidual</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="pf-detail-muted">—</span>
+                                    }
+                                </td>
+                                <td><span class="@ClaseEstado(evaluacion.Estado)">@NombreEstado(evaluacion.Estado)</span></td>
+                                <td>
+                                    <div class="acciones">
+                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => Seleccionar(evaluacion)">
+                                            @(Seleccionada?.Id == evaluacion.Id ? "Ocultar" : "Ver riesgos")
+                                        </button>
+
+                                        @if (evaluacion.EsBorrador)
+                                        {
+                                            <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => Editar(evaluacion)">Editar</button>
+                                        }
+
+                                        @foreach (var estado in evaluacion.EstadosSiguientes)
+                                        {
+                                            <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => PrepararCambio(evaluacion, estado)">
+                                                @TextoBoton(estado)
+                                            </button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    @if (Seleccionada != null)
+    {
+        <section class="pf-card pf-info-card bloque">
+            <h2>Riesgos de la versión @Seleccionada.Version</h2>
+
+            @if (!string.IsNullOrWhiteSpace(Seleccionada.Descripcion))
+            {
+                <p class="pf-detail-muted">@Seleccionada.Descripcion</p>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(Seleccionada.Conclusion))
+            {
+                <div class="pf-data-row">
+                    <span>Conclusión</span>
+                    <strong>@Seleccionada.Conclusion</strong>
+                </div>
+            }
+
+            @if (ErrorDetalle != null)
+            {
+                <div class="pf-detail-error" role="alert">@ErrorDetalle</div>
+            }
+
+            @if (!RiesgosDe(Seleccionada.Id).Any())
+            {
+                <div class="pf-detail-empty">Esta evaluación todavía no incluye riesgos.</div>
+            }
+            else
+            {
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th>Riesgo</th>
+                                <th>Nivel</th>
+                                <th>Estado actual</th>
+                                <th>Observación</th>
+                                <th>Incluido</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var incluido in RiesgosDe(Seleccionada.Id))
+                            {
+                                var riesgo = Riesgos.FirstOrDefault(r => r.Id == incluido.RiesgoId);
+
+                                <tr @key="incluido.RiesgoId">
+                                    <td>
+                                        <strong>@(riesgo?.Descripcion ?? $"Riesgo {incluido.RiesgoId}")</strong>
+                                        <small class="pf-detail-muted detalle">#@incluido.RiesgoId@(riesgo == null ? "" : $" · {NombreTratamiento(riesgo.TratamientoId)}")</small>
+                                    </td>
+                                    <td>
+                                        @if (riesgo != null)
+                                        {
+                                            <span class="@RiesgoDto.ClaseNivel(riesgo.Nivel)">@riesgo.Nivel</span>
+                                        }
+                                    </td>
+                                    <td>@(riesgo?.Estado ?? "—")</td>
+                                    <td>@(incluido.Observacion ?? "—")</td>
+                                    <td>@FechaHora(incluido.FechaAsignacion)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (Seleccionada.EsBorrador)
+            {
+                <div class="pf-detail-grid herramientas">
+                    <div>
+                        <h3 class="subtitulo">Agregar un riesgo</h3>
+
+                        <div class="pf-form-group">
+                            <select class="pf-field" aria-label="Riesgo a agregar" @bind="RiesgoNuevo">
+                                <option value="0">Selecciona un riesgo</option>
+                                @foreach (var riesgo in RiesgosAgregables)
+                                {
+                                    <option value="@riesgo.Id">#@riesgo.Id · nivel @riesgo.Nivel · @Recortar(riesgo.Descripcion)</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="pf-form-group">
+                            <input class="pf-field" maxlength="1000" placeholder="Observación (opcional)" aria-label="Observación del riesgo" @bind="ObservacionNueva" />
+                        </div>
+
+                        <button type="button" class="pf-btn pf-btn-main" disabled="@(Procesando || RiesgoNuevo == 0)" @onclick="AgregarRiesgoAsync">
+                            Agregar
+                        </button>
+                        <small class="pf-detail-muted ayuda">Los riesgos cerrados no se pueden agregar. Una vez incluido, un riesgo no se quita.</small>
+                    </div>
+
+                    <div>
+                        <h3 class="subtitulo">Copiar de otra versión</h3>
+
+                        <div class="pf-form-group">
+                            <select class="pf-field" aria-label="Evaluación de origen" value="@OrigenCopia" @onchange="CambiarOrigen">
+                                <option value="0">Selecciona la versión de origen</option>
+                                @foreach (var evaluacion in Lista.Where(e => e.Id != Seleccionada.Id))
+                                {
+                                    <option value="@evaluacion.Id">Versión @evaluacion.Version (#@evaluacion.Id) · @NombreEstado(evaluacion.Estado)</option>
+                                }
+                            </select>
+                        </div>
+
+                        @if (OrigenCopia != 0)
+                        {
+                            @if (!CopiablesDesdeOrigen.Any())
+                            {
+                                <p class="pf-detail-muted">No hay riesgos para copiar: ya están incluidos o están cerrados.</p>
+                            }
+                            else
+                            {
+                                <div class="copiables">
+                                    @foreach (var riesgo in CopiablesDesdeOrigen)
+                                    {
+                                        <label class="pf-checkbox" @key="riesgo.Id">
+                                            <input type="checkbox" checked="@(!Excluidos.Contains(riesgo.Id))" @onchange="e => Alternar(riesgo.Id, e)" />
+                                            #@riesgo.Id · @Recortar(riesgo.Descripcion)
+                                        </label>
+                                    }
+                                </div>
+                            }
+
+                            <button type="button" class="pf-btn pf-btn-main" disabled="@(Procesando || !CopiablesDesdeOrigen.Any(r => !Excluidos.Contains(r.Id)))" @onclick="CopiarAsync">
+                                Copiar seleccionados
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+            else
+            {
+                <p class="pf-detail-muted ayuda">La evaluación está @NombreEstado(Seleccionada.Estado).ToLowerInvariant(): ya no se le agregan riesgos. Crea una versión nueva y copia estos riesgos para actualizarla.</p>
+            }
+        </section>
+    }
+
+</div>
+
+@code {
+    private List<EvaluacionImpactoDto> Lista = new();
+    private List<EvaluacionRiesgoDto> Incluidos = new();
+    private List<RiesgoDto> Riesgos = new();
+    private List<TratamientoDto> Tratamientos = new();
+
+    private EvaluacionImpactoGuardarDto? Formulario;
+    private long? EditandoId;
+    private (EvaluacionImpactoDto Evaluacion, string Estado)? Cambio;
+    private string FiltroEstado = "";
+
+    private EvaluacionImpactoDto? Seleccionada;
+    private long RiesgoNuevo;
+    private string? ObservacionNueva;
+    private long OrigenCopia;
+    private HashSet<long> Excluidos = new();
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private string? Mensaje;
+    private string? Error;
+    private string? ErrorFormulario;
+    private string? ErrorCambio;
+    private string? ErrorDetalle;
+
+    private IEnumerable<EvaluacionImpactoDto> Visibles => Lista
+        .Where(e => FiltroEstado == "" || e.Estado == FiltroEstado);
+
+    private IEnumerable<EvaluacionRiesgoDto> RiesgosDe(long evaluacionId) => Incluidos
+        .Where(i => i.EvaluacionId == evaluacionId)
+        .OrderBy(i => i.RiesgoId);
+
+    private IEnumerable<RiesgoDto> RiesgosAgregables => Seleccionada == null
+        ? []
+        : Riesgos
+            .Where(r => r.Estado != "CERRADO" && RiesgosDe(Seleccionada.Id).All(i => i.RiesgoId != r.Id))
+            .OrderByDescending(r => r.Nivel);
+
+    private IEnumerable<RiesgoDto> CopiablesDesdeOrigen => Seleccionada == null || OrigenCopia == 0
+        ? []
+        : RiesgosDe(OrigenCopia)
+            .Where(i => RiesgosDe(Seleccionada.Id).All(d => d.RiesgoId != i.RiesgoId))
+            .Select(i => Riesgos.FirstOrDefault(r => r.Id == i.RiesgoId))
+            .Where(r => r != null && r.Estado != "CERRADO")
+            .Select(r => r!);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Tratamientos = await Api.ListarTratamientosAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La API tardó demasiado en responder. Recarga la página.";
+        }
+
+        await CargarAsync();
+    }
+
+    private async Task CargarAsync()
+    {
+        Cargando = true;
+
+        try
+        {
+            var evaluaciones = Api.ListarEvaluacionesAsync();
+            var incluidos = Api.ListarRiesgosEvaluadosAsync();
+            var riesgos = Api.ListarRiesgosAsync();
+
+            Lista = await evaluaciones;
+            Incluidos = await incluidos;
+            Riesgos = await riesgos;
+
+            if (Seleccionada != null)
+                Seleccionada = Lista.FirstOrDefault(e => e.Id == Seleccionada.Id);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            Error = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            Error = "La API tardó demasiado en responder. Recarga la página.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private string NombreTratamiento(int id) =>
+        Tratamientos.FirstOrDefault(t => t.Id == id)?.Nombre ?? $"Tratamiento {id}";
+
+    private static string Recortar(string texto) => texto.Length <= 70 ? texto : texto[..70] + "…";
+
+    private static string FechaHora(DateTime fecha) => PrivacidadApi.HoraEcuador(fecha).ToString("dd/MM/yyyy HH:mm");
+
+    private static string NombreEstado(string estado) => estado switch
+    {
+        "BORRADOR" => "Borrador",
+        "APROBADA" => "Aprobada",
+        "REVISADA" => "Revisada",
+        "CERRADA" => "Cerrada",
+        _ => estado
+    };
+
+    private static string ClaseEstado(string estado) => estado switch
+    {
+        "BORRADOR" => "pf-status warning",
+        "APROBADA" => "pf-status success",
+        "REVISADA" => "pf-status info",
+        _ => "pf-status"
+    };
+
+    private static string TextoBoton(string estado) => estado switch
+    {
+        "APROBADA" => "Aprobar",
+        "REVISADA" => "Marcar revisada",
+        "CERRADA" => "Cerrar",
+        _ => estado
+    };
+
+    private static string AyudaCambio(string estado) => estado switch
+    {
+        "APROBADA" => "Necesita la conclusión y el nivel de riesgo residual. Una vez aprobada ya no se edita ni se le agregan riesgos.",
+        "REVISADA" => "Indica que la evaluación aprobada se volvió a revisar y sigue vigente.",
+        _ => "La evaluación queda cerrada como histórico y ya no cambia de estado."
+    };
+
+    private void Nueva()
+    {
+        AbrirFormulario(new EvaluacionImpactoGuardarDto { Fecha = PrivacidadApi.HoyEcuador() }, null);
+    }
+
+    private void Editar(EvaluacionImpactoDto evaluacion)
+    {
+        AbrirFormulario(EvaluacionImpactoGuardarDto.Desde(evaluacion), evaluacion.Id);
+    }
+
+    private void AbrirFormulario(EvaluacionImpactoGuardarDto formulario, long? id)
+    {
+        Formulario = formulario;
+        EditandoId = id;
+        Cambio = null;
+        ErrorFormulario = null;
+        Mensaje = null;
+        Error = null;
+    }
+
+    private void CerrarFormulario()
+    {
+        Formulario = null;
+        EditandoId = null;
+        ErrorFormulario = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando || Formulario == null)
+            return;
+
+        ErrorFormulario = Formulario.Validar();
+
+        if (ErrorFormulario != null)
+            return;
+
+        Procesando = true;
+
+        try
+        {
+            var version = Formulario.Version.Trim();
+            var editada = EditandoId.HasValue;
+            long? nueva = null;
+
+            if (EditandoId.HasValue)
+                await Api.ActualizarEvaluacionAsync(EditandoId.Value, Formulario);
+            else
+                nueva = (await Api.CrearEvaluacionAsync(Formulario)).Id;
+
+            CerrarFormulario();
+            Error = null;
+            await CargarAsync();
+
+            if (nueva.HasValue)
+                Seleccionar(Lista.FirstOrDefault(e => e.Id == nueva.Value));
+
+            Mensaje = editada ? $"Evaluación versión {version} actualizada." : $"Evaluación versión {version} creada como borrador.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorFormulario = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorFormulario = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorFormulario = "La operación tardó demasiado. Recarga la página para ver si se guardó.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private void PrepararCambio(EvaluacionImpactoDto evaluacion, string estado)
+    {
+        CerrarFormulario();
+        Mensaje = null;
+        Error = null;
+        ErrorCambio = null;
+        Cambio = (evaluacion, estado);
+
+        if (estado == "APROBADA" && string.IsNullOrWhiteSpace(evaluacion.Conclusion))
+            ErrorCambio = "Falta la conclusión: edita la evaluación antes de aprobarla.";
+        else if (estado == "APROBADA" && !evaluacion.NivelResidual.HasValue)
+            ErrorCambio = "Falta el nivel de riesgo residual: edita la evaluación antes de aprobarla.";
+    }
+
+    private async Task ConfirmarCambioAsync()
+    {
+        if (Procesando || Cambio == null)
+            return;
+
+        Procesando = true;
+        ErrorCambio = null;
+
+        try
+        {
+            var (evaluacion, estado) = Cambio.Value;
+
+            await Api.CambiarEstadoEvaluacionAsync(evaluacion.Id, estado);
+
+            Cambio = null;
+            await CargarAsync();
+            Mensaje = $"Evaluación versión {evaluacion.Version}: {NombreEstado(evaluacion.Estado)} → {NombreEstado(estado)}.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorCambio = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorCambio = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorCambio = "La operación tardó demasiado. Recarga la página para ver su estado.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+
+    private void Seleccionar(EvaluacionImpactoDto? evaluacion)
+    {
+        Seleccionada = Seleccionada?.Id == evaluacion?.Id ? null : evaluacion;
+        RiesgoNuevo = 0;
+        ObservacionNueva = null;
+        OrigenCopia = 0;
+        Excluidos.Clear();
+        ErrorDetalle = null;
+    }
+
+    private void CambiarOrigen(ChangeEventArgs e)
+    {
+        OrigenCopia = long.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+        Excluidos.Clear();
+    }
+
+    private void Alternar(long riesgoId, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+            Excluidos.Remove(riesgoId);
+        else
+            Excluidos.Add(riesgoId);
+    }
+
+    private async Task AgregarRiesgoAsync()
+    {
+        if (Procesando || Seleccionada == null || RiesgoNuevo == 0)
+            return;
+
+        if (ObservacionNueva?.Trim().Length > 1000)
+        {
+            ErrorDetalle = "La observación no puede pasar de 1000 caracteres.";
+            return;
+        }
+
+        await EjecutarEnDetalleAsync(async evaluacion =>
+        {
+            var riesgo = RiesgoNuevo;
+            await Api.AgregarRiesgoEvaluacionAsync(evaluacion.Id, riesgo, ObservacionNueva);
+            return $"Riesgo #{riesgo} agregado a la versión {evaluacion.Version}.";
+        });
+    }
+
+    private async Task CopiarAsync()
+    {
+        if (Procesando || Seleccionada == null || OrigenCopia == 0)
+            return;
+
+        var excluidos = RiesgosDe(OrigenCopia)
+            .Select(i => i.RiesgoId)
+            .Where(id => Excluidos.Contains(id))
+            .ToList();
+
+        await EjecutarEnDetalleAsync(async evaluacion =>
+        {
+            var copiados = await Api.CopiarRiesgosEvaluacionAsync(OrigenCopia, evaluacion.Id, excluidos);
+            return copiados == 1
+                ? $"Se copió 1 riesgo a la versión {evaluacion.Version}."
+                : $"Se copiaron {copiados} riesgos a la versión {evaluacion.Version}.";
+        });
+    }
+
+    private async Task EjecutarEnDetalleAsync(Func<EvaluacionImpactoDto, Task<string>> operacion)
+    {
+        if (Seleccionada == null)
+            return;
+
+        Procesando = true;
+        ErrorDetalle = null;
+        Mensaje = null;
+
+        try
+        {
+            var texto = await operacion(Seleccionada);
+            var seleccionada = Seleccionada;
+
+            await CargarAsync();
+            Seleccionada = null;
+            Seleccionar(Lista.FirstOrDefault(e => e.Id == seleccionada.Id));
+            Mensaje = texto;
+        }
+        catch (InvalidOperationException ex)
+        {
+            ErrorDetalle = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            ErrorDetalle = "No fue posible conectar con PodoFlow.Api.";
+        }
+        catch (TaskCanceledException)
+        {
+            ErrorDetalle = "La operación tardó demasiado. Recarga la página para ver si se guardó.";
+        }
+        finally
+        {
+            Procesando = false;
+        }
+    }
+}

@@ -1,0 +1,185 @@
+@inject IPrivacidadApi Api
+@inject ILogger<ConsentimientosIniciales> Logger
+
+<section class="consentimientos" aria-labelledby="consentimientos-titulo">
+
+    <div class="encabezado">
+        <div class="pf-form-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 3 5 5.8v5.4c0 4.4 2.9 8.2 7 9.8 4.1-1.6 7-5.4 7-9.8V5.8L12 3Z" /><path d="m8.8 12 2.2 2.2 4.2-4.4" /></svg>
+        </div>
+
+        <div class="encabezado-texto">
+            <h2 id="consentimientos-titulo">Consentimientos</h2>
+            <p>Confirma cada uso de los datos con el paciente. Lo que no se active quedará como rechazado.</p>
+        </div>
+
+        @if (AvisoVigente != null && !Cargando)
+        {
+            <span class="aviso-version" title="Versión del aviso de privacidad vigente">Aviso v@(AvisoVigente.Version)</span>
+        }
+    </div>
+
+    @if (Cargando)
+    {
+        <div class="esqueleto" role="status" aria-label="Cargando finalidades">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+    }
+    else if (ErrorCarga != null)
+    {
+        <div class="estado-pendiente">
+            <strong>Podrás registrar el paciente, pero sus consentimientos quedarán pendientes.</strong>
+            <span>@ErrorCarga Complétalos después en Privacidad.</span>
+        </div>
+    }
+    else if (Finalidades.Count == 0)
+    {
+        <div class="estado-pendiente">
+            <strong>No hay finalidades que requieran consentimiento.</strong>
+            <span>Puedes registrar el paciente sin completar este paso.</span>
+        </div>
+    }
+    else
+    {
+        <AutorizacionCampos @ref="Campos"
+                            Modelo="Autorizacion"
+                            FechaNacimiento="FechaNacimiento"
+                            Cambio="StateHasChanged" />
+
+        <fieldset class="finalidades">
+            <legend>¿Qué autoriza?</legend>
+
+            <div class="lista-finalidades">
+                @foreach (var finalidad in Finalidades)
+                {
+                    var aceptada = Aceptadas.Contains(finalidad.Id);
+
+                    <label @key="finalidad.Id" class="finalidad @(aceptada ? "activa" : "")">
+                        <input type="checkbox"
+                               role="switch"
+                               checked="@aceptada"
+                               @onchange="e => Cambiar(finalidad.Id, e.Value is true)" />
+
+                        <span class="interruptor" aria-hidden="true"></span>
+
+                        <span class="finalidad-texto">
+                            <strong>@finalidad.Nombre</strong>
+                            @if (!string.IsNullOrWhiteSpace(finalidad.Descripcion))
+                            {
+                                <small>@finalidad.Descripcion</small>
+                            }
+                        </span>
+
+                        <span class="finalidad-estado">@(aceptada ? "Autoriza" : "Se rechazará")</span>
+                    </label>
+                }
+            </div>
+        </fieldset>
+
+        <div class="resumen" aria-live="polite">
+            <span class="resumen-titulo">Se registrará</span>
+            <span><strong>@Aceptadas.Count</strong> @(Aceptadas.Count == 1 ? "aceptada" : "aceptadas")</span>
+            <span><strong>@(Finalidades.Count - Aceptadas.Count)</strong> @(Finalidades.Count - Aceptadas.Count == 1 ? "rechazada" : "rechazadas")</span>
+            <span>Autoriza: <strong>@(Autorizacion.EsRepresentante ? "representante" : "titular")</strong></span>
+            <span>Medio: <strong>@OpcionesConsentimiento.NombreMedio(Autorizacion.Medio)</strong></span>
+        </div>
+    }
+
+</section>
+
+@code {
+    [Parameter]
+    public DateTime? FechaNacimiento { get; set; }
+
+    private readonly AutorizacionModelo Autorizacion = new();
+    private readonly HashSet<int> Aceptadas = new();
+
+    private AutorizacionCampos? Campos;
+    private List<FinalidadDto> Finalidades = new();
+    private AvisoDto? AvisoVigente;
+    private bool Cargando = true;
+    private string? ErrorCarga;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var finalidades = await Api.ListarFinalidadesAsync();
+            var avisos = await Api.ListarAvisosAsync();
+            var hoy = PrivacidadApi.HoyEcuador();
+
+            Finalidades = finalidades
+                .Where(f => f.Estatus && f.RequiereConsentimiento)
+                .ToList();
+
+            AvisoVigente = avisos
+                .Where(a => a.EsVigente(hoy))
+                .OrderByDescending(a => a.FechaDesde)
+                .ThenByDescending(a => a.Id)
+                .FirstOrDefault();
+
+            if (AvisoVigente == null)
+                ErrorCarga = "No hay un aviso de privacidad vigente.";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "No se pudieron cargar los datos de consentimiento");
+            ErrorCarga = "No se pudieron cargar las finalidades.";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (OpcionesConsentimiento.EsMenorDeEdad(FechaNacimiento))
+            Autorizacion.EsRepresentante = true;
+    }
+
+    public async Task<bool> ValidarAsync()
+    {
+        return Campos == null || await Campos.ValidarAsync();
+    }
+
+    public async Task<bool> RegistrarAsync(long pacienteId)
+    {
+        if (ErrorCarga != null || AvisoVigente == null || Cargando)
+            return false;
+
+        try
+        {
+            foreach (var finalidad in Finalidades)
+            {
+                await Api.CrearConsentimientoAsync(new ConsentimientoCrearDto
+                {
+                    PacienteId = pacienteId,
+                    FinalidadId = finalidad.Id,
+                    AvisoId = AvisoVigente.Id,
+                    Estado = Aceptadas.Contains(finalidad.Id) ? "ACEPTADO" : "RECHAZADO",
+                    Medio = Autorizacion.Medio,
+                    RepresentanteNombre = Autorizacion.NombreParaEnviar,
+                    RepresentanteRelacion = Autorizacion.RelacionParaEnviar
+                });
+            }
+
+            return true;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            Logger.LogWarning(ex, "Consentimientos incompletos del paciente {PacienteId}", pacienteId);
+            return false;
+        }
+    }
+
+    private void Cambiar(int finalidadId, bool aceptada)
+    {
+        if (aceptada)
+            Aceptadas.Add(finalidadId);
+        else
+            Aceptadas.Remove(finalidadId);
+    }
+}

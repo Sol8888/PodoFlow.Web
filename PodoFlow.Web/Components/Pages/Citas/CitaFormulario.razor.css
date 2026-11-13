@@ -1,0 +1,230 @@
+.cabecera {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 20px 24px 16px;
+    background: white;
+    border-bottom: 1px solid var(--pf-border);
+}
+
+    .cabecera h2 {
+        margin: 2px 0 0;
+        font-size: 18px;
+        font-weight: 700;
+    }
+
+.cerrar {
+    width: 32px;
+    height: 32px;
+    color: #475569;
+    font-size: 20px;
+    line-height: 1;
+    background: #f1f5f9;
+    border: 0;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+    .cerrar:hover {
+        background: #e2e8f0;
+    }
+
+.contenido {
+    padding: 20px 24px 24px;
+}
+
+.campos {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.campo {
+    min-width: 0;
+    margin-bottom: 16px;
+}
+
+    .campo label {
+        display: block;
+        margin-bottom: 6px;
+        color: #334155;
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+.dos-columnas {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 14px;
+}
+
+.invalido {
+    border-color: var(--pf-red);
+    box-shadow: 0 0 0 3px var(--pf-red-soft);
+}
+
+.error-campo {
+    display: block;
+    margin-top: 5px;
+    color: #b91c1c;
+    font-size: 12px;
+}
+
+    .error-campo:empty {
+        display: none;
+    }
+
+.ayuda {
+    margin: 6px 0 0;
+    color: var(--pf-text-soft);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+    .ayuda.aviso {
+        padding: 8px 10px;
+        color: var(--pf-orange-dark);
+        background: var(--pf-orange-soft);
+        border-radius: 8px;
+    }
+
+.paciente-elegido {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 12px;
+    background: var(--pf-blue-soft);
+    border: 1px solid var(--pf-blue-line);
+    border-radius: 8px;
+}
+
+    .paciente-elegido strong,
+    .paciente-elegido small,
+    .resultados strong,
+    .resultados small {
+        display: block;
+    }
+
+    .paciente-elegido strong,
+    .resultados strong {
+        color: var(--pf-navy);
+        font-size: 13px;
+    }
+
+    .paciente-elegido small,
+    .resultados small {
+        color: var(--pf-text-soft);
+        font-size: 12px;
+    }
+
+.boton-enlace {
+    padding: 0;
+    font-family: inherit;
+    white-space: nowrap;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+.resultados {
+    margin: 6px 0 0;
+    padding: 4px;
+    list-style: none;
+    border: 1px solid var(--pf-border);
+    border-radius: 8px;
+    box-shadow: var(--pf-shadow-md);
+}
+
+    .resultados button {
+        display: block;
+        width: 100%;
+        padding: 7px 9px;
+        font: inherit;
+        text-align: left;
+        background: none;
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+        .resultados button:hover,
+        .resultados button:focus-visible {
+            background: var(--pf-blue-soft);
+            outline: none;
+        }
+
+.hora-fila {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+    .hora-fila .ayuda {
+        margin: 0;
+    }
+
+.hora {
+    max-width: 130px;
+}
+
+.huecos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.hueco {
+    min-width: 58px;
+    height: 32px;
+    color: #475569;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    background: white;
+    border: 1px solid var(--pf-border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+}
+
+    .hueco:hover {
+        border-color: var(--pf-blue-line);
+        background: var(--pf-blue-soft);
+    }
+
+    .hueco:focus-visible {
+        outline: 3px solid rgba(0, 152, 218, .25);
+        outline-offset: 1px;
+    }
+
+    .hueco.activo {
+        color: white;
+        background: var(--pf-blue);
+        border-color: var(--pf-blue);
+    }
+
+.motivo {
+    padding: 14px;
+    background: var(--pf-orange-soft);
+    border: 1px solid var(--pf-orange-line);
+    border-radius: 8px;
+}
+
+@media (max-width: 460px) {
+    .dos-columnas {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hueco {
+        transition: none;
+    }
+}

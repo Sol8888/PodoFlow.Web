@@ -1,0 +1,143 @@
+@using PodoFlow.Web.Servicios
+
+@inject IClinicaApi Api
+
+@if (Estado is "ACTIVA" or "BLOQUEADA")
+{
+    <div class="historia-estado">
+
+        @if (!string.IsNullOrWhiteSpace(Error))
+        {
+            <div class="pf-detail-error" role="alert">@Error</div>
+        }
+
+        @if (Destino != null)
+        {
+            <div class="confirmacion">
+                <p>
+                    @switch (Destino)
+                    {
+                        case "BLOQUEADA":
+                            <strong>Bloquear la historia clínica.</strong>
+                            <text> Quedará en solo lectura hasta que se reactive.</text>
+                            break;
+                        case "CERRADA":
+                            <strong>Cerrar la historia clínica.</strong>
+                            <text> Es definitivo: ya no se podrá reactivar ni registrar atenciones.</text>
+                            break;
+                        default:
+                            <strong>Reactivar la historia clínica.</strong>
+                            <text> Se podrán volver a registrar atenciones.</text>
+                            break;
+                    }
+                </p>
+
+                @if (Destino != "ACTIVA")
+                {
+                    <label for="motivo-historia-@HistoriaId">Motivo *</label>
+                    <textarea id="motivo-historia-@HistoriaId" class="pf-field" rows="2" maxlength="500" @bind="Motivo"></textarea>
+                }
+
+                <div class="pf-form-actions">
+                    <button type="button" class="pf-btn pf-btn-neutral" disabled="@Ocupado" @onclick="Cancelar">Volver</button>
+                    <button type="button" class="pf-btn pf-btn-main" disabled="@Ocupado" @onclick="ConfirmarAsync">
+                        @(Ocupado ? "Guardando..." : "Confirmar")
+                    </button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="botones">
+                @if (Estado == "ACTIVA")
+                {
+                    <button type="button" class="pf-link boton-enlace" @onclick='() => Iniciar("BLOQUEADA")'>Bloquear historia</button>
+                }
+                else
+                {
+                    <button type="button" class="pf-link boton-enlace" @onclick='() => Iniciar("ACTIVA")'>Reactivar historia</button>
+                }
+
+                <button type="button" class="pf-link boton-enlace peligro" @onclick='() => Iniciar("CERRADA")'>Cerrar historia</button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public long HistoriaId { get; set; }
+
+    [Parameter, EditorRequired]
+    public string? Estado { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Version { get; set; } = "";
+
+    [Parameter]
+    public EventCallback<string> Cambio { get; set; }
+
+    private string? Destino;
+    private string Motivo = "";
+    private bool Ocupado;
+    private string? Error;
+
+    private void Iniciar(string destino)
+    {
+        Destino = destino;
+        Motivo = "";
+        Error = null;
+    }
+
+    private void Cancelar()
+    {
+        Destino = null;
+        Error = null;
+    }
+
+    private async Task ConfirmarAsync()
+    {
+        if (Ocupado || Destino == null)
+            return;
+
+        if (Destino != "ACTIVA" && string.IsNullOrWhiteSpace(Motivo))
+        {
+            Error = "Indica el motivo.";
+            return;
+        }
+
+        var destino = Destino;
+        Ocupado = true;
+        Error = null;
+
+        try
+        {
+            await Api.CambiarEstadoHistoriaAsync(
+                HistoriaId,
+                destino,
+                destino == "ACTIVA" ? null : Motivo.Trim(),
+                Version);
+
+            Destino = null;
+
+            await Cambio.InvokeAsync(destino switch
+            {
+                "BLOQUEADA" => "Historia clínica bloqueada.",
+                "CERRADA" => "Historia clínica cerrada.",
+                _ => "Historia clínica reactivada."
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        finally
+        {
+            Ocupado = false;
+        }
+    }
+}

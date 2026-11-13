@@ -1,0 +1,366 @@
+@page "/configuracion"
+@page "/configuracion/profesionales"
+@page "/seguridad"
+@page "/seguridad/usuarios"
+@rendermode InteractiveServer
+
+@using PodoFlow.Web.Modelos.Seguridad
+
+@inject ISeguridadApi Api
+
+<PageTitle>Profesionales | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">CONFIGURACIÓN</span>
+            <h1>Profesionales</h1>
+            <p>Registra al personal de la clínica y define qué roles tiene cada persona.</p>
+        </div>
+
+        <button type="button" class="pf-btn pf-btn-main" disabled="@(Cargando || Procesando)" @onclick="Nuevo">
+            + Nuevo profesional
+        </button>
+    </div>
+
+    <SeguridadPestanas Activa="usuarios" />
+
+    @if (Cargando)
+    {
+        <div class="pf-empty">Cargando profesionales...</div>
+    }
+    else
+    {
+        <div class="pf-module-toolbar">
+            <input type="search" class="pf-field buscar" placeholder="Buscar por nombre o correo"
+                   aria-label="Buscar profesional" @bind="Busqueda" @bind:event="oninput" />
+
+            <label class="pf-checkbox">
+                <input type="checkbox" @bind="IncluirInactivos" />
+                Incluir inactivos
+            </label>
+        </div>
+
+        @if (Mensaje != null)
+        {
+            <div class="pf-contact-success" aria-live="polite">@Mensaje</div>
+        }
+
+        @if (Error != null && !FormularioAbierto)
+        {
+            <div class="pf-detail-error" role="alert">@Error</div>
+        }
+
+        @if (FormularioAbierto)
+        {
+            <section class="pf-card pf-info-card">
+                <h2>@(Editando == null ? "Nuevo profesional" : "Editar profesional")</h2>
+
+                <form novalidate @onsubmit="GuardarAsync">
+                    <div class="pf-patient-form-grid">
+                        <div class="pf-form-group">
+                            <label for="usuario-nombre">Nombre completo *</label>
+                            <input id="usuario-nombre" class="pf-field" maxlength="150" @bind="Nombre" />
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="usuario-correo">Correo *</label>
+                            <input id="usuario-correo" type="email" class="pf-field" maxlength="320" @bind="Correo" />
+                        </div>
+                    </div>
+
+                    <fieldset class="roles">
+                        <legend>Roles</legend>
+
+                        @foreach (var rol in Roles.Where(x => x.Estatus))
+                        {
+                            <label class="pf-checkbox">
+                                <input type="checkbox" checked="@RolesMarcados.Contains(rol.Id)"
+                                       @onchange="e => MarcarRol(rol.Id, e.Value is true)" />
+                                @rol.Nombre <span class="codigo">@rol.Codigo</span>
+                            </label>
+                        }
+                    </fieldset>
+
+                    @if (Error != null)
+                    {
+                        <div class="pf-detail-error" role="alert">@Error</div>
+                    }
+
+                    <div class="pf-form-actions">
+                        <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="CerrarFormulario">Cancelar</button>
+                        <button type="submit" class="pf-btn pf-btn-main" disabled="@Procesando">
+                            @(Procesando ? "Guardando..." : "Guardar usuario")
+                        </button>
+                    </div>
+                </form>
+            </section>
+        }
+
+        <section class="pf-card pf-directory">
+            <div class="pf-card-header">
+                <div>
+                    <h2>Personal registrado</h2>
+                    <p>Desactivar a un profesional conserva su historial, pero ya no podrá operar.</p>
+                </div>
+
+                <span class="pf-soft-chip">@(Visibles.Count == 1 ? "1 visible" : $"{Visibles.Count} visibles")</span>
+            </div>
+
+            @if (Visibles.Count == 0)
+            {
+                <div class="pf-empty">No hay profesionales que coincidan con la búsqueda.</div>
+            }
+            else
+            {
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Correo</th>
+                                <th>Roles</th>
+                                <th>Último acceso</th>
+                                <th>Estado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var usuario in Visibles)
+                            {
+                                <tr @key="usuario.Id">
+                                    <td><strong class="nombre">@usuario.Nombre</strong></td>
+                                    <td>@usuario.Correo</td>
+                                    <td>
+                                        @foreach (var rol in RolesDe(usuario.Id))
+                                        {
+                                            <span class="pf-soft-chip chip">@rol.Nombre</span>
+                                        }
+                                    </td>
+                                    <td>@(usuario.UltimoAcceso?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Nunca")</td>
+                                    <td>
+                                        <span class="pf-status @(usuario.Estatus ? "success" : "")">@(usuario.Estatus ? "Activo" : "Inactivo")</span>
+                                    </td>
+                                    <td>
+                                        <div class="acciones">
+                                            @if (usuario.Estatus)
+                                            {
+                                                <button type="button" class="pf-action-link boton-tabla" disabled="@Procesando" @onclick="() => Editar(usuario)">Editar</button>
+                                                <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => CambiarEstadoAsync(usuario)">Desactivar</button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => CambiarEstadoAsync(usuario)">Reactivar</button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private List<UsuarioDto> UsuariosLista = [];
+    private List<RolDto> Roles = [];
+    private List<UsuarioRolDto> Asignaciones = [];
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private bool FormularioAbierto;
+    private bool IncluirInactivos;
+    private string Busqueda = "";
+    private UsuarioDto? Editando;
+    private string Nombre = "";
+    private string Correo = "";
+    private HashSet<int> RolesMarcados = [];
+    private string? Mensaje;
+    private string? Error;
+
+    private List<UsuarioDto> Visibles => UsuariosLista
+        .Where(x => IncluirInactivos || x.Estatus)
+        .Where(x => string.IsNullOrWhiteSpace(Busqueda) ||
+                    x.Nombre.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                    x.Correo.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase))
+        .OrderBy(x => x.Nombre)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        Cargando = false;
+    }
+
+    private async Task CargarAsync()
+    {
+        try
+        {
+            var usuarios = Api.ListarUsuariosAsync();
+            var roles = Api.ListarRolesAsync();
+            var asignaciones = Api.ListarUsuariosRolesAsync();
+
+            await Task.WhenAll(usuarios, roles, asignaciones);
+
+            UsuariosLista = await usuarios;
+            Roles = await roles;
+            Asignaciones = await asignaciones;
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+    }
+
+    private IEnumerable<RolDto> RolesDe(long usuarioId)
+    {
+        var ids = Asignaciones
+            .Where(x => x.UsuarioId == usuarioId && x.Estatus)
+            .Select(x => x.RolId)
+            .ToHashSet();
+
+        return Roles.Where(x => ids.Contains(x.Id)).OrderBy(x => x.Nombre);
+    }
+
+    private void Nuevo()
+    {
+        Editando = null;
+        Nombre = "";
+        Correo = "";
+        RolesMarcados = [];
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void Editar(UsuarioDto usuario)
+    {
+        Editando = usuario;
+        Nombre = usuario.Nombre;
+        Correo = usuario.Correo;
+        RolesMarcados = RolesDe(usuario.Id).Select(x => x.Id).ToHashSet();
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void CerrarFormulario()
+    {
+        FormularioAbierto = false;
+        Error = null;
+    }
+
+    private void MarcarRol(int rolId, bool marcado)
+    {
+        if (marcado)
+            RolesMarcados.Add(rolId);
+        else
+            RolesMarcados.Remove(rolId);
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando)
+            return;
+
+        Error = null;
+        Mensaje = null;
+
+        var nombre = Nombre.Trim();
+        var correo = Correo.Trim();
+
+        if (nombre.Length == 0)
+        {
+            Error = "El nombre es obligatorio.";
+            return;
+        }
+
+        if (correo.Length == 0 || !correo.Contains('@') || correo.StartsWith('@') || correo.EndsWith('@'))
+        {
+            Error = "Ingresa un correo válido.";
+            return;
+        }
+
+        var dto = new UsuarioGuardarDto
+        {
+            Nombre = nombre,
+            Correo = correo,
+            Version = Editando?.Version
+        };
+
+        await EjecutarAsync(async () =>
+        {
+            long usuarioId;
+
+            if (Editando == null)
+            {
+                var creado = await Api.CrearUsuarioAsync(dto);
+                usuarioId = creado.Id;
+            }
+            else
+            {
+                await Api.ActualizarUsuarioAsync(Editando.Id, dto);
+                usuarioId = Editando.Id;
+            }
+
+            var actuales = RolesDe(usuarioId).Select(x => x.Id).ToHashSet();
+
+            foreach (var rolId in RolesMarcados.Except(actuales))
+                await Api.AsignarRolAsync(usuarioId, rolId);
+
+            foreach (var rolId in actuales.Except(RolesMarcados))
+                await Api.QuitarRolAsync(usuarioId, rolId);
+
+            FormularioAbierto = false;
+            Mensaje = "Profesional guardado.";
+        });
+    }
+
+    private Task CambiarEstadoAsync(UsuarioDto usuario)
+    {
+        Error = null;
+        Mensaje = null;
+
+        return EjecutarAsync(async () =>
+        {
+            if (usuario.Estatus)
+                await Api.DesactivarUsuarioAsync(usuario.Id);
+            else
+                await Api.ReactivarUsuarioAsync(usuario.Id);
+
+            Mensaje = usuario.Estatus ? "Profesional desactivado." : "Profesional reactivado.";
+        });
+    }
+
+    private async Task EjecutarAsync(Func<Task> accion)
+    {
+        Procesando = true;
+
+        try
+        {
+            await accion();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        finally
+        {
+            await CargarAsync();
+            Procesando = false;
+        }
+    }
+}

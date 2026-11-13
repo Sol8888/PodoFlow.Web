@@ -1,0 +1,277 @@
+@page "/pagos/formas-pago"
+@rendermode InteractiveServer
+
+@using PodoFlow.Web.Modelos.Pagos
+
+@inject IPagosApi Api
+
+<PageTitle>Formas de pago | PodoFlow</PageTitle>
+
+<div class="pf-pacientes">
+
+    <div class="pf-module-header">
+        <div>
+            <span class="pf-module-eyebrow">PAGOS INTERNOS</span>
+            <h1>Formas de pago</h1>
+            <p>Medios con los que la clínica registra los cobros: efectivo, transferencia, tarjeta...</p>
+        </div>
+
+        <button type="button" class="pf-btn pf-btn-main" disabled="@(Cargando || Procesando)" @onclick="Nuevo">
+            + Nueva forma de pago
+        </button>
+    </div>
+
+    <PagosPestanas Activa="formas" />
+
+    @if (Cargando)
+    {
+        <div class="pf-empty">Cargando formas de pago...</div>
+    }
+    else
+    {
+        <div class="pf-module-toolbar">
+            <label class="pf-checkbox">
+                <input type="checkbox" @bind="IncluirInactivos" />
+                Incluir inactivas
+            </label>
+        </div>
+
+        @if (Mensaje != null)
+        {
+            <div class="pf-contact-success" aria-live="polite">@Mensaje</div>
+        }
+
+        @if (Error != null && !FormularioAbierto)
+        {
+            <div class="pf-detail-error" role="alert">@Error</div>
+        }
+
+        @if (FormularioAbierto)
+        {
+            <section class="pf-card pf-info-card">
+                <h2>@(EditandoId == null ? "Nueva forma de pago" : "Editar forma de pago")</h2>
+
+                <form novalidate @onsubmit="GuardarAsync">
+                    <div class="pf-patient-form-grid">
+                        <div class="pf-form-group">
+                            <label for="forma-codigo">Código *</label>
+                            <input id="forma-codigo" class="pf-field" maxlength="30" placeholder="EFECTIVO" @bind="Codigo" />
+                        </div>
+
+                        <div class="pf-form-group">
+                            <label for="forma-nombre">Nombre *</label>
+                            <input id="forma-nombre" class="pf-field" maxlength="100" placeholder="Efectivo" @bind="Nombre" />
+                        </div>
+                    </div>
+
+                    @if (Error != null)
+                    {
+                        <div class="pf-detail-error" role="alert">@Error</div>
+                    }
+
+                    <div class="pf-form-actions">
+                        <button type="button" class="pf-btn pf-btn-neutral" disabled="@Procesando" @onclick="CerrarFormulario">Cancelar</button>
+                        <button type="submit" class="pf-btn pf-btn-main" disabled="@Procesando">
+                            @(Procesando ? "Guardando..." : "Guardar")
+                        </button>
+                    </div>
+                </form>
+            </section>
+        }
+
+        <section class="pf-card pf-directory">
+            <div class="pf-card-header">
+                <div>
+                    <h2>Catálogo</h2>
+                    <p>Solo las formas activas aparecen al registrar un cobro.</p>
+                </div>
+
+                <span class="pf-soft-chip">@(Visibles.Count == 1 ? "1 visible" : $"{Visibles.Count} visibles")</span>
+            </div>
+
+            @if (Visibles.Count == 0)
+            {
+                <div class="pf-empty">No hay formas de pago registradas. Agrega una para poder cobrar.</div>
+            }
+            else
+            {
+                <div class="pf-table-wrap">
+                    <table class="pf-table">
+                        <thead>
+                            <tr>
+                                <th>Código</th>
+                                <th>Nombre</th>
+                                <th>Estado</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            @foreach (var forma in Visibles)
+                            {
+                                <tr @key="forma.Id">
+                                    <td><strong class="nombre">@forma.Codigo</strong></td>
+                                    <td>@forma.Nombre</td>
+                                    <td>
+                                        <span class="pf-status @(forma.Estatus ? "success" : "")">@(forma.Estatus ? "Activa" : "Inactiva")</span>
+                                    </td>
+                                    <td>
+                                        <div class="acciones">
+                                            @if (forma.Estatus)
+                                            {
+                                                <button type="button" class="pf-action-link boton-tabla" disabled="@Procesando" @onclick="() => Editar(forma)">Editar</button>
+                                                <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => CambiarEstadoAsync(forma)">Desactivar</button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button" class="pf-link boton-enlace" disabled="@Procesando" @onclick="() => CambiarEstadoAsync(forma)">Reactivar</button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private List<FormaPagoDto> Formas = [];
+
+    private bool Cargando = true;
+    private bool Procesando;
+    private bool FormularioAbierto;
+    private bool IncluirInactivos;
+    private int? EditandoId;
+    private string Codigo = "";
+    private string Nombre = "";
+    private string? Mensaje;
+    private string? Error;
+
+    private List<FormaPagoDto> Visibles => Formas
+        .Where(x => IncluirInactivos || x.Estatus)
+        .OrderBy(x => x.Nombre)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CargarAsync();
+        Cargando = false;
+    }
+
+    private async Task CargarAsync()
+    {
+        try
+        {
+            Formas = await Api.ListarFormasPagoAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+    }
+
+    private void Nuevo()
+    {
+        EditandoId = null;
+        Codigo = "";
+        Nombre = "";
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void Editar(FormaPagoDto forma)
+    {
+        EditandoId = forma.Id;
+        Codigo = forma.Codigo;
+        Nombre = forma.Nombre;
+        Mensaje = null;
+        Error = null;
+        FormularioAbierto = true;
+    }
+
+    private void CerrarFormulario()
+    {
+        FormularioAbierto = false;
+        Error = null;
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (Procesando)
+            return;
+
+        Error = null;
+        Mensaje = null;
+
+        if (string.IsNullOrWhiteSpace(Codigo) || string.IsNullOrWhiteSpace(Nombre))
+        {
+            Error = "El código y el nombre son obligatorios.";
+            return;
+        }
+
+        var dto = new FormaPagoGuardarDto
+        {
+            Codigo = Codigo.Trim().ToUpperInvariant(),
+            Nombre = Nombre.Trim()
+        };
+
+        await EjecutarAsync(async () =>
+        {
+            if (EditandoId.HasValue)
+                await Api.ActualizarFormaPagoAsync(EditandoId.Value, dto);
+            else
+                await Api.CrearFormaPagoAsync(dto);
+
+            FormularioAbierto = false;
+            Mensaje = "Forma de pago guardada.";
+        });
+    }
+
+    private Task CambiarEstadoAsync(FormaPagoDto forma)
+    {
+        Error = null;
+        Mensaje = null;
+
+        return EjecutarAsync(async () =>
+        {
+            if (forma.Estatus)
+                await Api.DesactivarFormaPagoAsync(forma.Id);
+            else
+                await Api.ReactivarFormaPagoAsync(forma.Id);
+
+            Mensaje = forma.Estatus ? "Forma de pago desactivada." : "Forma de pago reactivada.";
+        });
+    }
+
+    private async Task EjecutarAsync(Func<Task> accion)
+    {
+        Procesando = true;
+
+        try
+        {
+            await accion();
+        }
+        catch (InvalidOperationException ex)
+        {
+            Error = ex.Message;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            Error = "No se pudo conectar con PodoFlow.Api.";
+        }
+        finally
+        {
+            await CargarAsync();
+            Procesando = false;
+        }
+    }
+}
