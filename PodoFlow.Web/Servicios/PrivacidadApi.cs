@@ -1,6 +1,8 @@
 ﻿using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Components.Forms;
 using PodoFlow.Web.Modelos.Pacientes;
 using PodoFlow.Web.Modelos.Privacidad;
 
@@ -739,17 +741,47 @@ namespace PodoFlow.Web.Servicios
             return ListarPaginadoAsync<DocumentoDto>("api/Documento?incluirInactivos=true");
         }
 
-        public Task CrearDocumentoAsync(DocumentoGuardarDto dto)
+        public async Task SubirDocumentoAsync(DocumentoGuardarDto dto, IBrowserFile archivo)
         {
-            return EnviarAsync(_http.PostAsJsonAsync("api/Documento", new
+            var error = DocumentoDto.ValidarArchivo(archivo.Name, archivo.Size);
+
+            if (error != null)
+                throw new InvalidOperationException(error);
+
+            await using var flujo = archivo.OpenReadStream(DocumentoDto.MaximoBytes);
+            using var contenidoArchivo = new StreamContent(flujo);
+            contenidoArchivo.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+            using var formulario = new MultipartFormDataContent
             {
-                UsuarioId,
-                dto.Tipo,
-                Version = Limpiar(dto.Version),
-                Nombre = dto.Nombre.Trim(),
-                RutaArchivo = dto.RutaArchivo.Trim(),
-                Huella = Limpiar(dto.Huella)?.ToLowerInvariant()
-            }));
+                { new StringContent(UsuarioId.ToString()), "UsuarioId" },
+                { new StringContent(dto.Tipo), "Tipo" },
+                { new StringContent(dto.Nombre.Trim()), "Nombre" },
+                { contenidoArchivo, "Archivo", archivo.Name }
+            };
+
+            var version = Limpiar(dto.Version);
+
+            if (version != null)
+                formulario.Add(new StringContent(version), "Version");
+
+            await EnviarAsync(_http.PostAsync("api/Documento/archivo", formulario));
+        }
+
+        public async Task<ArchivoExportacionDto> DescargarDocumentoAsync(long id)
+        {
+            using var respuesta = await _http.GetAsync($"api/Documento/{id}/archivo");
+            await ValidarAsync(respuesta);
+
+            var cabecera = respuesta.Content.Headers.ContentDisposition;
+            var nombre = (cabecera?.FileNameStar ?? cabecera?.FileName ?? $"documento-{id}").Trim('"');
+
+            return new ArchivoExportacionDto
+            {
+                Contenido = await respuesta.Content.ReadAsByteArrayAsync(),
+                NombreArchivo = Path.GetFileName(nombre),
+                TipoContenido = respuesta.Content.Headers.ContentType?.MediaType ?? "application/octet-stream"
+            };
         }
 
         public Task ActualizarDocumentoAsync(long id, DocumentoGuardarDto dto)

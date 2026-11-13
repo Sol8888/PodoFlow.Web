@@ -87,10 +87,16 @@
                             <td>@Catalogos.NombreUsuario(cita.UsuarioId)</td>
                             <td><EstadoCita Estado="@cita.Estado" /></td>
                             <td>
-                                <button type="button" class="pf-action-link boton-tabla"
-                                        @onclick="() => CitaSeleccionada.InvokeAsync(cita)">
-                                    Ver cita →
-                                </button>
+                                <div class="acciones-fila">
+                                    @if (AgendaReglas.PuedeAtenderse(cita))
+                                    {
+                                        <a class="pf-btn pf-btn-main boton-atender" href="@($"/citas/{cita.Id}/atender")">Atender</a>
+                                    }
+                                    <button type="button" class="pf-action-link boton-tabla"
+                                            @onclick="() => CitaSeleccionada.InvokeAsync(cita)">
+                                        Ver cita →
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     }

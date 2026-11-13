@@ -101,16 +101,17 @@
                                 <th>Paciente</th>
                                 <th>Servicio</th>
                                 <th>Estado</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             @if (Cargando)
                             {
-                                <tr><td colspan="4">Cargando citas...</td></tr>
+                                <tr><td colspan="5">Cargando citas...</td></tr>
                             }
                             else if (CitasHoy.Count == 0)
                             {
-                                <tr><td colspan="4">No hay citas programadas para hoy.</td></tr>
+                                <tr><td colspan="5">No hay citas programadas para hoy.</td></tr>
                             }
                             @foreach (var cita in CitasHoy)
                             {
@@ -127,6 +128,12 @@
                                         <span class="pf-status @GetStatusClass(cita.Estado)">
                                             @cita.Estado
                                         </span>
+                                    </td>
+                                    <td>
+                                        @if (AgendaReglas.PuedeAtenderse(cita.Estado, cita.Inicio, cita.Fin))
+                                        {
+                                            <a class="pf-btn pf-btn-main" href="@($"/citas/{cita.Id}/atender")">Atender</a>
+                                        }
                                     </td>
                                 </tr>
                             }
@@ -323,6 +330,9 @@
                 .Where(x => x.Estado != "CANCELADA")
                 .OrderBy(x => x.InicioLocal)
                 .Select(x => new CitaHoy(
+                    x.Id,
+                    x.InicioLocal,
+                    x.FinLocal,
                     x.InicioLocal.ToString("HH:mm"),
                     nombres.NombrePaciente(x.PacienteId),
                     Iniciales(nombres.NombrePaciente(x.PacienteId)),
@@ -408,5 +418,5 @@
         _ => ""
     };
 
-    private sealed record CitaHoy(string Hora, string Paciente, string Iniciales, string Servicio, string Estado);
+    private sealed record CitaHoy(long Id, DateTime Inicio, DateTime Fin, string Hora, string Paciente, string Iniciales, string Servicio, string Estado);
 }

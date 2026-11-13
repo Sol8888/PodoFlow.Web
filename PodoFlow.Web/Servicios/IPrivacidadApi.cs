@@ -1,4 +1,5 @@
-﻿using PodoFlow.Web.Modelos.Pacientes;
+﻿using Microsoft.AspNetCore.Components.Forms;
+using PodoFlow.Web.Modelos.Pacientes;
 using PodoFlow.Web.Modelos.Privacidad;
 
 namespace PodoFlow.Web.Servicios
@@ -125,7 +126,9 @@ namespace PodoFlow.Web.Servicios
 
         Task<List<DocumentoDto>> ListarDocumentosAsync();
 
-        Task CrearDocumentoAsync(DocumentoGuardarDto dto);
+        Task SubirDocumentoAsync(DocumentoGuardarDto dto, IBrowserFile archivo);
+
+        Task<ArchivoExportacionDto> DescargarDocumentoAsync(long id);
 
         Task ActualizarDocumentoAsync(long id, DocumentoGuardarDto dto);
 
