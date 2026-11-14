@@ -3,7 +3,7 @@
 
 @inject IPrivacidadApi Api
 
-<PageTitle>Registro de tratamientos | PodoFlow</PageTitle>
+<PageTitle>Registro de tratamientos de datos personales | PodoFlow</PageTitle>
 
 <div class="pf-pacientes">
 
@@ -212,172 +212,175 @@
                                     </div>
                                 </td>
                             </tr>
+                            @if (Seleccionado?.Id == tratamiento.Id)
+                            {
+                                <tr @key="@($"ficha-{tratamiento.Id}")" class="fila-ficha">
+                                    <td colspan="6">
+                                        <div class="pf-detail-grid ficha">
+                                            <section class="pf-card pf-info-card">
+                                                <h2>@Seleccionado.Nombre</h2>
+
+                                                <div class="pf-data-row">
+                                                    <span>Finalidad</span>
+                                                    <strong>@NombreFinalidad(Seleccionado.FinalidadId)</strong>
+                                                </div>
+
+                                                <div class="pf-data-row">
+                                                    <span>Titulares</span>
+                                                    <strong>@(Seleccionado.CategoriasTitulares ?? "Sin registrar")</strong>
+                                                </div>
+
+                                                <div class="pf-data-row">
+                                                    <span>Base de legitimación</span>
+                                                    <strong>@(Seleccionado.BaseLegitimacion ?? "Sin registrar")</strong>
+                                                </div>
+
+                                                <div class="pf-data-row">
+                                                    <span>Plazo de conservación</span>
+                                                    <strong>@(Seleccionado.PlazoConservacion ?? "Sin registrar")</strong>
+                                                </div>
+
+                                                <div class="pf-data-row">
+                                                    <span>Medidas de seguridad</span>
+                                                    <strong>@(Seleccionado.MedidasSeguridad ?? "Sin registrar")</strong>
+                                                </div>
+
+                                                <div class="pf-data-row">
+                                                    <span>Descripción</span>
+                                                    <strong>@(Seleccionado.Descripcion ?? "Sin descripción")</strong>
+                                                </div>
+                                            </section>
+
+                                            <section class="pf-card pf-info-card">
+                                                <h2>Categorías y encargados</h2>
+
+                                                @if (!Seleccionado.Estatus)
+                                                {
+                                                    <p class="pf-detail-muted">El tratamiento está dado de baja: reactívalo para cambiar sus asignaciones.</p>
+                                                }
+
+                                                @if (ErrorAsignacion != null)
+                                                {
+                                                    <div class="pf-detail-error" role="alert">@ErrorAsignacion</div>
+                                                }
+
+                                                @if (CargandoAsignaciones)
+                                                {
+                                                    <div class="pf-empty" role="status">Cargando asignaciones...</div>
+                                                }
+                                                else
+                                                {
+                                                    <h3 class="subtitulo">Categorías de datos</h3>
+
+                                                    @if (!CategoriasAsignadas.Any())
+                                                    {
+                                                        <p class="pf-detail-muted">Todavía no tiene categorías de datos.</p>
+                                                    }
+                                                    else
+                                                    {
+                                                        <ul class="asignaciones">
+                                                            @foreach (var asignacion in CategoriasAsignadas)
+                                                            {
+                                                                var categoria = Categorias.FirstOrDefault(c => c.Id == asignacion.CategoriaId);
+
+                                                                <li @key="asignacion.CategoriaId">
+                                                                    <span>
+                                                                        <strong>@(categoria?.Nombre ?? $"Categoría {asignacion.CategoriaId}")</strong>
+                                                                        @if (categoria?.EsSensible == true)
+                                                                        {
+                                                                            <span class="pf-status danger">Sensible</span>
+                                                                        }
+                                                                        @if (categoria?.Estatus == false)
+                                                                        {
+                                                                            <span class="pf-mini-chip warning">Inactiva</span>
+                                                                        }
+                                                                    </span>
+
+                                                                    @if (Seleccionado.Estatus)
+                                                                    {
+                                                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => QuitarCategoriaAsync(asignacion.CategoriaId)">Quitar</button>
+                                                                    }
+                                                                </li>
+                                                            }
+                                                        </ul>
+                                                    }
+
+                                                    @if (Seleccionado.Estatus)
+                                                    {
+                                                        <div class="agregar">
+                                                            <select class="pf-field" aria-label="Categoría a asignar" @bind="CategoriaNueva">
+                                                                <option value="0">Agregar categoría...</option>
+                                                                @foreach (var categoria in CategoriasDisponibles)
+                                                                {
+                                                                    <option value="@categoria.Id">@categoria.Nombre@(categoria.EsSensible ? " (sensible)" : "")</option>
+                                                                }
+                                                            </select>
+
+                                                            <button type="button" class="pf-btn pf-btn-main" disabled="@(Procesando || CategoriaNueva == 0)" @onclick="AsignarCategoriaAsync">Asignar</button>
+                                                        </div>
+                                                    }
+
+                                                    <h3 class="subtitulo">Encargados</h3>
+
+                                                    @if (!EncargadosAsignados.Any())
+                                                    {
+                                                        <p class="pf-detail-muted">Ningún tercero trata estos datos.</p>
+                                                    }
+                                                    else
+                                                    {
+                                                        <ul class="asignaciones">
+                                                            @foreach (var asignacion in EncargadosAsignados)
+                                                            {
+                                                                var encargado = Encargados.FirstOrDefault(e => e.Id == asignacion.EncargadoId);
+
+                                                                <li @key="asignacion.EncargadoId">
+                                                                    <span>
+                                                                        <strong>@(encargado?.Nombre ?? $"Encargado {asignacion.EncargadoId}")</strong>
+                                                                        @if (encargado != null)
+                                                                        {
+                                                                            <small class="pf-detail-muted"> · @encargado.Servicio</small>
+                                                                        }
+                                                                        @if (encargado?.Estatus == false)
+                                                                        {
+                                                                            <span class="pf-mini-chip warning">Inactivo</span>
+                                                                        }
+                                                                    </span>
+
+                                                                    @if (Seleccionado.Estatus)
+                                                                    {
+                                                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => QuitarEncargadoAsync(asignacion.EncargadoId)">Quitar</button>
+                                                                    }
+                                                                </li>
+                                                            }
+                                                        </ul>
+                                                    }
+
+                                                    @if (Seleccionado.Estatus)
+                                                    {
+                                                        <div class="agregar">
+                                                            <select class="pf-field" aria-label="Encargado a asignar" @bind="EncargadoNuevo">
+                                                                <option value="0">Agregar encargado...</option>
+                                                                @foreach (var encargado in EncargadosDisponibles)
+                                                                {
+                                                                    <option value="@encargado.Id">@encargado.Nombre · @encargado.Servicio</option>
+                                                                }
+                                                            </select>
+
+                                                            <button type="button" class="pf-btn pf-btn-main" disabled="@(Procesando || EncargadoNuevo == 0)" @onclick="AsignarEncargadoAsync">Asignar</button>
+                                                        </div>
+                                                    }
+                                                }
+                                            </section>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
                         }
                     </tbody>
                 </table>
             </div>
         }
     </section>
-
-    @if (Seleccionado != null)
-    {
-        <div class="pf-detail-grid ficha">
-            <section class="pf-card pf-info-card">
-                <h2>@Seleccionado.Nombre</h2>
-
-                <div class="pf-data-row">
-                    <span>Finalidad</span>
-                    <strong>@NombreFinalidad(Seleccionado.FinalidadId)</strong>
-                </div>
-
-                <div class="pf-data-row">
-                    <span>Titulares</span>
-                    <strong>@(Seleccionado.CategoriasTitulares ?? "Sin registrar")</strong>
-                </div>
-
-                <div class="pf-data-row">
-                    <span>Base de legitimación</span>
-                    <strong>@(Seleccionado.BaseLegitimacion ?? "Sin registrar")</strong>
-                </div>
-
-                <div class="pf-data-row">
-                    <span>Plazo de conservación</span>
-                    <strong>@(Seleccionado.PlazoConservacion ?? "Sin registrar")</strong>
-                </div>
-
-                <div class="pf-data-row">
-                    <span>Medidas de seguridad</span>
-                    <strong>@(Seleccionado.MedidasSeguridad ?? "Sin registrar")</strong>
-                </div>
-
-                <div class="pf-data-row">
-                    <span>Descripción</span>
-                    <strong>@(Seleccionado.Descripcion ?? "Sin descripción")</strong>
-                </div>
-            </section>
-
-            <section class="pf-card pf-info-card">
-                <h2>Categorías y encargados</h2>
-
-                @if (!Seleccionado.Estatus)
-                {
-                    <p class="pf-detail-muted">El tratamiento está dado de baja: reactívalo para cambiar sus asignaciones.</p>
-                }
-
-                @if (ErrorAsignacion != null)
-                {
-                    <div class="pf-detail-error" role="alert">@ErrorAsignacion</div>
-                }
-
-                @if (CargandoAsignaciones)
-                {
-                    <div class="pf-empty" role="status">Cargando asignaciones...</div>
-                }
-                else
-                {
-                    <h3 class="subtitulo">Categorías de datos</h3>
-
-                    @if (!CategoriasAsignadas.Any())
-                    {
-                        <p class="pf-detail-muted">Todavía no tiene categorías de datos.</p>
-                    }
-                    else
-                    {
-                        <ul class="asignaciones">
-                            @foreach (var asignacion in CategoriasAsignadas)
-                            {
-                                var categoria = Categorias.FirstOrDefault(c => c.Id == asignacion.CategoriaId);
-
-                                <li @key="asignacion.CategoriaId">
-                                    <span>
-                                        <strong>@(categoria?.Nombre ?? $"Categoría {asignacion.CategoriaId}")</strong>
-                                        @if (categoria?.EsSensible == true)
-                                        {
-                                            <span class="pf-status danger">Sensible</span>
-                                        }
-                                        @if (categoria?.Estatus == false)
-                                        {
-                                            <span class="pf-mini-chip warning">Inactiva</span>
-                                        }
-                                    </span>
-
-                                    @if (Seleccionado.Estatus)
-                                    {
-                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => QuitarCategoriaAsync(asignacion.CategoriaId)">Quitar</button>
-                                    }
-                                </li>
-                            }
-                        </ul>
-                    }
-
-                    @if (Seleccionado.Estatus)
-                    {
-                        <div class="agregar">
-                            <select class="pf-field" aria-label="Categoría a asignar" @bind="CategoriaNueva">
-                                <option value="0">Agregar categoría...</option>
-                                @foreach (var categoria in CategoriasDisponibles)
-                                {
-                                    <option value="@categoria.Id">@categoria.Nombre@(categoria.EsSensible ? " (sensible)" : "")</option>
-                                }
-                            </select>
-
-                            <button type="button" class="pf-btn pf-btn-main" disabled="@(Procesando || CategoriaNueva == 0)" @onclick="AsignarCategoriaAsync">Asignar</button>
-                        </div>
-                    }
-
-                    <h3 class="subtitulo">Encargados</h3>
-
-                    @if (!EncargadosAsignados.Any())
-                    {
-                        <p class="pf-detail-muted">Ningún tercero trata estos datos.</p>
-                    }
-                    else
-                    {
-                        <ul class="asignaciones">
-                            @foreach (var asignacion in EncargadosAsignados)
-                            {
-                                var encargado = Encargados.FirstOrDefault(e => e.Id == asignacion.EncargadoId);
-
-                                <li @key="asignacion.EncargadoId">
-                                    <span>
-                                        <strong>@(encargado?.Nombre ?? $"Encargado {asignacion.EncargadoId}")</strong>
-                                        @if (encargado != null)
-                                        {
-                                            <small class="pf-detail-muted"> · @encargado.Servicio</small>
-                                        }
-                                        @if (encargado?.Estatus == false)
-                                        {
-                                            <span class="pf-mini-chip warning">Inactivo</span>
-                                        }
-                                    </span>
-
-                                    @if (Seleccionado.Estatus)
-                                    {
-                                        <button type="button" class="pf-contact-action" disabled="@Procesando" @onclick="() => QuitarEncargadoAsync(asignacion.EncargadoId)">Quitar</button>
-                                    }
-                                </li>
-                            }
-                        </ul>
-                    }
-
-                    @if (Seleccionado.Estatus)
-                    {
-                        <div class="agregar">
-                            <select class="pf-field" aria-label="Encargado a asignar" @bind="EncargadoNuevo">
-                                <option value="0">Agregar encargado...</option>
-                                @foreach (var encargado in EncargadosDisponibles)
-                                {
-                                    <option value="@encargado.Id">@encargado.Nombre · @encargado.Servicio</option>
-                                }
-                            </select>
-
-                            <button type="button" class="pf-btn pf-btn-main" disabled="@(Procesando || EncargadoNuevo == 0)" @onclick="AsignarEncargadoAsync">Asignar</button>
-                        </div>
-                    }
-                }
-            </section>
-        </div>
-    }
 
 </div>
 
